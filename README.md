@@ -11,7 +11,14 @@ Visual Studio Code
 1. Clone the repository
 2. Using command prompt, change the directory to the destination where the repository was cloned
 3. In the repository folder, use the command `rokit install`
-4. After installing rokit, use the command `rojo serve`
-5. On Roblox Studio, there should be a popup to connect to localhost.
-6. In a different command prompt window, type the command `codex` in the repository destination
-7. Sign in with the credentials provided in the pinned messages
+4. On the top right of Roblox Studio, there should be an icon for an AI Assistant (looks like a star)
+5. Click the 3 dots in the AI Assistant menu
+6. Click "Manage MCP Servers"
+7. Enable Studio as MCP server"
+8. Quick Connect both codex and VS Code
+9. Restart VS Code
+10. After installing rokit, use the command `rojo serve`
+11. On Roblox Studio, there should be a popup to connect to localhost
+12. In a different command prompt window, type the command `codex` in the repository destination
+13. Sign in with ChatGPT using the credentials provided in the pinned messages
+14. Use default configuration when setting up
