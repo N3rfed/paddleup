@@ -3,7 +3,8 @@ local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local Controller={}
 local active={}
-local MOVE_TIME,POSE_TIME=0.46,0.72
+local swings={}
+local MOVE_TIME,POSE_TIME=0.8,1.06
 local function smooth(x)
  x=math.clamp(x,0,1)
  return x*x*(3-2*x)
@@ -15,6 +16,23 @@ local function restorePose(d)
    j.previous=nil
   end
  end
+end
+function Controller.swing(userId,backhand)
+ local p=Players:GetPlayerByUserId(userId)
+ local c=p and p.Character
+ local root=c and c:FindFirstChild("HumanoidRootPart")
+ if not root then return end
+ if swings[c] then restorePose(swings[c]) end
+ local d={start=os.clock(),root=root,backhand=backhand,joints={}}
+ for _,joint in ipairs(c:GetDescendants()) do
+  if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
+   local name=joint.Name:lower():gsub(" ","")
+   if name=="rightshoulder" or name=="rightelbow" or name=="rightwrist" then
+    table.insert(d.joints,{instance=joint,name=name})
+   end
+  end
+ end
+ swings[c]=d
 end
 local function finish(character,d)
  restorePose(d)
@@ -74,6 +92,7 @@ function Controller.play(userId,direction)
 end
 -- Remove our previous overlay before the Animator evaluates the next frame.
 RunService.PreAnimation:Connect(function()
+ for _,d in pairs(swings) do restorePose(d) end
  for _,d in pairs(active) do restorePose(d) end
 end)
 RunService.PreSimulation:Connect(function(dt)
@@ -82,7 +101,7 @@ RunService.PreSimulation:Connect(function(dt)
   if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=POSE_TIME then
    finish(c,d)
   else
-   local weight=smooth(elapsed/0.12)*(1-smooth((elapsed-0.43)/0.29))
+   local weight=smooth(elapsed/0.12)*(1-smooth((elapsed-0.77)/0.29))
    for _,j in ipairs(d.joints) do
     if j.instance.Parent then
      j.previous=j.instance.Transform
@@ -100,10 +119,10 @@ RunService.PreSimulation:Connect(function(dt)
     -- Brake before court edges so the server's containment correction never fires.
     local allowance=math.huge
     if math.abs(direction.X)>0.001 then
-     allowance=math.min(allowance,((direction.X>0 and 23 or -23)-position.X)/direction.X)
+     allowance=math.min(allowance,((direction.X>0 and 29 or -29)-position.X)/direction.X)
     end
     if math.abs(direction.Z)>0.001 then
-     local minZ,maxZ=d.side==1 and 3.5 or -45,d.side==1 and 45 or -3.5
+     local minZ,maxZ=d.side==1 and 3.5 or -59,d.side==1 and 59 or -3.5
      allowance=math.min(allowance,((direction.Z>0 and maxZ or minZ)-position.Z)/direction.Z)
     end
     speed=math.min(speed,math.max(0,allowance-0.15)/safeStep)
@@ -113,6 +132,39 @@ RunService.PreSimulation:Connect(function(dt)
     r.CFrame=r.CFrame:Lerp(desired,1-math.exp(-dt*24))
     local velocity=r.AssemblyLinearVelocity
     r.AssemblyLinearVelocity=Vector3.new(direction.X*speed,velocity.Y,direction.Z*speed)
+   end
+  end
+ end
+ -- Layer the paddle stroke over animation and the diving pose.
+ for c,d in pairs(swings) do
+  local elapsed=os.clock()-d.start
+  if not c.Parent or elapsed>=0.33 then
+   restorePose(d)
+   swings[c]=nil
+  else
+   local weight=smooth(elapsed/0.07)*(1-smooth((elapsed-0.19)/0.14))
+   local stroke=smooth((elapsed-0.07)/0.12)
+   local startAngle=d.backhand and -65 or 65
+   local endAngle=d.backhand and 45 or -40
+   local sweep=startAngle+(endAngle-startAngle)*stroke
+   for _,j in ipairs(d.joints) do
+    if j.instance.Parent then
+     j.previous=j.instance.Transform
+     local joint=j.instance
+     local basis=joint.C0.Rotation
+     local rotation
+     if j.name=="rightshoulder" then
+      -- Positive pitch lifts the right hand forward; sweep across the chest.
+      -- Compensate for the torso's dive pose so the stroke stays in front.
+      rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(85),0,math.rad(sweep))
+     elseif j.name=="rightelbow" then
+      rotation=CFrame.Angles(math.rad(15),0,0)
+     else
+      rotation=CFrame.Angles(0,math.rad(d.backhand and 35 or -15),0)
+     end
+     local pose=basis:Inverse()*rotation*basis
+     joint.Transform=j.previous:Lerp(pose,weight)
+    end
    end
   end
  end

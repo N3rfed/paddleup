@@ -4,6 +4,8 @@ local RunService=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local CAS=game:GetService("ContextActionService")
 local TweenService=game:GetService("TweenService")
+local SoundService=game:GetService("SoundService")
+local Debris=game:GetService("Debris")
 local player=Players.LocalPlayer
 local DiveController=require(script:WaitForChild("DiveController"))
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
@@ -53,7 +55,7 @@ timingText.TextXAlignment=Enum.TextXAlignment.Center
 local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
-text(hitPanel,"LMB  SWING   /   Strafe to place your shot",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
+text(hitPanel,"LMB  SERVE / SWING   /   Strafe to aim",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
 local staminaLabel=text(hitPanel,"STAMINA",Vector2.new(20,97),Vector2.new(75,18),10)
 local staminaTrack=Instance.new("Frame",hitPanel); staminaTrack.Position=UDim2.fromOffset(95,103); staminaTrack.Size=UDim2.fromOffset(415,4); staminaTrack.BackgroundColor3=Color3.fromRGB(52,70,73); staminaTrack.BorderSizePixel=0
 local staminaFill=Instance.new("Frame",staminaTrack); staminaFill.Size=UDim2.fromScale(1,1); staminaFill.BackgroundColor3=mint; staminaFill.BorderSizePixel=0
@@ -72,7 +74,7 @@ local touchDive=touchSwing:Clone(); touchDive.Parent=canvas; touchDive.Position=
 local snapshot,receivedAt,toastUntil=nil,0,os.clock()+4
 local function swing()
  local h=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
- input:FireServer("Swing",h and h.MoveDirection or Vector3.zero)
+ input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing",h and h.MoveDirection or Vector3.zero)
 end
 touchSwing.Activated:Connect(swing)
 touchDive.Activated:Connect(function() input:FireServer("Dive") end)
@@ -109,6 +111,7 @@ local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); co
 local aim=Instance.new("Part",workspace); aim.Name="Movement aim"; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=0.4
 state.OnClientEvent:Connect(function(data)
  snapshot=data; receivedAt=os.clock()
+ touchSwing.Text=data.live and "SWING" or (data.canServe and "SERVE" or "WAIT")
  scoreText.Text=string.format("%02d    :    %02d",data.score[1],data.score[2])
  sides.Text="HOME                         "..(data.bot and "PRACTICE" or "AWAY")
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
@@ -120,37 +123,38 @@ state.OnClientEvent:Connect(function(data)
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
+ if kind=="ballHit" then
+  local shared=ReplicatedStorage:FindFirstChild("Shared")
+  local hello=shared and shared:FindFirstChild("Hello")
+  local template=hello and hello:FindFirstChild("pickleball hit")
+  if template and template:IsA("Sound") then
+   -- A separate voice per impact lets rapid rallies overlap naturally.
+   local sound=template:Clone()
+   sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
+   sound.Ended:Once(function() sound:Destroy() end)
+   Debris:AddItem(sound,10)
+   sound:Play()
+  end
+  return
+ end
  if kind=="diveMotion" then
   DiveController.play(message.userId,message.direction)
   return
  end
  if kind=="swing" then
-  local p=Players:GetPlayerByUserId(message)
-  if p and p.Character and not p.Character:GetAttribute("Diving") then
-   local arm=p.Character:FindFirstChild("RightUpperArm") or p.Character:FindFirstChild("Torso")
-   local shoulder=arm and (arm:FindFirstChild("RightShoulder") or arm:FindFirstChild("Right Shoulder"))
-   if shoulder and shoulder:IsA("Motor6D") then
-    local base=shoulder.C0
-    if not shoulder:GetAttribute("Swinging") then
-     shoulder:SetAttribute("Swinging",true)
-     TweenService:Create(shoulder,TweenInfo.new(0.09),{C0=base*CFrame.Angles(-1.8,0,-0.5)}):Play()
-     task.delay(0.1,function()
-      if shoulder.Parent then TweenService:Create(shoulder,TweenInfo.new(0.18),{C0=base}):Play() end
-      task.delay(0.2,function() if shoulder.Parent then shoulder:SetAttribute("Swinging",false) end end)
-     end)
-    end
-   end
-  end
+  DiveController.swing(message.userId,message.backhand)
   return
  end
  if kind=="miss" and os.clock()<toastUntil then return end
- toast.Text=tostring(message); toast.TextColor3=(kind=="perfect" or kind=="power") and mint or (kind=="miss" and coral or cream)
+ toast.Text=tostring(message); toast.TextColor3=(kind=="perfect" or kind=="slam" or kind=="power") and mint or (kind=="miss" and coral or cream)
  toastUntil=os.clock()+(kind=="point" and 2.5 or 1.2)
- if kind=="perfect" then
+ if kind=="perfect" or kind=="slam" then
   visual.Size=Vector3.new(1.4,1.4,1.4)
   TweenService:Create(visual,TweenInfo.new(0.25),{Size=Vector3.new(0.85,0.85,0.85)}):Play()
  end
 end)
+local cameraRoot,cameraSide,trackedCamera
+local ballLookOffset=Vector3.zero
 RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,function(dt)
  local camera=workspace.CurrentCamera
  if not camera then return end
@@ -159,11 +163,38 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
  local h=c and c:FindFirstChildOfClass("Humanoid")
- local side=(snapshot and snapshot.side~=0 and snapshot.side) or 1
+ local courtSide=(snapshot and snapshot.side) or player:GetAttribute("CourtSide") or 1
+ local side=courtSide~=0 and courtSide or 1
+ local age=snapshot and math.min(now-receivedAt,0.12) or 0
+ local predicted
+ if snapshot then
+  predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0)
+  predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
+ end
  if r then
   camera.CameraType=Enum.CameraType.Scriptable; camera.FieldOfView=65
-  local desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225,side*79),Vector3.new(r.Position.X*0.2,181,side*9))
-  camera.CFrame=camera.CFrame:Lerp(desired,1-math.exp(-dt*8))
+  local reset=cameraRoot~=r or cameraSide~=courtSide or trackedCamera~=camera
+  if reset then ballLookOffset=Vector3.zero end
+  local desired,focus
+  if courtSide==0 then
+   focus=Vector3.new(r.Position.X*0.2,181,side*9)
+   desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225,side*79),focus)
+  else
+   -- Stay behind our court side even when the avatar turns or dives.
+   local anchor=r.Position
+   focus=anchor+Vector3.new(0,1,-side*12)
+   local targetOffset=Vector3.zero
+   if snapshot and snapshot.live and predicted then
+    local delta=predicted-focus
+    targetOffset=Vector3.new(math.clamp(delta.X*0.18,-4,4),math.clamp(delta.Y*0.12,-1,2.5),math.clamp(delta.Z*0.08,-2,2))
+   end
+   ballLookOffset=ballLookOffset:Lerp(targetOffset,1-math.exp(-dt*4))
+   focus+=ballLookOffset
+   desired=CFrame.lookAt(anchor+Vector3.new(0,7,side*16),focus)
+  end
+  camera.CFrame=reset and desired or camera.CFrame:Lerp(desired,1-math.exp(-dt*10))
+  camera.Focus=CFrame.new(focus)
+  cameraRoot,cameraSide,trackedCamera=r,courtSide,camera
   if h then
    local ax=(arrows[Enum.KeyCode.Right] and 1 or 0)-(arrows[Enum.KeyCode.Left] and 1 or 0)
    local az=(arrows[Enum.KeyCode.Down] and 1 or 0)-(arrows[Enum.KeyCode.Up] and 1 or 0)
@@ -176,10 +207,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   end
  end
  if not snapshot then return end
- local age=math.min(now-receivedAt,0.12)
- local predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0)
- predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
- visual.Position=predicted; visual.Transparency=snapshot.live and 0 or 1; trail.Enabled=snapshot.live
+ visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live
  local eta=math.max(0,snapshot.eta-age)
  local color=snapshot.green and mint or (eta<0.6 and Color3.fromRGB(255,214,97) or coral)
  local visible=snapshot.live and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46
@@ -196,7 +224,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  countdown.TextColor3=color
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
- timingText.Text=not snapshot.live and "NEXT SERVE IN A MOMENT" or (snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
+ timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  timingText.TextColor3=color
  sub.Text=snapshot.side==0 and "SPECTATING  /  You will join when a court slot opens" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "YOUR SIDE: "..(side==1 and "HOME" or "AWAY").."   /   First to 11, win by 2")
  if now>toastUntil then

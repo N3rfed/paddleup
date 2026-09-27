@@ -1,8 +1,43 @@
 -- Rooftop environment, shared by the edit-time builder and game startup.
 local World = {}
+-- Update saved/edit-time courts too, without rebuilding their scenery.
+function World.updateLayout(root)
+ local previousDepth=48
+ for _,p in ipairs(root:GetChildren()) do
+  if p.Name=="Court end glass" and p:IsA("BasePart") then previousDepth=math.abs(p.Position.Z); break end
+ end
+ for _,p in ipairs(root:GetChildren()) do
+  if p.Name=="Club sign" then p:Destroy()
+  elseif p:IsA("BasePart") then
+   local pos=p.Position
+   if p.Name=="Court glass fence" then
+    p.Size=Vector3.new(0.18,10,168); p.Position=Vector3.new(math.sign(pos.X)*32,186,0)
+    p.Transparency=0.92
+   elseif p.Name=="Court end glass" then
+    p.Size=Vector3.new(64,10,0.18); p.Position=Vector3.new(0,186,math.sign(pos.Z)*84)
+    p.Transparency=0.94
+   elseif p.Name=="Fence upright" then
+    p.Position=Vector3.new(math.sign(pos.X)*32,pos.Y,pos.Z*84/previousDepth)
+   elseif p.Name=="Fence top rail" then
+    if p.Size.Z>p.Size.X then
+     p.Size=Vector3.new(0.2,0.2,168); p.Position=Vector3.new(math.sign(pos.X)*32,191,0)
+    else
+     p.Size=Vector3.new(64,0.2,0.2); p.Position=Vector3.new(0,191,math.sign(pos.Z)*84)
+    end
+   elseif p.Name=="Court surround" then p.Size=Vector3.new(64,0.12,168)
+   elseif p.Name=="Roof deck" then p.Size=Vector3.new(132,3,180)
+   elseif p.Name=="Safety glass" then p.Size=Vector3.new(0.2,4,180)
+   elseif p.Name=="Rooftop parapet" then
+    if p.Size.Z>p.Size.X then p.Size=Vector3.new(1,3,180)
+    else p.Position=Vector3.new(pos.X,pos.Y,math.sign(pos.Z)*89) end
+   end
+  end
+ end
+ return root
+end
 function World.build()
  local existing = workspace:FindFirstChild("PaddleUp")
- if existing then return existing end
+ if existing then return World.updateLayout(existing) end
  local root = Instance.new("Model")
  root.Name = "PaddleUp"
  root.Parent = workspace
@@ -85,19 +120,6 @@ function World.build()
  end
  for _,x in ipairs({35,57}) do for _,z in ipairs({-38,38}) do part("Pergola pillar",Vector3.new(0.5,12,0.5),Vector3.new(x,187,z),dark,Enum.Material.Metal) end end
  for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(46,193,z),Color3.fromRGB(143,100,65),Enum.Material.Wood) end
- local sign=part("Club sign",Vector3.new(37,7,0.5),Vector3.new(0,193,-49),dark)
- local gui=Instance.new("SurfaceGui")
- gui.Face=Enum.NormalId.Back
- gui.CanvasSize=Vector2.new(1110,210)
- gui.Parent=sign
- local label=Instance.new("TextLabel")
- label.Size=UDim2.fromScale(1,1)
- label.BackgroundTransparency=1
- label.Text="PADDLE UP!  /  SKYLINE CLUB"
- label.TextColor3=white
- label.Font=Enum.Font.GothamBold
- label.TextScaled=true
- label.Parent=gui
  local rng=Random.new(82)
  for i=1,30 do
   local angle=i*math.pi*2/30
@@ -143,6 +165,6 @@ function World.build()
  if bloom then bloom.Intensity=0.15; bloom.Size=24; bloom.Threshold=1.5 end
  local dof=lighting:FindFirstChildOfClass("DepthOfFieldEffect")
  if dof then dof.Enabled=false end
- return root
+ return World.updateLayout(root)
 end
 return World
