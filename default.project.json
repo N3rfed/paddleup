@@ -22,6 +22,9 @@
 
     "StarterPlayer": {
       "$className": "StarterPlayer",
+      "$properties": {
+        "EnableMouseLockOption": false
+      },
       "$ignoreUnknownInstances": true,
       "StarterPlayerScripts": {
         "Client": {
