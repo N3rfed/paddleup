@@ -3,15 +3,27 @@
   "tree": {
     "$className": "DataModel",
     "$ignoreUnknownInstances": true,
-
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "$ignoreUnknownInstances": true,
       "Shared": {
-        "$path": "src/shared"
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+        "Hello": {
+          "$path": "src/shared/Hello.luau",
+          "$ignoreUnknownInstances": true,
+          "pickleball hit": {
+            "$className": "Sound",
+            "$properties": {
+              "SoundId": "rbxassetid://105850247730037",
+              "Volume": 0.5,
+              "PlaybackSpeed": 1,
+              "Looped": false
+            }
+          }
+        }
       }
     },
-
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "$ignoreUnknownInstances": true,
@@ -19,9 +31,11 @@
         "$path": "src/server"
       }
     },
-
     "StarterPlayer": {
       "$className": "StarterPlayer",
+      "$properties": {
+        "EnableMouseLockOption": false
+      },
       "$ignoreUnknownInstances": true,
       "StarterPlayerScripts": {
         "Client": {
