@@ -1,10 +1,16 @@
 ## Prerequisites
 [Invoke-RestMethod](https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.ps1)
+
 [curl](https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.sh) -sSf
+
 Roblox Studio
+
 [rokit](https://github.com/rojo-rbx/rokit)
+
 Follow these instructions for [rojo](https://rojo.space/docs/v7/getting-started/installation/)
+
 Use the command `npm install -g @openai/codex` to install codex
+
 Visual Studio Code
 
 ## Getting Started
