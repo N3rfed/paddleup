@@ -63,6 +63,10 @@ local function rootOf(p)
  local c=p.Character
  return c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
 end
+local function clearCharge(p,d)
+ d.chargeAt=nil; d.chargeCharacter=nil
+ if p.Character then p.Character:SetAttribute("ShotChargeStarted",nil) end
+end
 local function tell(p,text,kind)
  feedback:FireClient(p,text,kind or "info")
 end
@@ -90,9 +94,10 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  end
  return false
 end
-local function launch(from,target,boost,lob,slam,momentum,soft,mishit)
+local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge)
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  -- Speed changes flight time and launch velocity; downward gravity stays constant.
+ speedScale*=1+Rules.CHARGE_SPEED_BONUS*(charge or 0)
  if soft then speedScale*=0.65 end
  local distance=(Vector3.new(target.X,0,target.Z)-Vector3.new(from.X,0,from.Z)).Magnitude
  local gravity=GRAVITY
@@ -133,7 +138,7 @@ local function point(winner,reason)
  if scored then score[index]+=1 end
  banner=(winner==1 and "HOME" or "AWAY")..(scored and " POINT  /  " or " SIDE OUT  /  ")..reason
  servingSide=winner; serveReady=false
- for _,d in pairs(users) do d.diveUntil=0; d.volleyPending=false end
+ for p,d in pairs(users) do clearCharge(p,d); d.diveUntil=0; d.volleyPending=false end
  nextServe=os.clock()+2.5
  local scorer=lastHitter[winner] or occupant(winner)
  local scorerName=scorer and scorer.DisplayName or "Practice Partner"
@@ -170,6 +175,7 @@ local function paddle(character)
 end
 local function spawnCharacter(p,c)
  local d=users[p]; if not d then return end
+ clearCharge(p,d)
  local r=c:WaitForChild("HumanoidRootPart",10)
  local h=c:WaitForChild("Humanoid",10)
  if not r or not h then return end
@@ -218,6 +224,7 @@ local function prepareServe()
  serverId=server and server.UserId
  receiverId=receiver and receiver.UserId
  for p,d in pairs(users) do
+  clearCharge(p,d)
   local r,h=rootOf(p)
   if d.side~=0 and r and h and h.Health>0 then
    local primary=p.UserId==(d.side==servingSide and serverId or receiverId)
@@ -243,7 +250,7 @@ local function facingTarget(from,r,side,depth)
  local distance=math.abs(-side*depth-from.Z)/math.max(0.25,math.abs(direction.Z))
  return from+direction*math.clamp(distance,12,110),momentum
 end
-local function serve(p,d,r,h)
+local function serve(p,d,r,h,charge)
  if not serveReady then return end
  local botServing=servingSide==-1 and not occupant(-1)
  if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
@@ -262,7 +269,7 @@ local function serve(p,d,r,h)
  local target,momentum
  if botServing then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
  else target,momentum=facingTarget(from,r,d.side,28) end
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum)
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,nil,not botServing and charge or 0)
  banner="SERVE  /  LET IT BOUNCE"
 end
 local function overheadStatus(p,r)
@@ -285,7 +292,7 @@ local function slamReady(p,d,now)
  local _,overhead=overheadStatus(p,r)
  return overhead and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
 end
-local function tryReturn(p,d,r,now,automatic,softRequested)
+local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   if now<d.lastSwing then return false end
   local distance,overhead=overheadStatus(p,r)
   local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE or overhead)
@@ -318,7 +325,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested)
   local powered=clean and not soft and now<d.powerUntil
   d.powerUntil=0
   ball.last=d.side; lastHitter[d.side]=p
-  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net")
+  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net",clean and not soft and charge or 0)
   local message=restored and (slam and "SLAM!  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
    or (slam and "SLAM!  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
@@ -331,15 +338,37 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  local d=users[p]
  if not d or d.side==0 or type(action)~="string" then return end
  local now=os.clock()
+ if action=="ChargeCancel" then clearCharge(p,d); return end
+ local r,h=rootOf(p)
+ if not r or not h or h.Health<=0 then clearCharge(p,d); return end
+ -- A release consumes its server-timed charge exactly once. Quick taps must
+ -- not be discarded by the general remote throttle after ChargeStart.
+ if action=="ChargeRelease" then
+  local started=d.chargeAt
+  local sameCharacter=d.chargeCharacter==p.Character
+  clearCharge(p,d)
+  if not started or not sameCharacter then return end
+  local charge=Rules.chargeAmount(now-started)
+  if ball.live then tryReturn(p,d,r,now,false,false,charge)
+  else serve(p,d,r,h,charge) end
+  return
+ end
  -- Remote flood protection does not impose a gameplay cooldown on perfect returns.
  if now-d.lastInput<0.015 then return end
  d.lastInput=now
- local r,h=rootOf(p)
- if not r or not h or h.Health<=0 then return end
+ if action=="ChargeStart" then
+  if d.chargeAt or now<(d.diveUntil or 0) then return end
+  if not ball.live and not serveReady then return end
+  d.chargeAt=now; d.chargeCharacter=p.Character
+  p.Character:SetAttribute("ShotChargeStarted",workspace:GetServerTimeNow())
+  return
+ end
  if action=="Serve" or (action=="Swing" and not ball.live) then
+  clearCharge(p,d)
   serve(p,d,r,h)
  elseif action=="Dive" then
   if now<d.diveAt or d.stamina<35 then return end
+  clearCharge(p,d)
   d.stamina-=35; d.diveAt=now+1.1
   d.diveUntil=now+0.48; d.diveCharacter=p.Character
   local delta=ball.live and ball.p-r.Position or Vector3.zero
@@ -364,6 +393,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   end
   tell(p,"OPPONENT SLOWED","power")
  elseif action=="Swing" or action=="SoftShot" then
+  clearCharge(p,d)
   if ball.live then tryReturn(p,d,r,now,false,action=="SoftShot") end
  end
 end)
@@ -373,6 +403,7 @@ RunService.Heartbeat:Connect(function(dt)
  for p,d in pairs(users) do
   d.stamina=math.min(100,d.stamina+dt*22)
   local r,h=rootOf(p)
+  if d.chargeAt and (not r or not h or h.Health<=0 or d.chargeCharacter~=p.Character) then clearCharge(p,d) end
   if r and h and h.Health>0 then
    h.WalkSpeed=now<d.slowUntil and 10 or 18
    local grounded=h.FloorMaterial~=Enum.Material.Air

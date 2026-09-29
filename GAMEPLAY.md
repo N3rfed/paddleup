@@ -115,3 +115,26 @@ Ball trails are wider and longer, changing yellow ? green (1.1x) ? orange (1.3x)
 ? red (1.6x) ? purple (2x). Slammable lob forecasts retain their blue trail.
 
 Team labels show each side's current player display name.
+
+Hold left mouse to charge, then release to serve or swing. The meter below the
+center crosshair fills in one second. Full charge gives a well-timed hit up to
+30% extra launch speed (subject to net clearance), without changing rally speed
+or gravity. Quick taps swing on release. Mistimed hits still lob or hit low;
+right-click still selects dink/drop. Charging cancels on a dive, right-click,
+menu/chat focus, window focus loss, death/respawn, or the end of a rally.
+
+Athletic movement uses directional footwork, bent knees, torso lean, a ready
+paddle arm, and a charge windup. Stride cadence follows actual movement speed,
+including strafing and backward movement. The pose blends away in the air;
+dives and strokes layer over it. Both R6 and R15/upgraded avatar joints are
+supported. The camera and centered crosshair remain stable during footwork.
+
+Animation review: articulated legs use separate foot-contact and lifted-step
+phases, backward knee hinges, and ankle counter-rotation to keep soles level.
+Leg lengths come from the avatar joints, with a simpler rigid-leg gait for R6.
+Strafing no longer drives both legs inward. Ready and charge poses use moderate
+elbow flexion; strokes coordinate torso rotation, gaze, and the balancing arm.
+Slams emphasize an early contact and follow-through. Dive poses lean in their
+travel direction, with a reaching arm and a bent supporting arm. The existing
+jump animation blends through while airborne. These poses use sports-anime
+anticipation and follow-through with human joint directions.

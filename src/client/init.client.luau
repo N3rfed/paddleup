@@ -78,7 +78,7 @@ timingText.TextXAlignment=Enum.TextXAlignment.Center
 local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
-text(hitPanel,"LMB SWING  /  RMB DINK or DROP",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
+text(hitPanel,"HOLD LMB / RELEASE HIT  /  RMB SOFT SHOT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
 local staminaPanel=panel(Vector2.new(490,738),Vector2.new(300,42))
 staminaPanel.Name="Stamina"
 local staminaLabel=text(staminaPanel,"STAMINA",Vector2.new(12,3),Vector2.new(270,18),10)
@@ -113,10 +113,49 @@ end
 devToggle.Activated:Connect(function() setDeveloperMode(not developerMode) end)
 setDeveloperMode(false)
 local snapshot,receivedAt,toastUntil=nil,0,os.clock()+4
+local chargeStarted,chargeCharacter
+local chargeTrack=Instance.new("Frame",crosshair)
+chargeTrack.Name="ChargeMeter"; chargeTrack.Position=UDim2.fromOffset(-30,36)
+chargeTrack.Size=UDim2.fromOffset(84,5); chargeTrack.BackgroundColor3=dark
+chargeTrack.BorderSizePixel=0; chargeTrack.Visible=false; round(chargeTrack,3)
+local chargeFill=Instance.new("Frame",chargeTrack)
+chargeFill.Size=UDim2.fromScale(0,1); chargeFill.BackgroundColor3=mint; chargeFill.BorderSizePixel=0; round(chargeFill,3)
+local chargeLabel=text(chargeTrack,"CHARGE",Vector2.new(-18,8),Vector2.new(120,18),11,mint)
+chargeLabel.TextXAlignment=Enum.TextXAlignment.Center
+local function cancelCharge()
+ if not chargeStarted then return end
+ input:FireServer("ChargeCancel")
+ if chargeCharacter then chargeCharacter:SetAttribute("ShotChargeStarted",nil) end
+ chargeStarted=nil; chargeCharacter=nil; chargeTrack.Visible=false
+end
+local function beginCharge()
+ local c=player.Character
+ local h=c and c:FindFirstChildOfClass("Humanoid")
+ if chargeStarted or not h or h.Health<=0 or c:GetAttribute("Diving") then return end
+ if not snapshot or (not snapshot.live and not snapshot.canServe) then return end
+ if UIS:IsKeyDown(Enum.KeyCode.LeftAlt) or UIS:IsKeyDown(Enum.KeyCode.RightAlt) then return end
+ chargeStarted=os.clock(); chargeCharacter=c
+ c:SetAttribute("ShotChargeStarted",workspace:GetServerTimeNow())
+ input:FireServer("ChargeStart")
+end
+local function releaseCharge()
+ if not chargeStarted then return end
+ if chargeCharacter then chargeCharacter:SetAttribute("ShotChargeStarted",nil) end
+ chargeStarted=nil; chargeCharacter=nil; chargeTrack.Visible=false
+ input:FireServer("ChargeRelease")
+end
+UIS.InputEnded:Connect(function(key)
+ if key.UserInputType==Enum.UserInputType.MouseButton1 then releaseCharge() end
+end)
+UIS.WindowFocusReleased:Connect(cancelCharge)
+UIS.TextBoxFocused:Connect(cancelCharge)
+game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
+player.CharacterRemoving:Connect(cancelCharge)
 local function swing()
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
 end
 local function dive()
+ cancelCharge()
  local character=player.Character
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
  input:FireServer("Dive",humanoid and humanoid.MoveDirection or Vector3.zero)
@@ -126,12 +165,14 @@ touchSwing.Activated:Connect(swing)
 touchDive.Activated:Connect(dive)
 UIS.InputBegan:Connect(function(key,processed)
  if UIS:GetFocusedTextBox() then return end
+ if key.KeyCode==Enum.KeyCode.LeftAlt or key.KeyCode==Enum.KeyCode.RightAlt then cancelCharge() end
  if key.KeyCode==Enum.KeyCode.Home then
+  cancelCharge()
   setDeveloperMode(not developerMode); return
  end
  if processed then return end
- if key.UserInputType==Enum.UserInputType.MouseButton1 then swing()
- elseif key.UserInputType==Enum.UserInputType.MouseButton2 then input:FireServer("SoftShot")
+ if key.UserInputType==Enum.UserInputType.MouseButton1 then beginCharge()
+ elseif key.UserInputType==Enum.UserInputType.MouseButton2 then cancelCharge(); input:FireServer("SoftShot")
  elseif key.KeyCode==Enum.KeyCode.LeftShift then dive()
  elseif key.KeyCode==Enum.KeyCode.Q then input:FireServer("Power")
  elseif key.KeyCode==Enum.KeyCode.E then input:FireServer("Slow") end
@@ -179,6 +220,7 @@ local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); co
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
  if not snapshot or snapshot.shotId~=data.shotId or not data.live then trail:Clear() end
+ if chargeStarted and snapshot and ((snapshot.live and not data.live) or (not snapshot.live and data.live) or data.side==0) then cancelCharge() end
  snapshot=data; receivedAt=os.clock()
  outGui.Enabled=data.outLanding~=nil
  if data.outLanding and data.outLanding~=lastOutLanding then
@@ -261,6 +303,15 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
  local h=c and c:FindFirstChildOfClass("Humanoid")
+ if chargeStarted then
+  if c~=chargeCharacter or not h or h.Health<=0 or c:GetAttribute("Diving") then cancelCharge()
+  else
+   local fraction=math.clamp((now-chargeStarted)/(Rules and Rules.CHARGE_TIME or 1),0,1)
+   chargeTrack.Visible=true; chargeFill.Size=UDim2.fromScale(fraction,1)
+   chargeFill.BackgroundColor3=fraction>=1 and coral or mint
+   chargeLabel.Text=fraction>=1 and "FULL CHARGE" or "HOLD TO CHARGE"
+  end
+ end
  local courtSide=(snapshot and snapshot.side) or player:GetAttribute("CourtSide") or 1
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and math.min(now-receivedAt,0.12) or 0

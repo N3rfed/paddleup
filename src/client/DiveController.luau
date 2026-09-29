@@ -4,6 +4,7 @@ local RunService=game:GetService("RunService")
 local Controller={}
 local active={}
 local swings={}
+local Movement
 local MOVE_TIME,POSE_TIME=0.48,0.66
 local function smooth(x)
  x=math.clamp(x,0,1)
@@ -23,11 +24,12 @@ function Controller.swing(userId,backhand,slam)
  local root=c and c:FindFirstChild("HumanoidRootPart")
  if not root then return end
  if swings[c] then restorePose(swings[c]) end
- local d={start=os.clock(),root=root,backhand=backhand,slam=slam,joints={}}
+ local humanoid=c:FindFirstChildOfClass("Humanoid")
+ local d={start=os.clock(),root=root,backhand=backhand,slam=slam,r15=humanoid and humanoid.RigType==Enum.HumanoidRigType.R15,joints={}}
  for _,joint in ipairs(c:GetDescendants()) do
   if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
    local name=joint.Name:lower():gsub(" ","")
-   if name=="rightshoulder" or name=="rightelbow" or name=="rightwrist" then
+   if name:find("shoulder") or name:find("elbow") or name=="rightwrist" or name=="waist" or name=="neck" or name=="root" or name=="rootjoint" then
     table.insert(d.joints,{instance=joint,name=name})
    end
   end
@@ -58,23 +60,9 @@ function Controller.play(userId,direction)
  local d={root=root,humanoid=humanoid,direction=direction,start=os.clock(),joints={},localPlayer=p==Players.LocalPlayer,side=p:GetAttribute("CourtSide") or 1}
  for _,joint in ipairs(c:GetDescendants()) do
   if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
-   local name=joint.Name:lower()
-   local rotation,offset
-   if joint.Part0==root then
-    rotation=Vector3.new(-74,0,0); offset=Vector3.new(0,-0.55,-0.2)
-   elseif name:find("shoulder") then
-    rotation=Vector3.new(155,0,name:find("right") and 12 or -12)
-   elseif name:find("hip") then
-    rotation=Vector3.new(name:find("right") and 8 or -8,0,0)
-   elseif name:find("knee") then rotation=Vector3.new(18,0,0)
-   elseif name:find("neck") then rotation=Vector3.new(30,0,0)
-   elseif name:find("elbow") then rotation=Vector3.new(-12,0,0)
-   elseif name:find("waist") then rotation=Vector3.zero end
-   if rotation then
-    -- Convert a pose in the parent-part axes to the joint's local axes (also works on R6).
-    local basis=joint.C0.Rotation
-    local pose=basis:Inverse()*CFrame.new(offset or Vector3.zero)*CFrame.Angles(math.rad(rotation.X),math.rad(rotation.Y),math.rad(rotation.Z))*basis
-    table.insert(d.joints,{instance=joint,pose=pose})
+   local name=joint.Name:lower():gsub(" ","")
+   if joint.Part0 and joint.Part1 then
+    table.insert(d.joints,{instance=joint,name=name})
    end
   end
  end
@@ -105,8 +93,14 @@ end
 RunService.PreAnimation:Connect(function()
  for _,d in pairs(swings) do restorePose(d) end
  for _,d in pairs(active) do restorePose(d) end
+ if Movement then Movement.restore() end
 end)
 RunService.PreSimulation:Connect(function(dt)
+ if not Movement then
+  local module=script.Parent:FindFirstChild("AthleticMovement")
+  if module then Movement=require(module) end
+ end
+ if Movement then Movement.update(dt) end
  for c,d in pairs(active) do
   local elapsed=os.clock()-d.start
   if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=POSE_TIME then
@@ -115,11 +109,14 @@ RunService.PreSimulation:Connect(function(dt)
    if d.airForce and (elapsed>=0.34 or d.humanoid.FloorMaterial~=Enum.Material.Air) then
     d.airForce:Destroy(); d.airAttachment:Destroy(); d.airForce=nil
    end
-   local weight=smooth(elapsed/0.08)*(1-smooth((elapsed-0.44)/0.22))
-   for _,j in ipairs(d.joints) do
-    if j.instance.Parent then
-     j.previous=j.instance.Transform
-     j.instance.Transform=j.previous:Lerp(j.pose,weight)
+   if Movement then
+    local localDirection=d.root.CFrame:VectorToObjectSpace(d.direction)
+    for _,j in ipairs(d.joints) do
+     if j.instance.Parent then
+      local target,weight=Movement.Pose.dive(j.name,localDirection,elapsed)
+      j.previous=j.instance.Transform
+      j.instance.Transform=j.previous:Lerp(Movement.Pose.atJoint(j.instance,target),weight)
+     end
     end
    end
    if d.localPlayer then
@@ -138,43 +135,32 @@ RunService.PreSimulation:Connect(function(dt)
    end
   end
  end
- -- Layer the paddle stroke over animation and the diving pose.
+ -- Coordinate the chest, gaze, paddle arm, and balancing arm through contact.
  for c,d in pairs(swings) do
   local elapsed=os.clock()-d.start
-  if not c.Parent or elapsed>=(d.slam and 0.42 or 0.33) then
+  if not c.Parent or not d.root.Parent or elapsed>=(d.slam and 0.46 or 0.36) then
    restorePose(d)
    swings[c]=nil
-  else
-   local weight=smooth(elapsed/0.07)*(1-smooth((elapsed-0.19)/0.14))
-   if d.slam then weight=smooth(elapsed/0.045)*(1-smooth((elapsed-0.25)/0.17)) end
-   local stroke=smooth((elapsed-0.07)/0.12)
-   local startAngle=d.backhand and -65 or 65
-   local endAngle=d.backhand and 45 or -40
-   local sweep=startAngle+(endAngle-startAngle)*stroke
+  elseif Movement then
    for _,j in ipairs(d.joints) do
-    if j.instance.Parent then
-     j.previous=j.instance.Transform
-     local joint=j.instance
-     local basis=joint.C0.Rotation
-     local rotation
-     if j.name=="rightshoulder" then
-      -- Positive pitch lifts the right hand forward; sweep across the chest.
-      -- Compensate for the torso's dive pose so the stroke stays in front.
-      rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(85),0,math.rad(sweep))
-     elseif j.name=="rightelbow" then
-      rotation=CFrame.Angles(math.rad(15),0,0)
-     else
-      rotation=CFrame.Angles(0,math.rad(d.backhand and 35 or -15),0)
+    local joint=j.instance
+    if joint.Parent then
+     local target,weight=Movement.Pose.stroke(j.name,elapsed,d.backhand,d.slam,d.r15)
+     local dive=active[c]
+     if dive then
+      -- Preserve the dive's body orientation; the arm still reaches toward aim.
+      if j.name=="waist" or j.name=="neck" or j.name=="root" or j.name=="rootjoint" then target=nil
+      elseif target and j.name:find("shoulder") then
+       local localDirection=d.root.CFrame:VectorToObjectSpace(dive.direction)
+       local diveTarget,diveWeight=Movement.Pose.dive("root",localDirection,os.clock()-dive.start)
+       local bodyTilt=CFrame.identity:Lerp(diveTarget.Rotation,diveWeight)
+       target=bodyTilt:Inverse()*target
+      end
      end
-     if d.slam then
-      local chop=smooth((elapsed-0.06)/0.15)
-      if j.name=="rightshoulder" then
-       rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(165-125*chop),0,math.rad(12))
-      elseif j.name=="rightelbow" then rotation=CFrame.Angles(math.rad(65*(1-chop)),0,0)
-      else rotation=CFrame.Angles(math.rad(-35*chop),0,0) end
+     if target then
+      j.previous=joint.Transform
+      joint.Transform=j.previous:Lerp(Movement.Pose.atJoint(joint,target),weight)
      end
-     local pose=basis:Inverse()*rotation*basis
-     joint.Transform=j.previous:Lerp(pose,weight)
     end
    end
   end
