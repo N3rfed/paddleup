@@ -21,6 +21,9 @@
               "Looped": false
             }
           }
+        },
+        "MatchRules": {
+          "$path": "src/server/MatchRules.luau"
         }
       }
     },
