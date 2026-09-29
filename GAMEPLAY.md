@@ -115,3 +115,10 @@ Ball trails are wider and longer, changing yellow ? green (1.1x) ? orange (1.3x)
 ? red (1.6x) ? purple (2x). Slammable lob forecasts retain their blue trail.
 
 Team labels show each side's current player display name.
+# Charged returns
+
+Charging now winds the paddle arm back with torso rotation and a balancing off arm. Release swings continue across the body before easing into locomotion; slams use a longer downward follow-through. Charge poses replicate to opponents. Successful returns include contact position and launch direction so the R15 arm solve puts the broad paddle face against the ball, within natural arm reach. The existing generous gameplay hitboxes remain in place, so far contacts can exceed the visual arm reach.
+
+Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.2 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves use normal serve speed.
+
+Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.

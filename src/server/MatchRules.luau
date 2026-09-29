@@ -115,8 +115,24 @@ function Rules.slamSpeedScale(rallySpeed)
  return rallySpeed*math.clamp(0.9+0.2*math.max(0,rallySpeed-1),0.9,1.3)
 end
 
-function Rules.returnSpeed(speed,clean,slam)
+Rules.CHARGE_TIME=1
+function Rules.chargeAmount(started,now)
+ local delay=0.4
+ return started and math.clamp((now-started-delay)/(Rules.CHARGE_TIME-delay),0,1) or 0
+end
+
+function Rules.chargeTarget(from,target,charge,severity,spread,depthRoll)
+ local offset=Vector3.new(target.X-from.X,0,target.Z-from.Z)
+ if offset.Magnitude<0.01 then return target end
+ local forward=offset.Unit
+ local right=Vector3.new(-forward.Z,0,forward.X)
+ local risk=charge*charge*math.clamp(severity,0,1)
+ return target+forward*((10+18*depthRoll)*risk)+right*(spread*16*risk)
+end
+
+function Rules.returnSpeed(speed,clean,slam,charged)
  if not clean then return speed*0.95 end
+ if charged and not slam then return math.max(1,speed)*1.07 end
  if speed<1 then return 1 end
  return speed*(slam and 1.10 or 1.05)
 end
