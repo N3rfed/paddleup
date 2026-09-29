@@ -9,6 +9,8 @@ local Debris=game:GetService("Debris")
 local player=Players.LocalPlayer
 local DiveController=require(script:WaitForChild("DiveController"))
 local HitboxOverlay=require(script:WaitForChild("HitboxOverlay"))
+local RallyEffects=require(script:WaitForChild("RallyEffects"))
+local BallShadow=require(script:WaitForChild("BallShadow"))
 local developerMode=false
 local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
@@ -68,10 +70,14 @@ developerLabel.Visible=false
 local brand=panel(Vector2.new(28,32),Vector2.new(295,82))
 text(brand,"PADDLE UP!",Vector2.new(18,9),Vector2.new(260,34),29).Font=Enum.Font.GothamBlack
 text(brand,"SKYLINE CLUB  /  ROOFTOP 18",Vector2.new(19,47),Vector2.new(270,20),11,mint)
-local scorePanel=panel(Vector2.new(451,32),Vector2.new(378,82))
+local scorePanel=panel(Vector2.new(490,24),Vector2.new(300,86))
 scorePanel.Name="Score"
-local scoreText=text(scorePanel,"00    :    00",Vector2.new(0,23),Vector2.new(378,48),33); scoreText.TextXAlignment=Enum.TextXAlignment.Center; scoreText.Font=Enum.Font.GothamBold
-local sides=text(scorePanel,"PLAYER                         PLAYER",Vector2.new(0,8),Vector2.new(378,18),11,mint); sides.TextXAlignment=Enum.TextXAlignment.Center
+local scoreText=text(scorePanel,"0  -  0  -  1",Vector2.new(0,18),Vector2.new(300,30),25); scoreText.TextXAlignment=Enum.TextXAlignment.Center; scoreText.Font=Enum.Font.GothamBold
+local sides=text(scorePanel,"TEAM 1  -  TEAM 2  -  # SERVER",Vector2.new(8,5),Vector2.new(284,13),9,mint); sides.TextXAlignment=Enum.TextXAlignment.Center
+local teamNames=text(scorePanel,"",Vector2.new(8,48),Vector2.new(284,15),9,cream)
+teamNames.TextXAlignment=Enum.TextXAlignment.Center; teamNames.TextTruncate=Enum.TextTruncate.AtEnd
+local servingLabel=text(scorePanel,"",Vector2.new(8,65),Vector2.new(284,15),10,mint)
+servingLabel.TextXAlignment=Enum.TextXAlignment.Center; servingLabel.TextTruncate=Enum.TextTruncate.AtEnd
 local badge=panel(Vector2.new(967,32),Vector2.new(285,82))
 local speedText=text(badge,"1.00x  RALLY SPEED",Vector2.new(17,12),Vector2.new(260,27),20,mint)
 local volleyText=text(badge,"0 PERFECT RETURNS",Vector2.new(17,46),Vector2.new(260,18),11)
@@ -116,7 +122,7 @@ local function setDeveloperMode(enabled)
  developerMode=enabled
  gui:SetAttribute("DeveloperMode",enabled)
  for _,child in ipairs(canvas:GetChildren()) do
-  if child:IsA("GuiObject") then child.Visible=child==scorePanel or child==staminaPanel or enabled end
+  if child:IsA("GuiObject") then child.Visible=child==scorePanel or child==staminaPanel or child==toast or enabled end
  end
  touchSwing.Visible=enabled and UIS.TouchEnabled; touchDive.Visible=enabled and UIS.TouchEnabled
  devToggle.Text=enabled and "DEV ON  /  Alt to click" or "DEV OFF  /  Alt to click"
@@ -124,7 +130,17 @@ end
 devToggle.Activated:Connect(function() setDeveloperMode(not developerMode) end)
 setDeveloperMode(false)
 local snapshot,receivedAt,toastUntil=nil,0,os.clock()+4
+local function animateSwing(softRequested,charge)
+ local character=player.Character
+ local root=character and character:FindFirstChild("HumanoidRootPart")
+ if not root then return end
+ local backhand=snapshot and root.CFrame:PointToObjectSpace(snapshot.p).X<0 or false
+ local side=player:GetAttribute("CourtSide") or 1
+ local soft=softRequested and (Rules and Rules.softShot(root.Position,side) or "drop") or nil
+ DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
+end
 local function swing()
+ animateSwing(false)
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
 end
 local function dive()
@@ -146,17 +162,22 @@ UIS.InputBegan:Connect(function(key,processed)
   chargeStarted=os.clock()
   local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
   chargeCanShow=not readyAt or workspace:GetServerTimeNow()>=readyAt
-  if chargeCanShow then DiveController.charge(player.UserId,true) end
+  animateSwing(false)
+  local started=chargeStarted
+  task.delay(0.4,function()
+   if chargeStarted==started and chargeCanShow then DiveController.charge(player.UserId,true,started) end
+  end)
   input:FireServer("ChargeStart")
- elseif key.UserInputType==Enum.UserInputType.MouseButton2 then cancelCharge(); input:FireServer("SoftShot")
+ elseif key.UserInputType==Enum.UserInputType.MouseButton2 then cancelCharge(); animateSwing(true); input:FireServer("SoftShot")
  elseif key.KeyCode==Enum.KeyCode.LeftShift then dive()
  elseif key.KeyCode==Enum.KeyCode.Q then input:FireServer("Power")
  elseif key.KeyCode==Enum.KeyCode.E then input:FireServer("Slow") end
 end)
 UIS.InputEnded:Connect(function(key)
  if key.UserInputType==Enum.UserInputType.MouseButton1 and chargeStarted then
+  local held=os.clock()-chargeStarted
+  if chargeCanShow and held>=0.4 then animateSwing(false,math.clamp((held-0.4)/0.6,0,1)) end
   chargeStarted=nil; chargeTrack.Visible=false
-  if chargeCanShow then DiveController.release(player.UserId) end
   chargeCanShow=false; input:FireServer("ChargeRelease")
  end
 end)
@@ -173,18 +194,17 @@ end,false,3000,Enum.KeyCode.Up,Enum.KeyCode.Down,Enum.KeyCode.Left,Enum.KeyCode.
 UIS.WindowFocusReleased:Connect(function() table.clear(arrows) end)
 local visual=Instance.new("Part")
 visual.Name="LocalPickleball"; visual.Shape=Enum.PartType.Ball; visual.Size=Vector3.new(0.85,0.85,0.85); visual.Color=Color3.fromRGB(239,255,87); visual.Material=Enum.Material.Neon
-visual.Anchored=true; visual.CanCollide=false; visual.CanQuery=false; visual.CanTouch=false; visual.Parent=workspace
+visual.Anchored=true; visual.CanCollide=false; visual.CanQuery=false; visual.CanTouch=false; visual.CastShadow=false; visual.Parent=workspace
+local ballShadow=BallShadow.new()
 local a0=Instance.new("Attachment",visual); a0.Position=Vector3.new(0,0.48,0)
 local a1=Instance.new("Attachment",visual); a1.Position=Vector3.new(0,-0.48,0)
 local trail=Instance.new("Trail",visual); trail.Attachment0=a0; trail.Attachment1=a1; trail.Lifetime=0.35; trail.Color=ColorSequence.new(Color3.fromRGB(245,255,126)); trail.Transparency=NumberSequence.new(0.15,1)
-local speedTrails={
- ColorSequence.new(Color3.fromRGB(245,255,126),Color3.fromRGB(255,235,90)),
- ColorSequence.new(Color3.fromRGB(100,255,160),Color3.fromRGB(25,200,130)),
- ColorSequence.new(Color3.fromRGB(255,175,65),Color3.fromRGB(255,95,35)),
- ColorSequence.new(Color3.fromRGB(255,85,110),Color3.fromRGB(205,40,80)),
- ColorSequence.new(Color3.fromRGB(225,130,255),Color3.fromRGB(150,55,255)),
-}
-local slamTrail=ColorSequence.new(Color3.fromRGB(55,155,255),Color3.fromRGB(145,220,255))
+local effects=RallyEffects.new(visual,trail)
+script.Destroying:Connect(function()
+ RunService:UnbindFromRenderStep("PaddleUpView")
+ effects:destroy()
+ ballShadow:destroy()
+end)
 local outMarker=Instance.new("Part",workspace)
 outMarker.Name="Out landing"; outMarker.Anchored=true; outMarker.Transparency=1
 outMarker.CanCollide=false; outMarker.CanTouch=false; outMarker.CanQuery=false
@@ -218,8 +238,9 @@ state.OnClientEvent:Connect(function(data)
  end
  lastOutLanding=data.outLanding
  touchSwing.Text=data.live and "SWING" or (data.canServe and "SERVE" or "WAIT")
- scoreText.Text=string.format("%02d    :    %02d",data.score[1],data.score[2])
- sides.Text=(data.homeName or "HOME").."   VS   "..(data.awayName or "AWAY")
+ scoreText.Text=string.format("%d  -  %d  -  %d",data.score[1],data.score[2],data.serverNumber or 1)
+ teamNames.Text="T1: "..(data.homeName or "Waiting").."  |  T2: "..(data.awayName or "Waiting")
+ servingLabel.Text=string.format("TEAM %d SERVING / #%d  %s",data.servingSide==1 and 1 or 2,data.serverNumber or 1,data.serverId==player.UserId and "YOU" or (data.serverName or ""))
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
  staminaFill.Size=UDim2.fromScale(data.stamina/100,1)
@@ -229,6 +250,20 @@ state.OnClientEvent:Connect(function(data)
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
+ effects:feedback(message,kind)
+ if kind=="ballBounce" then
+  if message.onCourt~=false then
+   local shared=ReplicatedStorage:FindFirstChild("Shared")
+   local hello=shared and shared:FindFirstChild("Hello")
+   local template=hello and (hello:FindFirstChild("pickleball bounce") or hello:FindFirstChild("pickleball hit"))
+   if template and template:IsA("Sound") then
+    local sound=template:Clone(); sound.Name="Pickleball bounce"
+    sound.Looped=false; sound.TimePosition=0; sound.Volume=0.35; sound.PlaybackSpeed=0.8; sound.Parent=SoundService
+    sound.Ended:Once(function() sound:Destroy() end); Debris:AddItem(sound,5); sound:Play()
+   end
+  end
+  return
+ end
  if kind=="rallyResult" or kind=="fault" then
   cancelCharge()
   announcement.Text=kind=="rallyResult" and (message.title.."\n"..message.fault) or tostring(message)
@@ -255,7 +290,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="swing" then
-  DiveController.swing(message.userId,message.backhand,message.slam,message.contact,message.direction,message.charge)
+  DiveController.swing(message.userId,message.backhand,message.slam,message.contact,message.direction,message.charge,message.soft)
   return
  end
  if kind=="miss" and os.clock()<toastUntil then return end
@@ -365,13 +400,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true; crosshair.Visible=false
  end
  HitboxOverlay.update(developerMode)
+ effects:update(dt,snapshot,chargeCanShow and chargeStarted or nil)
+ ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady))
  if not snapshot then return end
  visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live
- local tier=snapshot.speed>=2 and 5 or snapshot.speed>=1.6 and 4 or snapshot.speed>=1.3 and 3 or snapshot.speed>=1.1 and 2 or 1
- trail.Color=snapshot.slammable and slamTrail or speedTrails[tier]
- trail.Lifetime=snapshot.slammable and 0.7 or (0.35+(tier-1)*0.08)
- trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,1+(tier-1)*0.12),NumberSequenceKeypoint.new(1,0)})
- trail.LightEmission=0.8
  local eta=math.max(0,snapshot.eta-age)
  local color=snapshot.green and mint or (eta<0.6 and Color3.fromRGB(255,214,97) or coral)
  local visible=developerMode and snapshot.live and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46

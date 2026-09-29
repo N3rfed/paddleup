@@ -40,6 +40,9 @@ function Controller.play(userId,direction)
  local root=c and c:FindFirstChild("HumanoidRootPart")
  local humanoid=c and c:FindFirstChildOfClass("Humanoid")
  if not root or not humanoid or humanoid.Health<=0 then return end
+ direction=Vector3.new(direction.X,0,direction.Z)
+ if direction.Magnitude<0.001 then return end
+ direction=direction.Unit
  if active[c] then finish(c,active[c]) end
  local d={root=root,humanoid=humanoid,direction=direction,start=os.clock(),joints={},localPlayer=p==Players.LocalPlayer,side=p:GetAttribute("CourtSide") or 1}
  for _,joint in ipairs(c:GetDescendants()) do
@@ -60,7 +63,8 @@ function Controller.play(userId,direction)
     -- Convert a pose in the parent-part axes to the joint's local axes (also works on R6).
     local basis=joint.C0.Rotation
     local pose=basis:Inverse()*CFrame.new(offset or Vector3.zero)*CFrame.Angles(math.rad(rotation.X),math.rad(rotation.Y),math.rad(rotation.Z))*basis
-    table.insert(d.joints,{instance=joint,pose=pose})
+    table.insert(d.joints,{instance=joint,pose=pose,rootJoint=joint.Part0==root,
+     offset=offset or Vector3.zero,rotation=CFrame.Angles(math.rad(rotation.X),math.rad(rotation.Y),math.rad(rotation.Z))})
    end
   end
  end
@@ -105,7 +109,16 @@ RunService.PreSimulation:Connect(function(dt)
    for _,j in ipairs(d.joints) do
     if j.instance.Parent then
      j.previous=j.instance.Transform
-     j.instance.Transform=j.previous:Lerp(j.pose,weight)
+     local target=j.pose
+     if j.rootJoint then
+      -- Turn the whole dive pose into the travel direction. Recompute relative
+      -- yaw each frame so camera aiming cannot turn the body away mid-dive.
+      local facing=CFrame.lookAt(Vector3.zero,d.direction).Rotation
+      local relative=d.root.CFrame.Rotation:Inverse()*facing
+      local basis=j.instance.C0.Rotation
+      target=basis:Inverse()*relative*CFrame.new(j.offset)*j.rotation*basis
+     end
+     j.instance.Transform=j.previous:Lerp(target,weight)
     end
    end
    if d.localPlayer then
@@ -118,7 +131,7 @@ RunService.PreSimulation:Connect(function(dt)
     local safeStep=math.max(dt,1/240)
     local hit=workspace:Raycast(position,direction*(speed*safeStep+1.6),d.raycast)
     if hit then speed=math.min(speed,math.max(0,hit.Distance-1.6)/safeStep) end
-    -- Camera controls facing independently of dive travel for shot aiming.
+    -- Root facing remains available for shot aim; the body pose follows travel.
     local velocity=r.AssemblyLinearVelocity
     r.AssemblyLinearVelocity=Vector3.new(direction.X*speed,velocity.Y,direction.Z*speed)
    end

@@ -1,8 +1,9 @@
 # Paddle Up! — Skyline Club
 
 Arcade pickleball on an apartment rooftop. Press Play in Studio. The first
-player faces a practice partner; a second player replaces it. Additional
-players spectate and enter when a court slot opens.
+player faces a practice partner; a second player replaces it. A third player
+creates 2v1 and a fourth creates 2v2. Further players spectate and fill vacant
+slots in join order. Team changes reset the rally without awarding a point.
 
 | Input | Action |
 | --- | --- |
@@ -26,6 +27,9 @@ They slow to a stop over 0.48 seconds and recover by 0.66 seconds. Movement
 stays on the owning client, with server-validated stamina and cooldowns.
 Procedural poses
 support both Motor6D and upgraded AnimationConstraint avatar joints.
+During a dive the body turns toward the travel direction, including sideways
+and backward dives. The pose keeps that heading while the camera turns, then
+blends back into locomotion during recovery; camera-based shot aim is retained.
 
 The landing ring pulses red, yellow, then green. Returns within 0.23 seconds
 before a bounce or 0.28 seconds afterward count as perfect. Perfect hits have
@@ -37,9 +41,37 @@ First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.
 The two-bounce rule and diagonal serving are enforced. Kitchen faults apply
 when contact occurs inside the kitchen, or a dive contacts the ball there.
-Only the serving side scores; a receiving-side win transfers serve.
+Only the serving side scores. Doubles uses two service turns per possession:
+a fault passes serve to the partner, then the next fault causes a side-out.
+The opening doubles possession has only one turn, shown as 0-0-2. Solo sides
+in singles or 2v1 get one turn. Scoring switches the serving teammates' court
+positions; the diagonal receiver is enforced. On a side-out the doubles
+player in the right court serves first. Server numbers describe the current
+service turn, not a fixed player identity. These follow the
+[USA Pickleball side-out rules](https://usapickleball.org/rules/summary/),
+with one service turn for the solo side as the game's 2v1 adaptation.
+
+The scoreboard always reads **Team 1 points - Team 2 points - server number**,
+keeping team scores in fixed order. Below it are both team rosters and the
+serving team/player. New games reset to Team 1's opening service turn.
+
+A soft ground shadow stays directly beneath the rendered ball at its current
+X/Z position during play and serve setup. It follows the court/deck height,
+ignores players and the net, and works independently of lighting or shadow
+quality. The developer landing marker remains a separate prediction.
 
 The HUD includes clickable abilities and touch swing/dive buttons.
+
+The court glass enclosure, uprights, and rails are removed, including from
+saved courts on the next layout update. The invisible back and sideline
+movement limits are removed. Players can move through the rooftop surround.
+The score panel is compact, and shot feedback (lob, perfect, slam, dink, drop)
+is visible during normal play. Every gameplay left-click immediately swings;
+holding transitions into charge and release plays the charged follow-through.
+Right-click always plays an underhand dink/drop motion, even on a miss.
+Accepted contacts reconcile the animation without replaying it.
+Each on-court bounce plays a separate, softer, lower-pitched voice of the
+existing pickleball sample, configured as `pickleball bounce` in the project.
 
 - `src/server/init.server.luau`: ball simulation, hit validation, scoring,
   abilities, player slots, and practice partner.
@@ -54,6 +86,21 @@ edit mode, run `require(game.ServerScriptService.Server.World).build()`.
 
 The authoritative source is under `src/`, as mapped in
 `default.project.json`. The loose service folders are not mapped by Rojo.
+
+Court lighting reacts to rally speed and the interval between accepted hits.
+Six overhead washes and perimeter strips rest in teal, then follow the ball's
+yellow, green, orange, red, and violet speed tiers. Contact waves travel along
+the sidelines; quick exchanges build a stronger, gently pulsing glow. Lighting
+eases back to teal between points. Saved courts receive the rig on their next
+world layout update without rebuilding the rooftop.
+
+Every viewer sees contact sparks, stronger slam/charged/power impacts, bounce
+ripples, ball glow, and high-speed embers. Slammable lobs preserve their blue
+ball/trail cue. Players gain paddle charge sparks, brief contact highlights,
+swing trails, and dive/movement streaks; the practice partner also shows hit
+effects. These client-side visuals leave physics and hit validation unchanged,
+limit temporary effects, and clean up after rallies and character removal.
+`src/client/RallyEffects.luau` owns these effects and their speed palette.
 
 Developer overlay: press Home to toggle player hitboxes and the UI legend.
 Gold is normal hit reach, green is perfect-hit distance, blue is the overhead
@@ -86,8 +133,8 @@ Dive tuning: 64 studs/second initial speed, 0.48-second movement,
 windup/chop animation. Their shot speed starts at 90% of the previous base;
 the multiplier grows by 0.2 for each extra 1x rally speed, capped at 1.3.
 
-Only the serving side scores. A receiving-side rally win transfers serve without
-adding a point. Ball gravity remains 45 studs/s? for every shot; speed affects
+Only the serving side scores. A receiving-side rally win advances to the next
+server or causes a side-out without adding a point. Ball gravity remains 45 studs/s? for every shot; speed affects
 launch velocity and flight time. Net clearance can limit shot speed.
 The camera stays toward the opponent, with 25? left/right aim limits and subtle
 movement sway. Stamina stays visible in normal play. Out first landings show
