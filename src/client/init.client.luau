@@ -31,6 +31,17 @@ for _,shape in ipairs({{0,11,8,2},{16,11,8,2},{11,0,2,8},{11,16,2,8}}) do
  local outline=Instance.new("UIStroke",bar); outline.Color=dark; outline.Thickness=1
 end
 local scale=Instance.new("UIScale",canvas)
+local chargeTrack=Instance.new("Frame",crosshair)
+chargeTrack.Name="Charge"; chargeTrack.Position=UDim2.fromOffset(-12,34); chargeTrack.Size=UDim2.fromOffset(48,4)
+chargeTrack.BackgroundColor3=dark; chargeTrack.BorderSizePixel=0; chargeTrack.Visible=false
+local chargeFill=Instance.new("Frame",chargeTrack)
+chargeFill.BackgroundColor3=mint; chargeFill.BorderSizePixel=0; chargeFill.Size=UDim2.fromScale(0,1)
+local chargeStarted,chargeCanShow
+local function cancelCharge()
+ if chargeCanShow then DiveController.charge(player.UserId,false) end
+ if chargeStarted then input:FireServer("ChargeCancel") end
+ chargeStarted=nil; chargeCanShow=false; chargeTrack.Visible=false
+end
 local function round(object,r)
  local c=Instance.new("UICorner",object); c.CornerRadius=UDim.new(0,r or 14)
 end
@@ -78,7 +89,7 @@ timingText.TextXAlignment=Enum.TextXAlignment.Center
 local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
-text(hitPanel,"LMB SWING  /  RMB DINK or DROP",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
+text(hitPanel,"HOLD LMB / RELEASE HIT  /  RMB SOFT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
 local staminaPanel=panel(Vector2.new(490,738),Vector2.new(300,42))
 staminaPanel.Name="Stamina"
 local staminaLabel=text(staminaPanel,"STAMINA",Vector2.new(12,3),Vector2.new(270,18),10)
@@ -117,6 +128,7 @@ local function swing()
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
 end
 local function dive()
+ cancelCharge()
  local character=player.Character
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
  input:FireServer("Dive",humanoid and humanoid.MoveDirection or Vector3.zero)
@@ -130,12 +142,28 @@ UIS.InputBegan:Connect(function(key,processed)
   setDeveloperMode(not developerMode); return
  end
  if processed then return end
- if key.UserInputType==Enum.UserInputType.MouseButton1 then swing()
- elseif key.UserInputType==Enum.UserInputType.MouseButton2 then input:FireServer("SoftShot")
+ if key.UserInputType==Enum.UserInputType.MouseButton1 then
+  chargeStarted=os.clock()
+  local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
+  chargeCanShow=not readyAt or workspace:GetServerTimeNow()>=readyAt
+  if chargeCanShow then DiveController.charge(player.UserId,true) end
+  input:FireServer("ChargeStart")
+ elseif key.UserInputType==Enum.UserInputType.MouseButton2 then cancelCharge(); input:FireServer("SoftShot")
  elseif key.KeyCode==Enum.KeyCode.LeftShift then dive()
  elseif key.KeyCode==Enum.KeyCode.Q then input:FireServer("Power")
  elseif key.KeyCode==Enum.KeyCode.E then input:FireServer("Slow") end
 end)
+UIS.InputEnded:Connect(function(key)
+ if key.UserInputType==Enum.UserInputType.MouseButton1 and chargeStarted then
+  chargeStarted=nil; chargeTrack.Visible=false
+  if chargeCanShow then DiveController.release(player.UserId) end
+  chargeCanShow=false; input:FireServer("ChargeRelease")
+ end
+end)
+UIS.WindowFocusReleased:Connect(cancelCharge)
+UIS.TextBoxFocused:Connect(cancelCharge)
+game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
+player.CharacterRemoving:Connect(cancelCharge)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
  if UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -202,6 +230,7 @@ state.OnClientEvent:Connect(function(data)
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
  if kind=="rallyResult" or kind=="fault" then
+  cancelCharge()
   announcement.Text=kind=="rallyResult" and (message.title.."\n"..message.fault) or tostring(message)
   announcement.TextColor3=kind=="fault" and coral or cream
   announcementUntil=os.clock()+2.5; announcement.Visible=true
@@ -226,7 +255,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="swing" then
-  DiveController.swing(message.userId,message.backhand,message.slam)
+  DiveController.swing(message.userId,message.backhand,message.slam,message.contact,message.direction,message.charge)
   return
  end
  if kind=="miss" and os.clock()<toastUntil then return end
@@ -257,6 +286,15 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   if module then Rules=require(module) end
  end
  local now=os.clock()
+ if chargeStarted then
+  local character=player.Character
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  if not humanoid or humanoid.Health<=0 then cancelCharge()
+  else
+   chargeTrack.Visible=chargeCanShow==true and now-chargeStarted>=0.4
+   chargeFill.Size=UDim2.fromScale(math.clamp((now-chargeStarted-0.4)/0.6,0,1),1)
+  end
+ end
  announcement.Visible=now<announcementUntil
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")

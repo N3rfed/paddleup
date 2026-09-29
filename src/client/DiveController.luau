@@ -3,7 +3,10 @@ local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local Controller={}
 local active={}
-local swings={}
+local Shots=require(script.Parent:WaitForChild("ShotAnimation"))
+Controller.charge=Shots.charge
+Controller.release=Shots.release
+Controller.swing=Shots.swing
 local MOVE_TIME,POSE_TIME=0.48,0.66
 local function smooth(x)
  x=math.clamp(x,0,1)
@@ -16,23 +19,6 @@ local function restorePose(d)
    j.previous=nil
   end
  end
-end
-function Controller.swing(userId,backhand,slam)
- local p=Players:GetPlayerByUserId(userId)
- local c=p and p.Character
- local root=c and c:FindFirstChild("HumanoidRootPart")
- if not root then return end
- if swings[c] then restorePose(swings[c]) end
- local d={start=os.clock(),root=root,backhand=backhand,slam=slam,joints={}}
- for _,joint in ipairs(c:GetDescendants()) do
-  if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
-   local name=joint.Name:lower():gsub(" ","")
-   if name=="rightshoulder" or name=="rightelbow" or name=="rightwrist" then
-    table.insert(d.joints,{instance=joint,name=name})
-   end
-  end
- end
- swings[c]=d
 end
 local function finish(character,d)
  restorePose(d)
@@ -103,7 +89,7 @@ function Controller.play(userId,direction)
 end
 -- Remove our previous overlay before the Animator evaluates the next frame.
 RunService.PreAnimation:Connect(function()
- for _,d in pairs(swings) do restorePose(d) end
+ Shots.restore()
  for _,d in pairs(active) do restorePose(d) end
 end)
 RunService.PreSimulation:Connect(function(dt)
@@ -138,46 +124,6 @@ RunService.PreSimulation:Connect(function(dt)
    end
   end
  end
- -- Layer the paddle stroke over animation and the diving pose.
- for c,d in pairs(swings) do
-  local elapsed=os.clock()-d.start
-  if not c.Parent or elapsed>=(d.slam and 0.42 or 0.33) then
-   restorePose(d)
-   swings[c]=nil
-  else
-   local weight=smooth(elapsed/0.07)*(1-smooth((elapsed-0.19)/0.14))
-   if d.slam then weight=smooth(elapsed/0.045)*(1-smooth((elapsed-0.25)/0.17)) end
-   local stroke=smooth((elapsed-0.07)/0.12)
-   local startAngle=d.backhand and -65 or 65
-   local endAngle=d.backhand and 45 or -40
-   local sweep=startAngle+(endAngle-startAngle)*stroke
-   for _,j in ipairs(d.joints) do
-    if j.instance.Parent then
-     j.previous=j.instance.Transform
-     local joint=j.instance
-     local basis=joint.C0.Rotation
-     local rotation
-     if j.name=="rightshoulder" then
-      -- Positive pitch lifts the right hand forward; sweep across the chest.
-      -- Compensate for the torso's dive pose so the stroke stays in front.
-      rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(85),0,math.rad(sweep))
-     elseif j.name=="rightelbow" then
-      rotation=CFrame.Angles(math.rad(15),0,0)
-     else
-      rotation=CFrame.Angles(0,math.rad(d.backhand and 35 or -15),0)
-     end
-     if d.slam then
-      local chop=smooth((elapsed-0.06)/0.15)
-      if j.name=="rightshoulder" then
-       rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(165-125*chop),0,math.rad(12))
-      elseif j.name=="rightelbow" then rotation=CFrame.Angles(math.rad(65*(1-chop)),0,0)
-      else rotation=CFrame.Angles(math.rad(-35*chop),0,0) end
-     end
-     local pose=basis:Inverse()*rotation*basis
-     joint.Transform=j.previous:Lerp(pose,weight)
-    end
-   end
-  end
- end
+ Shots.update()
 end)
 return Controller
