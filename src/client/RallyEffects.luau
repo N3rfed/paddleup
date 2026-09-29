@@ -262,7 +262,8 @@ function Effects:update(dt,snapshot,localChargeAt)
    local chargeAge=chargeAt and serverNow-chargeAt or 0
    if owner==Players.LocalPlayer and localChargeAt then chargeAge=os.clock()-localChargeAt end
    local readyAt=character:GetAttribute("ChargedShotReadyAt") or 0
-   local charge=live and visible and serverNow>=readyAt and math.clamp((chargeAge-0.4)/0.6,0,1) or 0
+   local serving=snapshot and snapshot.serveReady and owner and owner.UserId==snapshot.serverId
+   local charge=(live or serving) and visible and (serving or serverNow>=readyAt) and math.clamp((chargeAge-0.4)/0.6,0,1) or 0
    actor.flash*=math.exp(-dt*8)
    local diving=visible and self.clock<actor.dive
    local actorColor=diving and BLUE or charge>0 and color:Lerp(WHITE,charge*0.4) or (actor.flash>0.02 and actor.flashColor) or color

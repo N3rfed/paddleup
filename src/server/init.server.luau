@@ -94,7 +94,11 @@ local function rootOf(p)
  return c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
 end
 local function tell(p,text,kind)
- feedback:FireClient(p,text,kind or "info")
+ kind=kind or "info"
+ local tone=(kind=="perfect" or kind=="slam" or kind=="power") and "good"
+  or (kind=="miss" or kind=="fault" or kind=="slow") and "bad" or "neutral"
+ feedback:FireAllClients({userId=p.UserId,text=text,tone=tone},"playerText")
+ if kind=="fault" then feedback:FireClient(p,text,kind) end
 end
 local function landing()
  if not ball.live then return ball.p,0 end
@@ -280,27 +284,33 @@ local function facingTarget(from,r,side,depth)
  local distance=math.abs(-side*depth-from.Z)/math.max(0.25,math.abs(direction.Z))
  return from+direction*math.clamp(distance,12,110),momentum
 end
-local function serve(p,d,r,h)
+local function serve(p,d,r,h,charge)
  if not serveReady then return end
+ if os.clock()<d.lastSwing then return end
+ charge=charge or 0
  local botServing=servingSide==-1 and not occupant(-1)
  if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
   tell(p,"WAIT FOR THE DESIGNATED SERVER","info"); return
  end
  local from=Vector3.new(serveX,184,servingSide*46)
+ if botServing then from=Rules.heldBallPosition(bot) or from end
  if not botServing then
   if not Rules.servePositionValid(r.Position,d.side,serveX,h.FloorMaterial~=Enum.Material.Air) then
    tell(p,"Foot Fault! Serve from behind the baseline on the marked side.","fault"); return
   end
-  from=Vector3.new(r.Position.X,184,r.Position.Z)
+  from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z)
  end
  if not botServing then lastHitter[servingSide]=p end
  serveReady=false; ball.last=servingSide; ball.shots=0
  local target,momentum
  if botServing then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
  else target,momentum=facingTarget(from,r,d.side,28) end
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,false,0,{userId=not botServing and p.UserId or nil})
+ d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
+ p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,false,charge,{userId=not botServing and p.UserId or nil})
  if not botServing then
-  feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit},"swing")
+  feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=charge},"swing")
+  if charge>0 then tell(p,"CHARGED SERVE!","perfect") end
  end
  banner="SERVE  /  LET IT BOUNCE"
 end
@@ -317,7 +327,7 @@ local function kitchenLobWindow(p,d,r,overhead)
 end
 local function slamReady(p,d,now)
  local r,h=rootOf(p)
- if not r or not h or h.Health<=0 or d.side==0 or now<d.lastSwing then return false end
+ if not r or not h or h.Health<=0 or d.side==0 then return false end
  if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
  if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,ball.p,d.side,now<d.diveUntil)) then return false end
@@ -326,17 +336,19 @@ local function slamReady(p,d,now)
 end
 local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   charge=charge or 0
-  if now<d.lastSwing then return false end
   local distance,overhead=overheadStatus(p,r)
   local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE or overhead)
   local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
   if automatic and not valid then return false end
   local clean=valid and (distance<=Rules.PERFECT_RANGE or overhead) and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
-  d.lastSwing=clean and now or now+0.28
+  if not Rules.hitReady(now,d.lastSwing,clean) then return false end
+  d.lastSwing=clean and now or now+Rules.HIT_COOLDOWN
+  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
   local backhand=r.CFrame:PointToObjectSpace(ball.p).X<0
   if not valid then
    feedback:FireAllClients({userId=p.UserId,backhand=backhand,soft=softRequested and Rules.softShot(r.Position,d.side) or nil},"swing")
-   tell(p,"MOVE INTO THE BALL","miss"); return
+   if not automatic then tell(p,"Miss!","miss") end
+   return
   end
   if ball.shots==0 and receiverId and p.UserId~=receiverId then
    point(-d.side,"Wrong receiver: the diagonal player must return the serve"); return false
@@ -375,7 +387,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   elseif charged and quality~="net" then message="MISTIMED CHARGE  /  WIDE RETURN" end
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
   elseif quality=="net" then message="BAD TIMING  /  LOW CONTACT" end
-  tell(p,message,slam and "slam" or (clean and "perfect" or "hit"))
+  feedback:FireAllClients({userId=p.UserId,text=message,tone=clean and "good" or (quality=="net" or charged) and "bad" or "neutral"},"playerText")
   d.diveUntil=0
   return true
 end
@@ -389,7 +401,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  if action=="ChargeRelease" then
   if not d.chargeAt then return end
   releasedCharge=Rules.chargeAmount(d.chargeAt,now); d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
-  if releasedCharge>0 and now<(d.chargeShotAt or 0) then releasedCharge=0; d.chargeCooldownBlocked=true end
+  if ball.live and releasedCharge>0 and now<(d.chargeShotAt or 0) then releasedCharge=0; d.chargeCooldownBlocked=true end
  end
  -- Remote flood protection does not impose a gameplay cooldown on perfect returns.
  if releasedCharge==nil and now-d.lastInput<0.015 then return end
@@ -404,7 +416,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
    local hit=tryReturn(p,d,r,now,false,false,releasedCharge)
    if hit and d.chargeCooldownBlocked then tell(p,"CHARGED SHOT RECHARGING  /  NORMAL HIT","info") end
    d.chargeCooldownBlocked=nil
-  else serve(p,d,r,h) end
+  else serve(p,d,r,h,releasedCharge) end
  elseif action=="Serve" or (action=="Swing" and not ball.live) then
   serve(p,d,r,h)
  elseif action=="Dive" then
@@ -537,12 +549,17 @@ RunService.Heartbeat:Connect(function(dt)
    ball.last=-1; ball.shots+=1
    local targetX=math.sin(now*0.7)*12
    launch(ball.p,Vector3.new(targetX,FLOOR,26),false,not clean,false,0,nil,false,0,{clean=clean})
+   feedback:FireAllClients({userId=0,text=clean and "PERFECT!" or "LOB RETURN",tone=clean and "good" or "neutral"},"playerText")
   end
  end
  botBody.Position=Vector3.new(botX,184.2,botZ)
  botHead.Position=Vector3.new(botX,186.3,botZ)
  botPaddle.CFrame=CFrame.new(botX-1.8,184.4,botZ+1)*CFrame.Angles(0,0,0.2)
  for i,p in ipairs(botLegs) do p.Position=Vector3.new(botX+(i==1 and -0.6 or 0.6),182.4,botZ) end
+ if serveReady then
+  local server=serverId and Players:GetPlayerByUserId(serverId)
+  ball.p=Rules.heldBallPosition(server and server.Character or (hasBot and bot)) or ball.p
+ end
  broadcast+=dt
  if broadcast>=0.05 then
   broadcast=0

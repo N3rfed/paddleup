@@ -52,8 +52,9 @@ service turn, not a fixed player identity. These follow the
 with one service turn for the solo side as the game's 2v1 adaptation.
 
 The scoreboard always reads **Team 1 points - Team 2 points - server number**,
-keeping team scores in fixed order. Below it are both team rosters and the
-serving team/player. New games reset to Team 1's opening service turn.
+keeping team scores in fixed order. The compact gradient panel contains only
+the three numbers, with a mint underline marking the serving team's score.
+New games reset to Team 1's opening service turn.
 
 A soft ground shadow stays directly beneath the rendered ball at its current
 X/Z position during play and serve setup. It follows the court/deck height,
@@ -65,9 +66,18 @@ The HUD includes clickable abilities and touch swing/dive buttons.
 The court glass enclosure, uprights, and rails are removed, including from
 saved courts on the next layout update. The invisible back and sideline
 movement limits are removed. Players can move through the rooftop surround.
-The score panel is compact, and shot feedback (lob, perfect, slam, dink, drop)
-is visible during normal play. Every gameplay left-click immediately swings;
-holding transitions into charge and release plays the charged follow-through.
+Shot feedback (lob, perfect, slam, dink, drop) floats above the player who
+performed the shot and is visible to everyone. Labels pop, rise, and fade:
+green for clean shots, gray for neutral feedback/lobs, and red for misses,
+faults, or mistimed charges. Each player keeps only their latest label during
+fast exchanges; the practice partner also shows shot labels. The fixed shot
+toast is removed; rally-result announcements remain separate.
+Labels use smaller 17px text and follow a smoothed root-position anchor instead
+of the animated head, with a gentle rise and fade instead of a bouncing scale.
+Left-click presses only begin charging; releasing plays the swing and attempts
+the hit. A tap is a normal swing. Non-perfect attempts have a 0.28-second hit
+cooldown; perfect timing bypasses it. Only an explicit missed click/release
+shows "Miss!"; holding and automatic dive reach checks do not create misses.
 Right-click always plays an underhand dink/drop motion, even on a miss.
 Accepted contacts reconcile the animation without replaying it.
 Each on-court bounce plays a separate, softer, lower-pitched voice of the
@@ -161,11 +171,11 @@ qualifies at the kitchen line. Right-click does not serve.
 Ball trails are wider and longer, changing yellow ? green (1.1x) ? orange (1.3x)
 ? red (1.6x) ? purple (2x). Slammable lob forecasts retain their blue trail.
 
-Team labels show each side's current player display name.
+The score-only HUD keeps Team 1 and Team 2 in fixed order, followed by server number.
 # Charged returns
 
 Charging now winds the paddle arm back with torso rotation and a balancing off arm. Release swings continue across the body before easing into locomotion; slams use a longer downward follow-through. Charge poses replicate to opponents. Successful returns include contact position and launch direction so the R15 arm solve puts the broad paddle face against the ball, within natural arm reach. The existing generous gameplay hitboxes remain in place, so far contacts can exceed the visual arm reach.
 
-Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.2 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves use normal serve speed.
+Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.4 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves accept the same charge-dependent launch boost, subject to net clearance. The ball stays in the designated server's off hand until release and launches from that hand; diagonal service and foot-fault checks still apply.
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
