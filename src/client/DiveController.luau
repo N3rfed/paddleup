@@ -4,7 +4,7 @@ local RunService=game:GetService("RunService")
 local Controller={}
 local active={}
 local swings={}
-local MOVE_TIME,POSE_TIME=0.8,1.06
+local MOVE_TIME,POSE_TIME=0.48,0.66
 local function smooth(x)
  x=math.clamp(x,0,1)
  return x*x*(3-2*x)
@@ -17,13 +17,13 @@ local function restorePose(d)
   end
  end
 end
-function Controller.swing(userId,backhand)
+function Controller.swing(userId,backhand,slam)
  local p=Players:GetPlayerByUserId(userId)
  local c=p and p.Character
  local root=c and c:FindFirstChild("HumanoidRootPart")
  if not root then return end
  if swings[c] then restorePose(swings[c]) end
- local d={start=os.clock(),root=root,backhand=backhand,joints={}}
+ local d={start=os.clock(),root=root,backhand=backhand,slam=slam,joints={}}
  for _,joint in ipairs(c:GetDescendants()) do
   if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
    local name=joint.Name:lower():gsub(" ","")
@@ -36,6 +36,7 @@ function Controller.swing(userId,backhand)
 end
 local function finish(character,d)
  restorePose(d)
+ if d.airForce then d.airForce:Destroy(); d.airAttachment:Destroy(); d.airForce=nil end
  character:SetAttribute("Diving",nil)
  if d.localPlayer and d.humanoid.Parent then
   d.humanoid.AutoRotate=d.autoRotate
@@ -78,6 +79,16 @@ function Controller.play(userId,direction)
   end
  end
  if d.localPlayer then
+  if humanoid.FloorMaterial==Enum.Material.Air then
+   local velocity=root.AssemblyLinearVelocity
+   root.AssemblyLinearVelocity=Vector3.new(velocity.X,math.clamp(velocity.Y,-4,8),velocity.Z)
+   d.airAttachment=Instance.new("Attachment",root)
+   d.airForce=Instance.new("VectorForce")
+   d.airForce.Attachment0=d.airAttachment; d.airForce.RelativeTo=Enum.ActuatorRelativeTo.World
+   d.airForce.ApplyAtCenterOfMass=true
+   d.airForce.Force=Vector3.new(0,root.AssemblyMass*workspace.Gravity*0.8,0)
+   d.airForce.Parent=root
+  end
   d.autoRotate=humanoid.AutoRotate
   d.jumpEnabled=humanoid:GetStateEnabled(Enum.HumanoidStateType.Jumping)
   humanoid.AutoRotate=false
@@ -101,7 +112,10 @@ RunService.PreSimulation:Connect(function(dt)
   if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=POSE_TIME then
    finish(c,d)
   else
-   local weight=smooth(elapsed/0.12)*(1-smooth((elapsed-0.77)/0.29))
+   if d.airForce and (elapsed>=0.34 or d.humanoid.FloorMaterial~=Enum.Material.Air) then
+    d.airForce:Destroy(); d.airAttachment:Destroy(); d.airForce=nil
+   end
+   local weight=smooth(elapsed/0.08)*(1-smooth((elapsed-0.44)/0.22))
    for _,j in ipairs(d.joints) do
     if j.instance.Parent then
      j.previous=j.instance.Transform
@@ -113,23 +127,12 @@ RunService.PreSimulation:Connect(function(dt)
     h:Move(Vector3.zero,false)
     h.Jump=false
     local direction=d.direction
-    local speed=elapsed<MOVE_TIME and 44*(1-smooth(elapsed/MOVE_TIME)) or 0
+    local speed=elapsed<MOVE_TIME and 64*(1-smooth(elapsed/MOVE_TIME)) or 0
     local position=r.Position
     local safeStep=math.max(dt,1/240)
-    -- Brake before court edges so the server's containment correction never fires.
-    local allowance=math.huge
-    if math.abs(direction.X)>0.001 then
-     allowance=math.min(allowance,((direction.X>0 and 29 or -29)-position.X)/direction.X)
-    end
-    if math.abs(direction.Z)>0.001 then
-     local minZ,maxZ=d.side==1 and 3.5 or -59,d.side==1 and 59 or -3.5
-     allowance=math.min(allowance,((direction.Z>0 and maxZ or minZ)-position.Z)/direction.Z)
-    end
-    speed=math.min(speed,math.max(0,allowance-0.15)/safeStep)
     local hit=workspace:Raycast(position,direction*(speed*safeStep+1.6),d.raycast)
     if hit then speed=math.min(speed,math.max(0,hit.Distance-1.6)/safeStep) end
-    local desired=CFrame.lookAt(position,position+direction)
-    r.CFrame=r.CFrame:Lerp(desired,1-math.exp(-dt*24))
+    -- Camera controls facing independently of dive travel for shot aiming.
     local velocity=r.AssemblyLinearVelocity
     r.AssemblyLinearVelocity=Vector3.new(direction.X*speed,velocity.Y,direction.Z*speed)
    end
@@ -138,11 +141,12 @@ RunService.PreSimulation:Connect(function(dt)
  -- Layer the paddle stroke over animation and the diving pose.
  for c,d in pairs(swings) do
   local elapsed=os.clock()-d.start
-  if not c.Parent or elapsed>=0.33 then
+  if not c.Parent or elapsed>=(d.slam and 0.42 or 0.33) then
    restorePose(d)
    swings[c]=nil
   else
    local weight=smooth(elapsed/0.07)*(1-smooth((elapsed-0.19)/0.14))
+   if d.slam then weight=smooth(elapsed/0.045)*(1-smooth((elapsed-0.25)/0.17)) end
    local stroke=smooth((elapsed-0.07)/0.12)
    local startAngle=d.backhand and -65 or 65
    local endAngle=d.backhand and 45 or -40
@@ -161,6 +165,13 @@ RunService.PreSimulation:Connect(function(dt)
       rotation=CFrame.Angles(math.rad(15),0,0)
      else
       rotation=CFrame.Angles(0,math.rad(d.backhand and 35 or -15),0)
+     end
+     if d.slam then
+      local chop=smooth((elapsed-0.06)/0.15)
+      if j.name=="rightshoulder" then
+       rotation=joint.Part0.CFrame.Rotation:Inverse()*d.root.CFrame.Rotation*CFrame.Angles(math.rad(165-125*chop),0,math.rad(12))
+      elseif j.name=="rightelbow" then rotation=CFrame.Angles(math.rad(65*(1-chop)),0,0)
+      else rotation=CFrame.Angles(math.rad(-35*chop),0,0) end
      end
      local pose=basis:Inverse()*rotation*basis
      joint.Transform=j.previous:Lerp(pose,weight)
