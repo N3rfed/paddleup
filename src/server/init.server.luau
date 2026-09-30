@@ -16,6 +16,7 @@ local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
 local WALK_SPEED,SLOWED_SPEED=18,10
 local rulesModule=script:WaitForChild("MatchRules")
 local Rules=require(rulesModule)
+local BodyBounce=require(script:WaitForChild("BodyBounce"))
 -- Existing Studio sessions may not have picked up the new Rojo shared mapping.
 local shared=ReplicatedStorage:FindFirstChild("Shared") or Instance.new("Folder")
 shared.Name="Shared"; shared.Parent=ReplicatedStorage
@@ -141,6 +142,7 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  local duration=slam and math.max(0.12,math.min(distance/(BASE_SPEED*1.8),math.sqrt(2*math.max(0.1,from.Y-FLOOR)/gravity)*0.75)) or math.max(0.7,distance/BASE_SPEED)
  if lob then duration=math.max(duration*1.35,1.5) end
  duration=duration/math.max(0.1,speedScale)
+ if contact and contact.minDuration then duration=math.max(duration,contact.minDuration) end
  local vy=(FLOOR-from.Y+0.5*gravity*duration*duration)/duration
  local crossing=(0-from.Z)/(target.Z-from.Z)
  if not mishit and crossing>0 and crossing<1 then
@@ -170,6 +172,34 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  contact.position=from; contact.direction=ball.v.Unit; contact.speed=ball.speed
  contact.slam=slam==true; contact.powered=boost==true; contact.charge=charge or 0; contact.soft=soft
  feedback:FireAllClients(contact,"ballHit")
+end
+-- Only the receiving team can deflect a shot; changing ball.last prevents
+-- the outgoing lob from repeatedly colliding with the same player or teammate.
+local function bodyReturn(previous,hasBot)
+ local earliest,hitPlayer,hitSide
+ local function check(character,side,player)
+  if not character or side~=-ball.last then return end
+  for _,part in ipairs(character:GetChildren()) do
+   if part:IsA("BasePart") and part.Name~="HumanoidRootPart" and not part.Name:find("Paddle") then
+    local fraction=BodyBounce.contact(previous,ball.p,part.CFrame,part.Size)
+    if fraction and (not earliest or fraction<earliest) then
+     earliest=fraction; hitPlayer=player; hitSide=side
+    end
+   end
+  end
+ end
+ for p,d in pairs(users) do
+  local _,h=rootOf(p)
+  if d.side~=0 and h and h.Health>0 then check(p.Character,d.side,p) end
+ end
+ if hasBot then check(bot,-1,nil) end
+ if not earliest then return end
+ local position=previous:Lerp(ball.p,earliest)
+ local target,speed,duration=BodyBounce.shot(position,ball.v,hitSide,ball.speed,FLOOR)
+ ball.speed=speed; ball.last=hitSide; ball.shots+=1
+ lastHitter[hitSide]=hitPlayer
+ launch(position,target,false,true,false,0,nil,false,0,{userId=hitPlayer and hitPlayer.UserId or 0,minDuration=duration})
+ if hitPlayer then tell(hitPlayer,"BODY BOUNCE / SLOW LOB","info") end
 end
 local function point(winner,reason)
  if not ball.live then return end
@@ -540,6 +570,8 @@ RunService.Heartbeat:Connect(function(dt)
     end
    elseif ball.p.Y<170 then
     point(ball.bounces>0 and ball.last or -ball.last,"Rally over")
+   else
+    bodyReturn(previous,hasBot)
    end
   end
  else accumulator=0 end

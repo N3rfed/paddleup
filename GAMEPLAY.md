@@ -181,3 +181,8 @@ Charging now winds the paddle arm back with torso rotation and a balancing off a
 Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.4 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves accept the same charge-dependent launch boost, subject to net clearance. The ball stays in the designated server's off hand until release and launches from that hand; diagonal service and foot-fault checks still apply.
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
+
+Body hits automatically deflect incoming balls into the opposite court as a
+slow lob, including hits on the practice partner. These arcade saves require
+no swing and reduce rally speed by 30%; horizontal pace is at least 30% slower
+than the incoming ball. Paddle parts and spectators do not trigger body saves.
