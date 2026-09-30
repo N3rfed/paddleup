@@ -4,6 +4,7 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 require(script:WaitForChild("World")).build()
+require(script:WaitForChild("DayNightCycle")).start()
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
 local function remote(name)
@@ -133,6 +134,7 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  return false
 end
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
+ ball.bodyHitSide=nil
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  if not slam and not soft then speedScale*=1+0.22*(charge or 0) end
  -- Speed changes flight time and launch velocity; downward gravity stays constant.
@@ -173,9 +175,9 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  contact.slam=slam==true; contact.powered=boost==true; contact.charge=charge or 0; contact.soft=soft
  feedback:FireAllClients(contact,"ballHit")
 end
--- Only the receiving team can deflect a shot; changing ball.last prevents
--- the outgoing lob from repeatedly colliding with the same player or teammate.
+-- Body hits stay visible until landing, but cannot be returned or deflected twice.
 local function bodyReturn(previous,hasBot)
+ if ball.bodyHitSide then return end
  local earliest,hitPlayer,hitSide
  local function check(character,side,player)
   if not character or side~=-ball.last then return end
@@ -195,11 +197,14 @@ local function bodyReturn(previous,hasBot)
  if hasBot then check(bot,-1,nil) end
  if not earliest then return end
  local position=previous:Lerp(ball.p,earliest)
- local target,speed,duration=BodyBounce.shot(position,ball.v,hitSide,ball.speed,FLOOR)
- ball.speed=speed; ball.last=hitSide; ball.shots+=1
- lastHitter[hitSide]=hitPlayer
- launch(position,target,false,true,false,0,nil,false,0,{userId=hitPlayer and hitPlayer.UserId or 0,minDuration=duration})
- if hitPlayer then tell(hitPlayer,"BODY BOUNCE / SLOW LOB","info") end
+ ball.p=position
+ ball.v=BodyBounce.deflect(ball.v,hitSide)
+ ball.g=GRAVITY; ball.lob=false; ball.slamLob=false
+ ball.bodyHitSide=hitSide
+ ball.shotId=(ball.shotId or 0)+1
+ feedback:FireAllClients({position=position,direction=ball.v.Unit,speed=ball.speed,
+  userId=hitPlayer and hitPlayer.UserId or 0,slam=false,powered=false,charge=0},"ballHit")
+ if hitPlayer then tell(hitPlayer,"BODY HIT / DEAD BALL","miss") end
 end
 local function point(winner,reason)
  if not ball.live then return end
@@ -221,6 +226,7 @@ local function point(winner,reason)
   ["Wrong receiver: the diagonal player must return the serve"]="Wrong Receiver!",
   ["Serve fault: land in the diagonal service court"]="Serve Fault!",
   ["Rally over"]="Rally Over!",
+  ["Body hit"]="Body Hit!",
  }
  feedback:FireAllClients({title=scored and (scorerName.." Scored for Team "..index.."!") or outcome=="secondServer" and "Second Server!" or "Side Out!",fault=faultNames[reason] or (reason.."!")},"rallyResult")
  if scored and score[index]>=11 and math.abs(score[1]-score[2])>=2 then
@@ -367,7 +373,7 @@ end
 local function slamReady(p,d,now)
  local r,h=rootOf(p)
  if not r or not h or h.Health<=0 or d.side==0 then return false end
- if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
+ if ball.bodyHitSide or not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
  if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,ball.p,d.side,now<d.diveUntil)) then return false end
  local _,overhead=overheadStatus(p,r)
@@ -377,7 +383,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   charge=charge or 0
   local distance,overhead=overheadStatus(p,r)
   local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE or overhead)
-  local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
+  local valid=ball.live and not ball.bodyHitSide and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
   if automatic and not valid then return false end
   local clean=valid and (distance<=Rules.PERFECT_RANGE or overhead) and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
   if not Rules.hitReady(now,d.lastSwing,clean) then return false end
@@ -550,7 +556,9 @@ RunService.Heartbeat:Connect(function(dt)
     if ball.bounces==0 and (math.abs(impact.X)>20.09 or math.abs(impact.Z)>40.09) then
      ball.outLanding=Vector3.new(impact.X,FLOOR,impact.Z)
     end
-    if ball.bounces>=1 then
+    if ball.bodyHitSide then
+     point(-ball.bodyHitSide,"Body hit")
+    elseif ball.bounces>=1 then
      point(ball.last,"Double bounce")
     elseif ball.shots==0 and not Rules.serveLandingValid(ball.p,servingSide,serveX) then
      point(-servingSide,"Serve fault: land in the diagonal service court")
@@ -601,7 +609,7 @@ RunService.Heartbeat:Connect(function(dt)
   local rootFrame=CFrame.lookAt(rootPosition,rootPosition+Vector3.new(0,0,1))
   local center=Vector3.new(botX,184.5,botZ+1)
   local distance=(ball.p-center).Magnitude
-  if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
+  if not ball.bodyHitSide and ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
    and ball.p.Z< -2 and distance<6.5 and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
