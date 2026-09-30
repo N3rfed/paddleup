@@ -98,8 +98,9 @@ function Rules.softShot(position,side)
 end
 
 function Rules.kitchenHitFault(rootPosition,ballPosition,side,isDiving)
- if Rules.inKitchen(rootPosition,0) then return true end
- return isDiving==true and Rules.inKitchen(ballPosition,0)
+ -- Reaching over the kitchen is legal, including during a dive.
+ -- The ball position must not be treated as the player touching the kitchen.
+ return Rules.inKitchen(rootPosition,0)
 end
 
 function Rules.diveDirection(moveDirection,lookDirection,ballDirection)

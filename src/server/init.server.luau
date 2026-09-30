@@ -13,6 +13,7 @@ local function remote(name)
 end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
+local WALK_SPEED,SLOWED_SPEED=18,10
 local rulesModule=script:WaitForChild("MatchRules")
 local Rules=require(rulesModule)
 -- Existing Studio sessions may not have picked up the new Rojo shared mapping.
@@ -32,6 +33,12 @@ ball.shots=0
 local banner="Welcome to Skyline Club"
 local botSlowUntil=0
 local botX,botZ=0,-28
+local botRandom=Random.new()
+local botShotId,botReactAt,botThinkAt,botSwingAt=nil,0,0,0
+local botTarget=Vector3.new(0,0,-28)
+local botError=Vector3.zero
+local botAttempted=false
+local botStride,botMoving=0,false
 local world=workspace:WaitForChild("PaddleUp")
 local bot=Instance.new("Model")
 bot.Name="Practice Partner"; bot.Parent=world
@@ -213,7 +220,7 @@ local function spawnCharacter(p,c)
  local r=c:WaitForChild("HumanoidRootPart",10)
  local h=c:WaitForChild("Humanoid",10)
  if not r or not h then return end
- h.WalkSpeed=18; h.UseJumpPower=true; h.JumpPower=38
+ h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
  local z=d.side==0 and 58 or d.side*28
  c:PivotTo(CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,185,z),Vector3.new(0,185,0)))
  if not c:FindFirstChild("PaddleFace") then paddle(c) end
@@ -270,6 +277,8 @@ local function prepareServe()
  end
  if servingSide==-1 and not occupant(-1) then botX=serveX; botZ=-46
  else botX=-serveX; botZ=-46 end
+ botShotId=nil; botAttempted=false; botSwingAt=0
+ botTarget=Vector3.new(botX,0,botZ)
  ball.outLanding=nil
  ball.p=Vector3.new(serveX,184,servingSide*46)
  ball.v=Vector3.zero; ball.speed=1; ball.perfects=0; ball.shots=0
@@ -457,7 +466,7 @@ RunService.Heartbeat:Connect(function(dt)
   d.stamina=math.min(100,d.stamina+dt*22)
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
-   h.WalkSpeed=now<d.slowUntil and 10 or 18
+   h.WalkSpeed=now<d.slowUntil and SLOWED_SPEED or WALK_SPEED
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local inKitchen=Rules.inKitchen(r.Position,1)
    if grounded then d.kitchenTouched=inKitchen end
@@ -534,28 +543,63 @@ RunService.Heartbeat:Connect(function(dt)
    end
   end
  else accumulator=0 end
+ botMoving=false
  if hasBot and ball.live then
-  local predicted=landing()
-  local tx=ball.live and ball.last==1 and math.clamp(predicted.X,-18,18) or 0
-  local tz=ball.live and ball.last==1 and math.clamp(predicted.Z,-37,-8) or -28
-  local delta=Vector3.new(tx-botX,0,tz-botZ)
-  local move=math.min(delta.Magnitude,dt*(now<botSlowUntil and 8 or 20))
+  if botShotId~=ball.shotId then
+   botShotId=ball.shotId
+   botReactAt=now+botRandom:NextNumber(0.22,0.42)
+   botThinkAt=botReactAt; botAttempted=false
+   botError=Vector3.new(botRandom:NextNumber(-3,3),0,botRandom:NextNumber(-2,2))
+  end
+  -- Read the flight periodically instead of following its exact landing every frame.
+  if now>=botThinkAt then
+   botThinkAt=now+0.18
+   if ball.last==1 then
+    local predicted=landing()
+    botTarget=Vector3.new(math.clamp(predicted.X+botError.X,-30,30),0,
+     math.clamp(predicted.Z-3+botError.Z,-Rules.BACK_LIMIT,-2.5))
+   else botTarget=Vector3.new(0,0,-28) end
+  end
+  local delta=botTarget-Vector3.new(botX,0,botZ)
+  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or WALK_SPEED))
+  botMoving=move>0.01
+  botStride+=move*0.65
   if delta.Magnitude>0.01 then botX+=delta.Unit.X*move; botZ+=delta.Unit.Z*move end
+  local rootPosition=Vector3.new(botX,184,botZ)
+  local rootFrame=CFrame.lookAt(rootPosition,rootPosition+Vector3.new(0,0,1))
   local center=Vector3.new(botX,184.5,botZ+1)
-  if ball.live and ball.last==1 and ball.p.Z< -2 and (ball.p-center).Magnitude<6.5 and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0) and not Rules.returnFault(ball.bounces,ball.shots,Rules.inKitchen(center,1)) then
-   local clean=perfect(now)
-   if clean then ball.perfects+=1 end
-   ball.speed=Rules.returnSpeed(ball.speed,clean,false)
-   ball.last=-1; ball.shots+=1
-   local targetX=math.sin(now*0.7)*12
-   launch(ball.p,Vector3.new(targetX,FLOOR,26),false,not clean,false,0,nil,false,0,{clean=clean})
-   feedback:FireAllClients({userId=0,text=clean and "PERFECT!" or "LOB RETURN",tone=clean and "good" or "neutral"},"playerText")
+  local distance=(ball.p-center).Magnitude
+  if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
+   and ball.p.Z< -2 and distance<6.5 and Rules.contactInFront(ball.p,rootFrame)
+   and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
+   and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
+   -- One attempt per incoming shot: a whiff cannot be retried on the next frame.
+   botAttempted=true; botSwingAt=now+0.28
+   local pressure=math.clamp((ball.speed-1)*0.15+(distance/6.5)*0.08,0,0.18)
+   if botRandom:NextNumber()>=0.10+pressure then
+    local clean=perfect(now) and distance<=Rules.PERFECT_RANGE and botRandom:NextNumber()<0.55
+    local _,timeToBounce=landing()
+    local quality=Rules.shotQuality(clean,timeToBounce,now-ball.bounceAt)
+    if clean then ball.perfects+=1 end
+    ball.speed=Rules.returnSpeed(ball.speed,clean,false)
+    ball.last=-1; ball.shots+=1
+    local targetX=botRandom:NextNumber(-15,15)
+    local targetZ=botRandom:NextNumber(20,34)
+    if botRandom:NextNumber()<0.07+pressure*0.3 then
+     targetX=(targetX<0 and -1 or 1)*botRandom:NextNumber(21,25)
+    end
+    launch(ball.p,Vector3.new(targetX,FLOOR,targetZ),false,quality=="lob",false,0,nil,quality=="net",0,{clean=clean})
+    feedback:FireAllClients({userId=0,text=clean and "PERFECT!" or "LOB RETURN",tone=clean and "good" or "neutral"},"playerText")
+   end
   end
  end
  botBody.Position=Vector3.new(botX,184.2,botZ)
  botHead.Position=Vector3.new(botX,186.3,botZ)
  botPaddle.CFrame=CFrame.new(botX-1.8,184.4,botZ+1)*CFrame.Angles(0,0,0.2)
- for i,p in ipairs(botLegs) do p.Position=Vector3.new(botX+(i==1 and -0.6 or 0.6),182.4,botZ) end
+ for i,p in ipairs(botLegs) do
+  local stride=botMoving and math.sin(botStride)*(i==1 and 1 or -1) or 0
+  p.CFrame=CFrame.new(botX+(i==1 and -0.6 or 0.6),182.4,botZ+stride*0.45)*CFrame.Angles(stride*0.4,0,0)
+ end
  if serveReady then
   local server=serverId and Players:GetPlayerByUserId(serverId)
   ball.p=Rules.heldBallPosition(server and server.Character or (hasBot and bot)) or ball.p

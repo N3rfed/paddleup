@@ -40,7 +40,9 @@ no swing cooldown and multiply rally speed by 1.05. Other swings have a
 First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.
 The two-bounce rule and diagonal serving are enforced. Kitchen faults apply
-when contact occurs inside the kitchen, or a dive contacts the ball there.
+when the player is inside the kitchen at volley contact. Reaching over the
+kitchen during a dive does not itself cause a foot fault; bounced returns
+remain legal from inside the kitchen.
 Only the serving side scores. Doubles uses two service turns per possession:
 a fault passes serve to the partner, then the next fault causes a side-out.
 The opening doubles possession has only one turn, shown as 0-0-2. Solo sides
