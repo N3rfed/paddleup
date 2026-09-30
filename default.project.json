@@ -20,6 +20,15 @@
               "PlaybackSpeed": 1,
               "Looped": false
             }
+          },
+          "pickleball bounce": {
+            "$className": "Sound",
+            "$properties": {
+              "SoundId": "rbxassetid://105850247730037",
+              "Volume": 0.35,
+              "PlaybackSpeed": 0.8,
+              "Looped": false
+            }
           }
         },
         "MatchRules": {

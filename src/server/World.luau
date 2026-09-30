@@ -1,30 +1,50 @@
 -- Rooftop environment, shared by the edit-time builder and game startup.
 local World = {}
+-- A versioned rig also installs on saved courts without rebuilding the scenery.
+function World.addCourtLights(root)
+ local existing=root:FindFirstChild("RallyLights")
+ if existing and existing:GetAttribute("Version")==1 then return existing end
+ if existing then existing:Destroy() end
+ local rig=Instance.new("Model")
+ rig.Name="RallyLights"; rig:SetAttribute("Version",1)
+ local idle=Color3.fromRGB(92,211,201)
+ local function fixture(name,size,position,color,neon)
+  local p=Instance.new("Part")
+  p.Name=name; p.Size=size; p.Position=position; p.Color=color
+  p.Material=neon and Enum.Material.Neon or Enum.Material.Metal
+  p.Anchored=true; p.CanCollide=false; p.CanTouch=false; p.CanQuery=false; p.CastShadow=false
+  p.Parent=rig
+  return p
+ end
+ for _,x in ipairs({-30,30}) do
+  for _,z in ipairs({-54,0,54}) do
+   fixture("Light mast",Vector3.new(0.4,23,0.4),Vector3.new(x,192.5,z),Color3.fromRGB(27,46,52))
+   fixture("Light housing",Vector3.new(4,0.4,2),Vector3.new(x,204,z),Color3.fromRGB(27,46,52))
+   local lamp=fixture("Court wash",Vector3.new(3.7,0.15,1.7),Vector3.new(x,203.75,z),idle,true)
+   local light=Instance.new("SurfaceLight")
+   light.Face=Enum.NormalId.Bottom; light.Angle=125; light.Range=48
+   light.Brightness=0.85; light.Color=Color3.fromRGB(220,239,230); light.Shadows=false; light.Parent=lamp
+  end
+  -- Segments run outside the playing lines; pulses travel along the sidelines.
+  for i=1,14 do
+   local strip=fixture("Tempo strip",Vector3.new(0.24,0.12,10),Vector3.new(x,181.36,-78+(i-1)*12),idle,true)
+   strip.Transparency=0.25
+  end
+ end
+ for _,z in ipairs({-82,82}) do
+  fixture("End accent",Vector3.new(59,0.12,0.24),Vector3.new(0,181.36,z),idle,true)
+ end
+ rig.Parent=root
+ return rig
+end
 -- Update saved/edit-time courts too, without rebuilding their scenery.
 function World.updateLayout(root)
- local previousDepth=48
  for _,p in ipairs(root:GetChildren()) do
-  if p.Name=="Court end glass" and p:IsA("BasePart") then previousDepth=math.abs(p.Position.Z); break end
- end
- for _,p in ipairs(root:GetChildren()) do
-  if p.Name=="Club sign" then p:Destroy()
+  if p.Name=="Club sign" or p.Name=="Court glass fence" or p.Name=="Court end glass"
+   or p.Name=="Fence upright" or p.Name=="Fence top rail" then p:Destroy()
   elseif p:IsA("BasePart") then
    local pos=p.Position
-   if p.Name=="Court glass fence" then
-    p.Size=Vector3.new(0.18,10,168); p.Position=Vector3.new(math.sign(pos.X)*32,186,0)
-    p.Transparency=0.92
-   elseif p.Name=="Court end glass" then
-    p.Size=Vector3.new(64,10,0.18); p.Position=Vector3.new(0,186,math.sign(pos.Z)*84)
-    p.Transparency=0.94
-   elseif p.Name=="Fence upright" then
-    p.Position=Vector3.new(math.sign(pos.X)*32,pos.Y,pos.Z*84/previousDepth)
-   elseif p.Name=="Fence top rail" then
-    if p.Size.Z>p.Size.X then
-     p.Size=Vector3.new(0.2,0.2,168); p.Position=Vector3.new(math.sign(pos.X)*32,191,0)
-    else
-     p.Size=Vector3.new(64,0.2,0.2); p.Position=Vector3.new(0,191,math.sign(pos.Z)*84)
-    end
-   elseif p.Name=="Court surround" then p.Size=Vector3.new(64,0.12,168)
+   if p.Name=="Court surround" then p.Size=Vector3.new(64,0.12,168)
    elseif p.Name=="Roof deck" then p.Size=Vector3.new(132,3,180)
    elseif p.Name=="Safety glass" then p.Size=Vector3.new(0.2,4,180)
    elseif p.Name=="Rooftop parapet" then
@@ -33,6 +53,7 @@ function World.updateLayout(root)
    end
   end
  end
+ World.addCourtLights(root)
  return root
 end
 function World.build()
@@ -81,17 +102,6 @@ function World.build()
  part("Net white tape",Vector3.new(42,0.15,0.22),Vector3.new(0,184.4,0),white)
  for x=-20,20,1 do part("Net cord",Vector3.new(0.035,3,0.035),Vector3.new(x,182.8,0),dark).CanCollide=false end
  for y=181.5,184.25,0.5 do part("Net cord",Vector3.new(42,0.035,0.035),Vector3.new(0,y,0),dark).CanCollide=false end
- for _,x in ipairs({-26,26}) do
-  local fence=part("Court glass fence",Vector3.new(0.18,10,96),Vector3.new(x,186,0),Color3.fromRGB(164,208,207),Enum.Material.Glass)
-  fence.Transparency=0.8
-  for z=-48,48,12 do part("Fence upright",Vector3.new(0.2,10,0.2),Vector3.new(x,186,z),dark,Enum.Material.Metal) end
-  part("Fence top rail",Vector3.new(0.2,0.2,96),Vector3.new(x,191,0),dark)
- end
- for _,z in ipairs({-48,48}) do
-  local f=part("Court end glass",Vector3.new(52,10,0.18),Vector3.new(0,186,z),Color3.fromRGB(164,208,207),Enum.Material.Glass)
-  f.Transparency=0.85
-  part("Fence top rail",Vector3.new(52,0.2,0.2),Vector3.new(0,191,z),dark)
- end
  for _,x in ipairs({-65,65}) do
   part("Rooftop parapet",Vector3.new(1,3,144),Vector3.new(x,182.5,0),cream)
   local g=part("Safety glass",Vector3.new(0.2,4,144),Vector3.new(x,186,0),Color3.fromRGB(164,208,207),Enum.Material.Glass)

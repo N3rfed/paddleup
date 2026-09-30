@@ -23,25 +23,31 @@ local function collect(c)
  end
  return d
 end
-function Shots.charge(userId,enabled)
+function Shots.charge(userId,enabled,startedAt)
  local p=Players:GetPlayerByUserId(userId)
  local c=p and p.Character
  if not c then return end
  local old=states[c]
  if old then restore(old) end
  if not enabled then states[c]=nil; return end
- local d=collect(c); d.start=os.clock(); d.charging=true; states[c]=d
+ local d=collect(c); d.start=startedAt or os.clock(); d.charging=true; states[c]=d
 end
-function Shots.swing(userId,backhand,slam,contact,direction,charge)
+function Shots.swing(userId,backhand,slam,contact,direction,charge,soft,predicted)
  local p=Players:GetPlayerByUserId(userId)
  local c=p and p.Character
  if not c then return end
  local old=states[c]
+ -- Reconcile the accepted contact without replaying the locally predicted swing.
+ if old and old.predicted and not predicted and not old.charging and os.clock()-old.start<0.6 then
+  old.backhand=backhand; old.slam=slam; old.contact=contact; old.direction=direction
+  old.charge=charge or old.charge; old.soft=soft or old.soft; old.predicted=false
+  return
+ end
  local held=old and old.charging and math.clamp(os.clock()-old.start,0,1) or 0
  if old then restore(old) end
  local d=collect(c)
  d.start=os.clock(); d.backhand=backhand; d.slam=slam; d.contact=contact
- d.direction=direction; d.charge=charge or held
+ d.direction=direction; d.charge=charge or held; d.soft=soft; d.predicted=predicted
  states[c]=d
 end
 function Shots.release(userId)
@@ -160,7 +166,7 @@ function Shots.update()
    -- A tap is a normal swing; only begin showing the windup after the charge threshold.
    local weight=d.charging and smooth((t-0.4)/0.15) or (1-smooth((t-duration*0.55)/(duration*0.45)))
    local follow=d.charging and 0 or smooth(t/0.25)
-   local twist=d.charging and (-16-12*charge) or side*(8+24*follow)
+   local twist=d.charging and (-16-12*charge) or side*(d.soft and (3+9*follow) or (8+24*follow))
    if not c:GetAttribute("Diving") then
     pose(d,"waist",angles(d.charging and -4 or -10,twist,0),weight)
     pose(d,"neck",angles(4,-twist*0.55,0),weight)
@@ -168,9 +174,10 @@ function Shots.update()
    pose(d,"leftshoulder",angles(30,0,-25),weight)
    pose(d,"leftelbow",angles(45),weight)
    local shoulder=d.charging and angles(35+20*charge,-40-20*charge,25)
+    or (d.soft and angles((d.soft=="dink" and 12 or 20)+35*follow,side*(8+18*follow),8))
     or (d.slam and angles(110-70*follow,15+20*follow,12) or angles(70-15*follow,side*(10+65*follow),12-25*follow))
    pose(d,"rightshoulder",shoulder,weight)
-   pose(d,"rightelbow",angles(d.charging and 50+25*charge or 20+40*follow),weight)
+   pose(d,"rightelbow",angles(d.charging and 50+25*charge or d.soft and 15+15*follow or 20+40*follow),weight)
    pose(d,"rightwrist",angles(0,d.charging and -15 or 10*follow,0),weight)
    if not d.charging and d.contact and d.direction then
     -- Contact is immediate: gameplay has already launched the ball at this event.

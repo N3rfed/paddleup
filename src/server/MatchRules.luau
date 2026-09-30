@@ -98,8 +98,9 @@ function Rules.softShot(position,side)
 end
 
 function Rules.kitchenHitFault(rootPosition,ballPosition,side,isDiving)
- if Rules.inKitchen(rootPosition,0) then return true end
- return isDiving==true and Rules.inKitchen(ballPosition,0)
+ -- Reaching over the kitchen is legal, including during a dive.
+ -- The ball position must not be treated as the player touching the kitchen.
+ return Rules.inKitchen(rootPosition,0)
 end
 
 function Rules.diveDirection(moveDirection,lookDirection,ballDirection)
@@ -116,6 +117,19 @@ function Rules.slamSpeedScale(rallySpeed)
 end
 
 Rules.CHARGE_TIME=1
+Rules.HIT_COOLDOWN=0.28
+function Rules.heldBallPosition(character)
+ if not character then return nil end
+ local hand=character:FindFirstChild("LeftHand") or character:FindFirstChild("Left Arm")
+ if hand then return hand.CFrame:PointToWorldSpace(Vector3.new(0,-hand.Size.Y*0.5-0.3,-0.2)) end
+ local root=character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Body")
+ return root and root.CFrame:PointToWorldSpace(Vector3.new(-1.2,0,-1.2)) or nil
+end
+
+function Rules.hitReady(now,readyAt,perfect)
+ return perfect or now>=readyAt
+end
+
 function Rules.chargeAmount(started,now)
  local delay=0.4
  return started and math.clamp((now-started-delay)/(Rules.CHARGE_TIME-delay),0,1) or 0
