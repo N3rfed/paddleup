@@ -4,6 +4,7 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 require(script:WaitForChild("World")).build()
+require(script:WaitForChild("LobbyWorld")).build()
 require(script:WaitForChild("DayNightCycle")).start()
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
@@ -15,14 +16,20 @@ end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
 local WALK_SPEED,SLOWED_SPEED=18,10
+local MAX_STAMINA,DIVE_COST,STAMINA_REGEN=70,35,8
 local rulesModule=script:WaitForChild("MatchRules")
 local Rules=require(rulesModule)
 local BodyBounce=require(script:WaitForChild("BodyBounce"))
+local BotDifficulty=require(script:WaitForChild("BotDifficulty"))
+local botSettings=BotDifficulty.Normal
 -- Existing Studio sessions may not have picked up the new Rojo shared mapping.
 local shared=ReplicatedStorage:FindFirstChild("Shared") or Instance.new("Folder")
 shared.Name="Shared"; shared.Parent=ReplicatedStorage
 if not shared:FindFirstChild("MatchRules") then rulesModule:Clone().Parent=shared end
 local users={}
+local lobby
+local matchActive=false
+local matchEnding=false
 local rotation=require(script:WaitForChild("ServeRotation")).new()
 local score=rotation.score
 local joinSerial=0
@@ -30,6 +37,8 @@ local lastHitter={}
 local ball={p=Vector3.new(0,187,-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,speed=1,bounceAt=-100}
 local nextServe=0
 local servingSide,serveReady,serveX=1,false,10
+local SERVE_TIMEOUT=15
+local serveDeadline=0
 local serverId,receiverId
 ball.shots=0
 local banner="Welcome to Skyline Club"
@@ -85,7 +94,7 @@ local function rosterChanged()
  local home,away={},{}
  for _,p in ipairs(teamPlayers(1)) do table.insert(home,p.UserId) end
  for _,p in ipairs(teamPlayers(-1)) do table.insert(away,p.UserId) end
- if #home>0 and #away==0 then away={0} end -- Bot service follows singles rules.
+ if matchActive and lobby.model.active and lobby.model.active.bot then away={0} end
  rotation:setTeams(home,away)
  if #home==0 and #away==0 then rotation:reset(); score=rotation.score end
  syncServing()
@@ -230,10 +239,14 @@ local function point(winner,reason)
  }
  feedback:FireAllClients({title=scored and (scorerName.." Scored for Team "..index.."!") or outcome=="secondServer" and "Second Server!" or "Side Out!",fault=faultNames[reason] or (reason.."!")},"rallyResult")
  if scored and score[index]>=11 and math.abs(score[1]-score[2])>=2 then
-  banner="TEAM "..index.." WINS!  /  New game in 6 seconds"
+  banner="TEAM "..index.." WINS!  /  Returning to lobby"
   feedback:FireAllClients(banner,"point")
-  nextServe=os.clock()+6
-  ball.resetScore=true
+  nextServe=math.huge
+  matchEnding=true
+  local finishedMatch=lobby.model.active
+  task.delay(5,function()
+   if lobby.model.active==finishedMatch then lobby:finish("Team "..index.." wins! Queue again when ready.") end
+  end)
  end
 end
 local function paddle(character)
@@ -257,46 +270,79 @@ local function spawnCharacter(p,c)
  local h=c:WaitForChild("Humanoid",10)
  if not r or not h then return end
  h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
- local z=d.side==0 and 58 or d.side*28
- c:PivotTo(CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,185,z),Vector3.new(0,185,0)))
+ local position=d.side==0 and Vector3.new(112,185,20) or Vector3.new(0,185,d.side*28)
+ c:PivotTo(CFrame.lookAt(position,d.side==0 and Vector3.new(112,185,0) or Vector3.new(0,185,0)))
  if not c:FindFirstChild("PaddleFace") then paddle(c) end
  d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
- if not ball.live then serveReady=false end
 end
+local function returnToLobby(p,d)
+ d.side=0; d.slot=0; d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil
+ p:SetAttribute("CourtSide",0)
+ if p.Character then
+  p.Character:SetAttribute("ShotChargeAt",nil)
+  p.Character:PivotTo(CFrame.new(112,185,20))
+  local root=p.Character:FindFirstChild("HumanoidRootPart")
+  if root then root.AssemblyLinearVelocity=Vector3.zero end
+ end
+end
+lobby=require(script:WaitForChild("LobbyService")).new(folder,{
+ score=function() return {score[1],score[2]} end,
+ start=function(match)
+  matchActive=true; matchEnding=false
+  botSettings=BotDifficulty[match.difficulty] or BotDifficulty.Normal
+  botSlowUntil=0
+  tagText.Text=match.bot and (string.upper(match.difficulty).." PRACTICE BOT") or "PRACTICE PARTNER"
+  ball.live=false; ball.v=Vector3.zero; ball.outLanding=nil; ball.resetScore=false
+  for _,team in ipairs({{ids=match.home,side=1},{ids=match.away,side=-1}}) do
+   for slot,id in ipairs(team.ids) do
+    if id==0 then continue end
+    local p=Players:GetPlayerByUserId(id)
+    local d=p and users[p]
+    assert(d,"Queued player missing")
+    d.side=team.side; d.slot=slot; d.stamina=MAX_STAMINA
+    d.diveAt=0; d.powerAt=0; d.slowAt=0; d.powerUntil=0; d.slowUntil=0; d.lastSwing=0
+    p:SetAttribute("CourtSide",team.side)
+    if p.Character then
+     p.Character:SetAttribute("HitReadyAt",nil); p.Character:SetAttribute("ChargedShotReadyAt",nil)
+     task.spawn(spawnCharacter,p,p.Character)
+    end
+   end
+  end
+  rotation:setTeams(match.home,match.away); rotation:reset(); score=rotation.score
+  rosterChanged()
+ end,
+ stop=function()
+  matchActive=false; matchEnding=false; ball.live=false; ball.v=Vector3.zero
+  ball.outLanding=nil; ball.bodyHitSide=nil; ball.resetScore=false; serveReady=false; nextServe=math.huge
+  for p,d in pairs(users) do if d.side~=0 then returnToLobby(p,d) end end
+  rotation:setTeams({},{}); rotation:reset(); score=rotation.score; syncServing()
+  banner="SKYLINE LOBBY / CHOOSE A QUEUE"
+ end,
+})
 local function addPlayer(p)
  if users[p] then return end
- local home,away=#teamPlayers(1),#teamPlayers(-1)
- local side=home<2 and (home<=away or away>=2) and 1 or (away<2 and -1 or 0)
+ local side=0
  joinSerial+=1
- users[p]={side=side,slot=side~=0 and availableSlot(side) or 0,joined=joinSerial,stamina=100,lastSwing=0,diveAt=0,powerAt=0,slowAt=0,powerUntil=0,slowUntil=0,lastInput=0}
+ users[p]={side=side,slot=side~=0 and availableSlot(side) or 0,joined=joinSerial,stamina=MAX_STAMINA,lastSwing=0,diveAt=0,powerAt=0,slowAt=0,powerUntil=0,slowUntil=0,lastInput=0}
  p:SetAttribute("CourtSide",side)
- if side~=0 then rosterChanged() end
+ lobby:add(p)
  p.CharacterAdded:Connect(function(c) spawnCharacter(p,c) end)
  if p.Character then task.spawn(spawnCharacter,p,p.Character) end
 end
 Players.PlayerAdded:Connect(addPlayer)
 for _,p in ipairs(Players:GetPlayers()) do addPlayer(p) end
 Players.PlayerRemoving:Connect(function(p)
- local leaving=users[p]
+ lobby:remove(p)
  users[p]=nil
- if leaving and leaving.side~=0 then
-  local waiting=teamPlayers(0)[1]
-  if waiting then
-   local d=users[waiting]
-   d.slot=availableSlot(leaving.side); d.side=leaving.side; waiting:SetAttribute("CourtSide",d.side)
-   if waiting.Character then task.spawn(spawnCharacter,waiting,waiting.Character) end
-  end
-  if not occupant(1) then
-   local remaining,d=occupant(-1)
-   if remaining then
-    d.slot=availableSlot(1); d.side=1; remaining:SetAttribute("CourtSide",1)
-    if remaining.Character then task.spawn(spawnCharacter,remaining,remaining.Character) end
-   end
-  end
-  rosterChanged()
- end
 end)
 local function prepareServe()
+ if not matchActive or matchEnding then return end
+ for _,id in ipairs(lobby.model.active.members) do
+  local p=Players:GetPlayerByUserId(id)
+  local r,h
+  if p then r,h=rootOf(p) end
+  if not r or not h or h.Health<=0 then return end
+ end
  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false end
  syncServing()
  if not occupant(servingSide) and servingSide==1 then return end
@@ -320,6 +366,7 @@ local function prepareServe()
  ball.v=Vector3.zero; ball.speed=1; ball.perfects=0; ball.shots=0
  ball.bounces=0; ball.bounceAt=-100; ball.last=servingSide
  serveReady=true
+ serveDeadline=workspace:GetServerTimeNow()+SERVE_TIMEOUT
  banner="TEAM "..(servingSide==1 and "1" or "2").." / SERVER "..rotation.number.." TO SERVE"
 end
 local function facingTarget(from,r,side,depth)
@@ -329,9 +376,9 @@ local function facingTarget(from,r,side,depth)
  local distance=math.abs(-side*depth-from.Z)/math.max(0.25,math.abs(direction.Z))
  return from+direction*math.clamp(distance,12,110),momentum
 end
-local function serve(p,d,r,h,charge)
+local function serve(p,d,r,h,charge,automatic)
  if not serveReady then return end
- if os.clock()<d.lastSwing then return end
+ if not automatic and os.clock()<d.lastSwing then return end
  charge=charge or 0
  local botServing=servingSide==-1 and not occupant(-1)
  if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
@@ -340,24 +387,41 @@ local function serve(p,d,r,h,charge)
  local from=Vector3.new(serveX,184,servingSide*46)
  if botServing then from=Rules.heldBallPosition(bot) or from end
  if not botServing then
-  if not Rules.servePositionValid(r.Position,d.side,serveX,h.FloorMaterial~=Enum.Material.Air) then
+  if automatic then
+   -- Timeout serves start legally even if the server walked away, jumped, or is respawning.
+   if r and h and h.Health>0 then
+    local position=Vector3.new(serveX,185,servingSide*46)
+    p.Character:PivotTo(CFrame.lookAt(position,Vector3.new(-serveX,185,-servingSide*28)))
+    r.AssemblyLinearVelocity=Vector3.zero
+   end
+  elseif not Rules.servePositionValid(r.Position,d.side,serveX,h.FloorMaterial~=Enum.Material.Air) then
    tell(p,"Foot Fault! Serve from behind the baseline on the marked side.","fault"); return
   end
-  from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z)
+  if not automatic then from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z) end
  end
  if not botServing then lastHitter[servingSide]=p end
  serveReady=false; ball.last=servingSide; ball.shots=0
+ serveDeadline=0; d.chargeAt=nil
+ if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  local target,momentum
- if botServing then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
+ if botServing or automatic then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
  else target,momentum=facingTarget(from,r,d.side,28) end
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
- p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)
+ if p.Character then p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN) end
  launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,false,charge,{userId=not botServing and p.UserId or nil})
  if not botServing then
   feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=charge},"swing")
   if charge>0 then tell(p,"CHARGED SERVE!","perfect") end
  end
  banner="SERVE  /  LET IT BOUNCE"
+end
+local function automaticServe()
+ local id=serverId==0 and receiverId or serverId
+ local p=id and Players:GetPlayerByUserId(id)
+ local d=p and users[p]
+ if not d then return end
+ local r,h=rootOf(p)
+ serve(p,d,r,h,0,true)
 end
 local function overheadStatus(p,r)
   local face=p.Character:FindFirstChild("PaddleFace")
@@ -438,7 +502,15 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
 end
 input.OnServerEvent:Connect(function(p,action,moveIntent)
  local d=users[p]
- if not d or d.side==0 or type(action)~="string" then return end
+ if d and d.side==0 and action=="LobbySwing" and p:GetAttribute("LobbyStatus")=="Lobby" then
+  local _,h=rootOf(p)
+  local now=os.clock()
+  if not h or h.Health<=0 or now<(d.lobbySwingAt or 0) then return end
+  d.lobbySwingAt=now+0.28
+  feedback:FireAllClients({userId=p.UserId,backhand=false,soft=moveIntent==true and "drop" or nil},"swing")
+  return
+ end
+ if not d or d.side==0 or not matchActive or matchEnding or type(action)~="string" then return end
  local now=os.clock()
  -- Release/cancel must survive the flood gate, even for a very quick tap.
  if action=="ChargeCancel" then d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
@@ -466,8 +538,8 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   serve(p,d,r,h)
  elseif action=="Dive" then
   d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
-  if now<d.diveAt or d.stamina<35 then return end
-  d.stamina-=35; d.diveAt=now+1.1
+  if now<d.diveAt or d.stamina<DIVE_COST then return end
+  d.stamina-=DIVE_COST; d.diveAt=now+1.1
   d.diveUntil=now+0.48; d.diveCharacter=p.Character
   local delta=ball.live and ball.p-r.Position or Vector3.zero
   if typeof(moveIntent)~="Vector3" or moveIntent.X~=moveIntent.X or moveIntent.Z~=moveIntent.Z then
@@ -495,11 +567,13 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   if ball.live then tryReturn(p,d,r,now,false,action=="SoftShot") end
  end
 end)
-local accumulator,broadcast=0,0
+local accumulator,broadcast,lobbyBroadcast=0,0,0
 RunService.Heartbeat:Connect(function(dt)
  local now=os.clock()
+ lobbyBroadcast+=dt
+ if lobbyBroadcast>=1 then lobbyBroadcast=0; lobby:broadcast() end
  for p,d in pairs(users) do
-  d.stamina=math.min(100,d.stamina+dt*22)
+  d.stamina=math.min(MAX_STAMINA,d.stamina+dt*STAMINA_REGEN)
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
    h.WalkSpeed=now<d.slowUntil and SLOWED_SPEED or WALK_SPEED
@@ -512,7 +586,12 @@ RunService.Heartbeat:Connect(function(dt)
      if d.volleySettled>0.15 then d.volleyPending=false end
     else d.volleySettled=0 end
    end
-   if d.side~=0 then
+   if d.side==0 then
+    -- Lobby visitors and spectators cannot enter or physically disrupt the court.
+    if r.Position.X<83 or r.Position.X>141 or math.abs(r.Position.Z)>36 or r.Position.Y<178 then
+     p.Character:PivotTo(CFrame.new(112,185,20)); r.AssemblyLinearVelocity=Vector3.zero
+    end
+   else
     local x,z
     if now<d.diveUntil then
      x=r.Position.X
@@ -527,10 +606,11 @@ RunService.Heartbeat:Connect(function(dt)
    end
   end
  end
- local hasBot=occupant(-1)==nil
+ local hasBot=matchActive and lobby.model.active and lobby.model.active.bot==true
  for _,p in ipairs(bot:GetChildren()) do if p:IsA("BasePart") then p.Transparency=hasBot and 0 or 1 end end
  tag.Enabled=hasBot
- if not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
+ if matchActive and not matchEnding and not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
+ if matchActive and not matchEnding and serveReady and workspace:GetServerTimeNow()>=serveDeadline then automaticServe() end
  if ball.live then
   accumulator+=math.min(dt,0.1)
   while accumulator>=1/120 and ball.live do
@@ -571,7 +651,8 @@ RunService.Heartbeat:Connect(function(dt)
      if ball.bounces>=2 then point(ball.last,"Double bounce")
      else
       ball.p=Vector3.new(ball.p.X,FLOOR,ball.p.Z)
-      ball.v=Vector3.new(ball.v.X,math.max(15,-ball.v.Y*0.78),ball.v.Z)
+      -- Damp steep lob impacts and keep rebounds between 2.2 and 4.4 studs high.
+      ball.v=Vector3.new(ball.v.X,math.clamp(-ball.v.Y*0.55,14,20),ball.v.Z)
       ball.bounceAt=now
       ball.bouncePoint=ball.p
      end
@@ -587,13 +668,13 @@ RunService.Heartbeat:Connect(function(dt)
  if hasBot and ball.live then
   if botShotId~=ball.shotId then
    botShotId=ball.shotId
-   botReactAt=now+botRandom:NextNumber(0.22,0.42)
+   botReactAt=now+botRandom:NextNumber(botSettings.reactionMin,botSettings.reactionMax)
    botThinkAt=botReactAt; botAttempted=false
-   botError=Vector3.new(botRandom:NextNumber(-3,3),0,botRandom:NextNumber(-2,2))
+   botError=Vector3.new(botRandom:NextNumber(-botSettings.errorX,botSettings.errorX),0,botRandom:NextNumber(-botSettings.errorZ,botSettings.errorZ))
   end
   -- Read the flight periodically instead of following its exact landing every frame.
   if now>=botThinkAt then
-   botThinkAt=now+0.18
+   botThinkAt=now+botSettings.think
    if ball.last==1 then
     local predicted=landing()
     botTarget=Vector3.new(math.clamp(predicted.X+botError.X,-30,30),0,
@@ -601,7 +682,7 @@ RunService.Heartbeat:Connect(function(dt)
    else botTarget=Vector3.new(0,0,-28) end
   end
   local delta=botTarget-Vector3.new(botX,0,botZ)
-  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or WALK_SPEED))
+  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or botSettings.speed))
   botMoving=move>0.01
   botStride+=move*0.65
   if delta.Magnitude>0.01 then botX+=delta.Unit.X*move; botZ+=delta.Unit.Z*move end
@@ -615,9 +696,9 @@ RunService.Heartbeat:Connect(function(dt)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
    -- One attempt per incoming shot: a whiff cannot be retried on the next frame.
    botAttempted=true; botSwingAt=now+0.28
-   local pressure=math.clamp((ball.speed-1)*0.15+(distance/6.5)*0.08,0,0.18)
-   if botRandom:NextNumber()>=0.10+pressure then
-    local clean=perfect(now) and distance<=Rules.PERFECT_RANGE and botRandom:NextNumber()<0.55
+   local pressure=math.clamp((ball.speed-1)*0.15+(distance/6.5)*0.08,0,0.18)*botSettings.pressureScale
+   if botRandom:NextNumber()>=botSettings.miss+pressure then
+    local clean=perfect(now) and distance<=Rules.PERFECT_RANGE and botRandom:NextNumber()<botSettings.perfect
     local _,timeToBounce=landing()
     local quality=Rules.shotQuality(clean,timeToBounce,now-ball.bounceAt)
     if clean then ball.perfects+=1 end
@@ -625,7 +706,7 @@ RunService.Heartbeat:Connect(function(dt)
     ball.last=-1; ball.shots+=1
     local targetX=botRandom:NextNumber(-15,15)
     local targetZ=botRandom:NextNumber(20,34)
-    if botRandom:NextNumber()<0.07+pressure*0.3 then
+    if botRandom:NextNumber()<botSettings.out+pressure*0.3 then
      targetX=(targetX<0 and -1 or 1)*botRandom:NextNumber(21,25)
     end
     launch(ball.p,Vector3.new(targetX,FLOOR,targetZ),false,quality=="lob",false,0,nil,quality=="net",0,{clean=clean})
@@ -657,11 +738,11 @@ RunService.Heartbeat:Connect(function(dt)
     slammable=ball.live and ball.slamLob,shotId=ball.shotId,slamReady=slamReady(p,d,now),
     green=ball.live and perfect(now),last=ball.last,bounces=ball.bounces,
     perfects=ball.perfects,speed=ball.speed,score=score,banner=banner,
-    serveReady=serveReady,servingSide=servingSide,serveX=serveX,serverId=serverId,receiverId=receiverId,serverNumber=rotation.number,
+    serveReady=serveReady,serveDeadline=serveReady and serveDeadline or nil,servingSide=servingSide,serveX=serveX,serverId=serverId,receiverId=receiverId,serverNumber=rotation.number,
     serverName=(serverId and Players:GetPlayerByUserId(serverId) and Players:GetPlayerByUserId(serverId).DisplayName) or "Practice Partner",
     canServe=serveReady and (p.UserId==serverId or (hasBot and servingSide==-1 and p.UserId==receiverId)),
     mustBounce=ball.live and ball.shots<2 and ball.bounces==0,
-    side=d.side,bot=hasBot,stamina=d.stamina,dive=math.max(0,d.diveAt-now),
+    side=d.side,bot=hasBot,stamina=d.stamina,maxStamina=MAX_STAMINA,dive=math.max(0,d.diveAt-now,(DIVE_COST-d.stamina)/STAMINA_REGEN),
     homeName=teamName(1),awayName=teamName(-1),
     power=math.max(0,d.powerAt-now),slow=math.max(0,d.slowAt-now),
     armed=math.max(0,d.powerUntil-now),slowed=math.max(0,d.slowUntil-now)

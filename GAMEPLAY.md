@@ -1,9 +1,33 @@
 # Paddle Up! — Skyline Club
 
-Arcade pickleball on an apartment rooftop. Press Play in Studio. The first
-player faces a practice partner; a second player replaces it. A third player
-creates 2v1 and a fourth creates 2v2. Further players spectate and fill vacant
-slots in join order. Team changes reset the rally without awarding a point.
+Arcade pickleball on an apartment rooftop. Press Play in Studio to spawn on
+the walkable Skyline Club lobby terrace beside the court. Walk to a Singles,
+Doubles, Practice, or Spectate station and press E (or tap the prompt), or
+open PLAY / PARTY. BACK TO TERRACE closes the menu so you can keep exploring.
+The lobby uses the same shift-lock camera as the court. Left-click (or tap)
+to swing your paddle; right-click performs a soft swing. Other players see
+these swings, but they do not hit the match ball. Hold Alt to click PLAY /
+PARTY; an open queue menu keeps the cursor free and blocks paddle swings.
+
+Matchmaking uses players in the same server and one shared court. Singles
+waits for two humans; doubles waits for four. Solo queues fill with random
+players. Invite a player from the lobby list; they must accept within 30
+seconds. The party leader chooses the mode and queues the group. Two friends
+face each other in singles and stay together in doubles. Groups of three or
+four split in party join order (first two on Team 1); a group of three fills
+its final slot from the solo queue. Leaving a party cancels its queue.
+
+Practice is solo against a bot, with Easy, Normal, or Hard difficulty. Easy
+reacts and moves more slowly and makes more mistakes; Hard reacts faster,
+tracks more accurately, and hits more perfect returns. Practice waits for
+the court if another match is running. Leave a party before choosing practice.
+
+Spectate a running match, including practice, without occupying a court slot.
+You can watch while queued. BACK TO LOBBY returns to the terrace; accepting
+a match automatically switches you into play. During play, hold Alt to click
+LEAVE MATCH and confirm. A win or player departure ends the match and returns
+its players and spectators to the lobby. The next ready queue can then play.
+Friends remain in their party after a match; queue again when ready.
 
 | Input | Action |
 | --- | --- |
@@ -35,10 +59,18 @@ The landing ring pulses red, yellow, then green. Returns within 0.23 seconds
 before a bounce or 0.28 seconds afterward count as perfect. Perfect hits have
 no swing cooldown and multiply rally speed by 1.05. Other swings have a
 0.28-second cooldown. A point resets rally speed. Stamina regenerates at
-22 per second. Power shots add a temporary 22% speed boost.
+8 per second, with a maximum of 70 and a cost of 35 per dive. Two quick dives
+leave roughly 3.3 seconds before another dive is available. Power shots add
+a temporary 22% speed boost.
 
 First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.
+Each prepared serve gets a 15-second server-controlled deadline. Players and
+spectators see "[DisplayName]'s serve" and the remaining seconds. Serving
+manually clears the timer; otherwise a normal, uncharged serve launches into
+the diagonal service court automatically. A human server who wandered away
+is returned to the serving position. The timer also applies to practice bots,
+and any held charge is canceled when the automatic serve starts.
 The two-bounce rule and diagonal serving are enforced. Kitchen faults apply
 when the player is inside the kitchen at volley contact. Reaching over the
 kitchen during a dive does not itself cause a foot fault; bounced returns
