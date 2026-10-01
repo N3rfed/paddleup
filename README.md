@@ -28,3 +28,5 @@ Visual Studio Code
 12. In a different command prompt window, type the command `codex` in the repository destination
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
+## Environment
+The rooftop cycles through sunrise, daylight, sunset, and night every 12 real-world minutes. Each server starts at 06:00 and shares the same lighting with all players. Court lights remain on for nighttime play. Adjust CYCLE_SECONDS and START_HOUR in src/server/DayNightCycle.luau to change the duration or starting time.

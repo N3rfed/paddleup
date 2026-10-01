@@ -19,11 +19,12 @@ function BodyBounce.contact(from,to,frame,size)
  return first
 end
 
-function BodyBounce.shot(position,velocity,side,speed,floor)
- local target=Vector3.new(math.clamp(position.X,-16,16),floor,-side*27)
- local distance=Vector3.new(target.X-position.X,0,target.Z-position.Z).Magnitude
- local pace=Vector3.new(velocity.X,0,velocity.Z).Magnitude
- return target,speed*0.7,math.max(1.5,distance/math.max(0.1,pace*0.7))
+-- A body hit loses most of its energy and drops locally, without lob assistance.
+function BodyBounce.deflect(velocity,side)
+ local horizontal=Vector3.new(velocity.X,0,velocity.Z)
+ local pace=horizontal.Magnitude
+ local direction=pace>1e-8 and -horizontal/pace or Vector3.new(0,0,-side)
+ return direction*math.min(pace*0.15,8)+Vector3.new(0,3,0)
 end
 
 return BodyBounce
