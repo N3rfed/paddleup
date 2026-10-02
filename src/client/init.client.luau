@@ -16,6 +16,12 @@ local developerMode=false
 local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
+task.spawn(function() require(script:WaitForChild("LobbyUI")).start(network) end)
+local function playing() return player:GetAttribute("LobbyStatus")=="Playing" end
+local function lobbyMenuOpen()
+ local ui=player.PlayerGui:FindFirstChild("SkylineLobbyUI")
+ return ui and ui:GetAttribute("MenuOpen")==true
+end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -64,6 +70,11 @@ announcement.Position=UDim2.fromScale(0.5,0.43); announcement.Size=UDim2.fromSca
 announcement.TextXAlignment=Enum.TextXAlignment.Center; announcement.TextWrapped=true
 announcement.Font=Enum.Font.GothamBold; announcement.TextStrokeTransparency=0.3; announcement.Visible=false
 local announcementUntil=0
+local serveNotice=text(gui,"",Vector2.zero,Vector2.new(700,64),24,cream)
+serveNotice.Name="ServeNotice"; serveNotice.AnchorPoint=Vector2.new(0.5,0)
+serveNotice.Position=UDim2.fromScale(0.5,0.27); serveNotice.TextXAlignment=Enum.TextXAlignment.Center
+serveNotice.Font=Enum.Font.GothamBold; serveNotice.TextStrokeTransparency=0.3; serveNotice.Visible=false
+local serveNoticeScale=Instance.new("UIScale",serveNotice)
 local developerLabel=text(canvas,"",Vector2.new(28,590),Vector2.new(820,58),12,mint)
 developerLabel.TextWrapped=true
 developerLabel.Text="DEV HITBOXES [HOME]  /  Gold: hit  |  Green: perfect range  |  Blue: overhead zone  |  Purple: slam distance cap\nSlams need blue/purple overlap. Contact behind the red rear-limit plane is rejected."
@@ -83,7 +94,7 @@ for i,layout in ipairs({{8,64,cream},{93,64,cream},{177,36,mint}}) do
  scoreDigits[i]=digit
 end
 for _,x in ipairs({73,158}) do
- local dash=text(scorePanel,"–",Vector2.new(x,12),Vector2.new(20,34),20,Color3.fromRGB(104,139,146))
+ local dash=text(scorePanel,"-",Vector2.new(x,12),Vector2.new(20,34),20,Color3.fromRGB(104,139,146))
  dash.TextXAlignment=Enum.TextXAlignment.Center
 end
 local serveAccent=Instance.new("Frame",scorePanel)
@@ -141,7 +152,9 @@ setDeveloperMode(false)
 local snapshot,receivedAt=nil,0
 local localHitReadyAt=0
 local function hitInputReady()
+ if not playing() then return false end
  local character=player.Character
+ if character and character:GetAttribute("MissImmune") then return false end
  local readyAt=character and character:GetAttribute("HitReadyAt") or 0
  local perfect=snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)
  return perfect or (os.clock()>=localHitReadyAt and workspace:GetServerTimeNow()>=readyAt)
@@ -156,12 +169,23 @@ local function animateSwing(softRequested,charge)
  DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
-local function swing()
+local function swing(softRequested)
+ if player:GetAttribute("LobbyStatus")=="Lobby" then
+  if lobbyMenuOpen() or UIS:IsKeyDown(Enum.KeyCode.LeftAlt) or UIS:IsKeyDown(Enum.KeyCode.RightAlt) then return end
+  local character=player.Character
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  if not humanoid or humanoid.Health<=0 or os.clock()<localHitReadyAt then return end
+  localHitReadyAt=os.clock()+0.28
+  DiveController.swing(player.UserId,false,false,nil,nil,0,softRequested==true and "drop" or nil,true)
+  input:FireServer("LobbySwing",softRequested==true)
+  return
+ end
  if not hitInputReady() then return end
  animateSwing(false)
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
 end
 local function dive()
+ if not playing() then return end
  cancelCharge()
  local character=player.Character
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
@@ -176,6 +200,11 @@ UIS.InputBegan:Connect(function(key,processed)
   setDeveloperMode(not developerMode); return
  end
  if processed then return end
+ if not playing() then
+  if key.UserInputType==Enum.UserInputType.MouseButton1 then swing()
+  elseif key.UserInputType==Enum.UserInputType.MouseButton2 then swing(true) end
+  return
+ end
  if key.UserInputType==Enum.UserInputType.MouseButton1 then
   chargeStarted=os.clock()
   local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
@@ -205,9 +234,11 @@ UIS.WindowFocusReleased:Connect(cancelCharge)
 UIS.TextBoxFocused:Connect(cancelCharge)
 game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
+player:GetAttributeChangedSignal("LobbyStatus"):Connect(cancelCharge)
 local arrows={}
+player:GetAttributeChangedSignal("LobbyStatus"):Connect(function() table.clear(arrows) end)
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
- if UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+ if UIS:GetFocusedTextBox() or not playing() then return Enum.ContextActionResult.Pass end
  arrows[key.KeyCode]=status==Enum.UserInputState.Begin or status==Enum.UserInputState.Change
  return Enum.ContextActionResult.Sink
 end,false,3000,Enum.KeyCode.Up,Enum.KeyCode.Down,Enum.KeyCode.Left,Enum.KeyCode.Right)
@@ -247,6 +278,7 @@ local landingGui=Instance.new("BillboardGui",marker); landingGui.Size=UDim2.from
 local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); countdown.TextXAlignment=Enum.TextXAlignment.Center; countdown.Font=Enum.Font.GothamBold; countdown.TextStrokeTransparency=0.4
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
+ if snapshot and snapshot.serveReady and not data.serveReady then cancelCharge() end
  if not snapshot or snapshot.shotId~=data.shotId or not data.live then trail:Clear() end
  snapshot=data; receivedAt=os.clock()
  outGui.Enabled=data.outLanding~=nil
@@ -263,13 +295,32 @@ state.OnClientEvent:Connect(function(data)
  serveAccent.Position=UDim2.fromOffset(data.servingSide==1 and 22 or 107,53)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
- staminaFill.Size=UDim2.fromScale(data.stamina/100,1)
+ staminaFill.Size=UDim2.fromScale(math.clamp(data.stamina/(data.maxStamina or 100),0,1),1)
  staminaLabel.Text=data.dive>0 and string.format("DIVE %.1fs",data.dive) or "STAMINA"
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
+local studioSoundNames={
+ ["pickleball floor"]="Pickleball Floor (Tire Drop Bounce 19 (SFX))",
+ ["crowd gasp"]="Crowd Gasp",
+}
+local function playRallySound(name)
+ local shared=ReplicatedStorage:FindFirstChild("Shared")
+ local hello=shared and shared:FindFirstChild("Hello")
+ local template=hello and hello:FindFirstChild(name)
+ -- Existing Studio sessions may still have the imported assets in Workspace.
+ if not template and studioSoundNames[name] then template=workspace:FindFirstChild(studioSoundNames[name]) end
+ if not template or not template:IsA("Sound") then return end
+ -- Independent voices preserve rapid impacts and the original sample's pitch.
+ local sound=template:Clone()
+ sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
+ sound.Ended:Once(function() sound:Destroy() end)
+ Debris:AddItem(sound,30)
+ sound:Play()
+end
 feedback.OnClientEvent:Connect(function(message,kind)
+ if kind=="crowdGasp" then playRallySound("crowd gasp"); return end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
   local world=workspace:FindFirstChild("PaddleUp")
@@ -279,16 +330,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
  end
  effects:feedback(message,kind)
  if kind=="ballBounce" then
-  if message.onCourt~=false then
-   local shared=ReplicatedStorage:FindFirstChild("Shared")
-   local hello=shared and shared:FindFirstChild("Hello")
-   local template=hello and (hello:FindFirstChild("pickleball bounce") or hello:FindFirstChild("pickleball hit"))
-   if template and template:IsA("Sound") then
-    local sound=template:Clone(); sound.Name="Pickleball bounce"
-    sound.Looped=false; sound.TimePosition=0; sound.Volume=0.35; sound.PlaybackSpeed=0.8; sound.Parent=SoundService
-    sound.Ended:Once(function() sound:Destroy() end); Debris:AddItem(sound,5); sound:Play()
-   end
-  end
+  playRallySound("pickleball floor")
   return
  end
  if kind=="fault" then cancelCharge(); return end
@@ -305,17 +347,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="ballHit" then
-  local shared=ReplicatedStorage:FindFirstChild("Shared")
-  local hello=shared and shared:FindFirstChild("Hello")
-  local template=hello and hello:FindFirstChild("pickleball hit")
-  if template and template:IsA("Sound") then
-   -- A separate voice per impact lets rapid rallies overlap naturally.
-   local sound=template:Clone()
-   sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
-   sound.Ended:Once(function() sound:Destroy() end)
-   Debris:AddItem(sound,10)
-   sound:Play()
-  end
+  playRallySound("pickleball hit")
   return
  end
  if kind=="diveMotion" then
@@ -338,7 +370,7 @@ local windowFocused=true
 UIS.WindowFocusReleased:Connect(function() windowFocused=false end)
 UIS.WindowFocused:Connect(function() windowFocused=true end)
 UIS.TouchMoved:Connect(function(touch,processed)
- if processed or touch.Position.X<workspace.CurrentCamera.ViewportSize.X*0.5 then return end
+ if processed or player:GetAttribute("LobbyStatus")=="Spectating" or lobbyMenuOpen() or touch.Position.X<workspace.CurrentCamera.ViewportSize.X*0.5 then return end
  yaw-=touch.Delta.X*0.004
  pitch=math.clamp(pitch-touch.Delta.Y*0.004,math.rad(-65),math.rad(30))
 end)
@@ -361,11 +393,21 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    chargeFill.Size=UDim2.fromScale(math.clamp((now-chargeStarted-0.4)/0.6,0,1),1)
   end
  end
- announcement.Visible=now<announcementUntil
+ local lobbyStatus=player:GetAttribute("LobbyStatus") or "Lobby"
+ canvas.Visible=lobbyStatus~="Lobby"
+ devToggle.Visible=lobbyStatus=="Playing"
+ staminaPanel.Visible=lobbyStatus=="Playing"
+ announcement.Visible=lobbyStatus~="Lobby" and now<announcementUntil
+ serveNoticeScale.Scale=scale.Scale
+ serveNotice.Visible=lobbyStatus~="Lobby" and snapshot~=nil and snapshot.serveReady==true
+ if serveNotice.Visible then
+  local remaining=math.max(0,math.ceil((snapshot.serveDeadline or workspace:GetServerTimeNow())-workspace:GetServerTimeNow()))
+  serveNotice.Text=(snapshot.serverName or "Player").."'s serve\nAuto-serve in "..remaining.."s"
+ end
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
  local h=c and c:FindFirstChildOfClass("Humanoid")
- local courtSide=(snapshot and snapshot.side) or player:GetAttribute("CourtSide") or 1
+ local courtSide=playing() and (player:GetAttribute("CourtSide") or 0) or 0
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and math.min(now-receivedAt,0.12) or 0
  local predicted
@@ -386,8 +428,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    yaw=side==1 and 0 or math.pi
    pitch=math.rad(-18)
   end
-  local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local locked=playing() and h and h.Health>0
+  local aiming=locked and not lobbyMenuOpen() and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=aiming==true
@@ -398,9 +440,9 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   end
   if h then h.AutoRotate=not locked end
   local desired,focus
-  if courtSide==0 then
-   focus=Vector3.new(r.Position.X*0.2,181,side*9)
-   desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225,side*79),focus)
+  if lobbyStatus=="Spectating" then
+    focus=Vector3.new(0,182,0)
+    desired=CFrame.lookAt(Vector3.new(50,235,72),focus)
   else
    local heading=CFrame.Angles(0,yaw,0)
    if locked then r.CFrame=CFrame.new(r.Position)*heading end
@@ -461,5 +503,5 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
- sub.Text=snapshot.side==0 and "SPECTATING  /  You will join when a court slot opens" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
+ sub.Text=courtSide==0 and "SPECTATING  /  Return to lobby to manage your queue" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)

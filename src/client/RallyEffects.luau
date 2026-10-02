@@ -127,6 +127,11 @@ function Effects:actor(character)
  actor.charge=particles(attachment); actor.charge.Speed=NumberRange.new(0.5,2); actor.charge.SpreadAngle=Vector2.new(180,180)
  local light=Instance.new("PointLight"); light.Name="Paddle glow"; light.Range=6; light.Brightness=0; light.Parent=paddle
  actor.light=light; table.insert(actor.owned,light)
+ local aura=Instance.new("Attachment"); aura.Name="Perfect streak aura"; aura.Parent=root
+ table.insert(actor.owned,aura)
+ actor.aura=particles(aura)
+ actor.aura.Speed=NumberRange.new(1,3); actor.aura.Lifetime=NumberRange.new(0.4,0.8)
+ actor.aura.SpreadAngle=Vector2.new(180,180)
  self.actors[character]=actor
  return actor
 end
@@ -174,6 +179,7 @@ function Effects:reset()
  self.trail.Enabled=false; self.trail:Clear(); self.embers.Enabled=false; self.embers:Clear()
  for _,actor in pairs(self.actors) do
   actor.dive=0; actor.swing=0; actor.flash=0; actor.charge:Clear(); actor.charge.Enabled=false
+  actor.aura:Clear(); actor.aura.Enabled=false
   actor.paddleTrail.Enabled=false; actor.paddleTrail:Clear()
   for _,trail in ipairs(actor.motion) do trail.Enabled=false; trail:Clear() end
  end
@@ -266,12 +272,16 @@ function Effects:update(dt,snapshot,localChargeAt)
    local charge=(live or serving) and visible and (serving or serverNow>=readyAt) and math.clamp((chargeAge-0.4)/0.6,0,1) or 0
    actor.flash*=math.exp(-dt*8)
    local diving=visible and self.clock<actor.dive
-   local actorColor=diving and BLUE or charge>0 and color:Lerp(WHITE,charge*0.4) or (actor.flash>0.02 and actor.flashColor) or color
+   local streak=live and math.clamp(character:GetAttribute("PerfectStreak") or 0,0,10)/10 or 0
+   local auraColor=BLUE:Lerp(Color3.fromRGB(255,190,65),streak)
+   actor.aura.Color=ColorSequence.new(auraColor)
+   actor.aura.Enabled=visible and streak>0 or false; actor.aura.Rate=8+streak*32
+   local actorColor=diving and BLUE or charge>0 and color:Lerp(WHITE,charge*0.4) or (actor.flash>0.02 and actor.flashColor) or (streak>0 and auraColor) or color
    local sequence=ColorSequence.new(actorColor)
-   actor.highlight.Enabled=visible and (charge>0 or actor.flash>0.02) or false
+   actor.highlight.Enabled=visible and (streak>0 or charge>0 or actor.flash>0.02) or false
    actor.highlight.FillColor=actorColor; actor.highlight.OutlineColor=actorColor
-   actor.highlight.FillTransparency=1-math.max(charge*0.08,actor.flash*0.15)
-   actor.highlight.OutlineTransparency=1-math.max(charge*0.6,actor.flash*0.8)
+   actor.highlight.FillTransparency=1-math.max(streak*0.18,charge*0.08,actor.flash*0.15)
+   actor.highlight.OutlineTransparency=1-math.max(streak>0 and 0.3+streak*0.4 or 0,charge*0.6,actor.flash*0.8)
    actor.light.Color=actorColor; actor.light.Brightness=visible and (charge*1.2+actor.flash) or 0
    actor.charge.Color=sequence; actor.charge.Enabled=charge>0; actor.charge.Rate=charge*16
    actor.paddleTrail.Color=sequence; actor.paddleTrail.Enabled=visible and (charge>0.15 or self.clock<actor.swing) or false
@@ -279,7 +289,7 @@ function Effects:update(dt,snapshot,localChargeAt)
    local moving=distance/math.max(dt,0.001)>9 and distance<12
    actor.lastPosition=actor.root.Position
    for _,trail in ipairs(actor.motion) do
-    trail.Color=sequence; trail.Enabled=visible and (diving or (live and self.energy>0.35 and moving)) or false
+    trail.Color=sequence; trail.Enabled=visible and (diving or (live and (streak>0 or self.energy>0.35) and moving)) or false
     if distance>=12 then trail:Clear(); actor.paddleTrail:Clear() end
    end
   end

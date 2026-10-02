@@ -1,9 +1,12 @@
 # Paddle Up! — Skyline Club
 
-Arcade pickleball on an apartment rooftop. Press Play in Studio. The first
-player faces a practice partner; a second player replaces it. A third player
-creates 2v1 and a fourth creates 2v2. Further players spectate and fill vacant
-slots in join order. Team changes reset the rally without awarding a point.
+Arcade pickleball on an apartment rooftop. Press Play in Studio to enter the
+lobby. Click PLAY / PARTY or use a queue station, select 1v1, 2v2, or Practice,
+then click the queue button. Singles requires two players and doubles requires
+four; Practice starts a bot match when the court is free. Invite friends into
+a party to queue together, cancel a queue from the same menu, or spectate the
+current match. Completed matches return players to the lobby to queue again.
+The cursor stays free in the lobby so queue controls are directly clickable.
 
 | Input | Action |
 | --- | --- |
@@ -16,7 +19,7 @@ slots in join order. Team changes reset the rally without awarding a point.
 | Q | Arm a power shot for 5 seconds; 10-second cooldown |
 | E | Slow the opponent for 2.5 seconds; 12-second cooldown |
 
-Gameplay uses an always-on shift-lock camera. Serves and returns follow the
+On-court gameplay uses a shift-lock camera. Serves and returns follow the
 character's horizontal facing direction at impact, including during dives.
 The ground marker shows that direction; shot height follows the arcade arc.
 Aim serves into the diagonal service court. Shots are not clamped in bounds.
@@ -36,6 +39,17 @@ before a bounce or 0.28 seconds afterward count as perfect. Perfect hits have
 no swing cooldown and multiply rally speed by 1.05. Other swings have a
 0.28-second cooldown. A point resets rally speed. Stamina regenerates at
 22 per second. Power shots add a temporary 22% speed boost.
+
+Players walk at 22 studs/second. Each consecutive legal perfect return adds
+0.8 studs/second of movement speed and an extra 0.03 to the return's rally-speed
+multiplier, with bonuses capped at 10 hits (30 studs/second and +0.30 per return).
+Perfect dinks and drops build the streak but retain their soft-shot power.
+After a perfect hit, follow-up swings cannot count as misses, break the streak,
+or add a hit cooldown until the opposing team returns the ball or the point ends.
+Slow abilities override the movement bonus. Unprotected misses, non-perfect returns, body
+contacts, rally ends, roster changes, and respawns reset the player's streak.
+Perfect-hit feedback shows the count; a blue-to-gold aura and movement trails
+grow with the streak and are visible to all players.
 
 First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.
@@ -82,8 +96,12 @@ cooldown; perfect timing bypasses it. Only an explicit missed click/release
 shows "Miss!"; holding and automatic dive reach checks do not create misses.
 Right-click always plays an underhand dink/drop motion, even on a miss.
 Accepted contacts reconcile the animation without replaying it.
-Each on-court bounce plays a separate, softer, lower-pitched voice of the
-existing pickleball sample, configured as `pickleball bounce` in the project.
+Each floor impact, including out balls, plays the dedicated `pickleball floor`
+sample at its original pitch. Paddle contacts retain `pickleball hit`.
+The crowd gasps when a perfect streak of at least five breaks or ends with the
+point, or when a lob follows three consecutive shots at 1.3x rally speed or
+higher. Gasps have a shared four-second cooldown, so simultaneous streak breaks
+and dramatic lobs do not overlap. Lobby and respawn resets do not trigger gasps.
 
 - `src/server/init.server.luau`: ball simulation, hit validation, scoring,
   abilities, player slots, and practice partner.

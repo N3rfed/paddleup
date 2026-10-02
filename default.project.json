@@ -21,12 +21,21 @@
               "Looped": false
             }
           },
-          "pickleball bounce": {
+          "pickleball floor": {
             "$className": "Sound",
             "$properties": {
-              "SoundId": "rbxassetid://105850247730037",
-              "Volume": 0.35,
-              "PlaybackSpeed": 0.8,
+              "SoundId": "rbxassetid://9120068025",
+              "Volume": 0.5,
+              "PlaybackSpeed": 1,
+              "Looped": false
+            }
+          },
+          "crowd gasp": {
+            "$className": "Sound",
+            "$properties": {
+              "SoundId": "rbxassetid://88495424108255",
+              "Volume": 0.5,
+              "PlaybackSpeed": 1,
               "Looped": false
             }
           }
