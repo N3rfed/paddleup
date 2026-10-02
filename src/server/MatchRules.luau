@@ -116,6 +116,62 @@ function Rules.slamSpeedScale(rallySpeed)
  return rallySpeed*math.clamp(0.9+0.2*math.max(0,rallySpeed-1),0.9,1.3)
 end
 
+Rules.SERVE_GOOD_START=0.67
+Rules.SERVE_GOOD_END=1.23
+Rules.SERVE_PERFECT_START=0.92
+Rules.SERVE_PERFECT_END=0.98
+Rules.SERVE_GREAT_SPEED=1.35
+Rules.SERVE_PERFECT_SPEED=1.6
+Rules.SERVE_METER_TIME=1.5
+Rules.SERVE_METER_SPEED=1.5
+
+-- The full good zone stays away from both ends; perfect remains centered inside it.
+function Rules.serveZoneCenter(roll)
+ return 0.6+0.5*math.clamp(roll,0,1)
+end
+
+function Rules.serveMeterPosition(held)
+ local phase=(math.max(0,held or 0)*Rules.SERVE_METER_SPEED)%(2*Rules.SERVE_METER_TIME)
+ return phase<=Rules.SERVE_METER_TIME and phase or 2*Rules.SERVE_METER_TIME-phase
+end
+
+function Rules.serveZoneBounds(center)
+ center=center or 0.95
+ return center-0.28,center+0.28,center-0.03,center+0.03,center-0.12,center+0.12
+end
+
+function Rules.serveCharge(held,center)
+ local position=Rules.serveMeterPosition(held)
+ local goodStart,goodEnd,perfectStart,perfectEnd,greatStart,greatEnd=Rules.serveZoneBounds(center)
+ local netEnd=goodStart*(0.4/0.85)
+ if position<netEnd then return "net",2 end
+ if position<goodStart-1e-8 then
+  return "short",2+11*(position-netEnd)/(goodStart-netEnd)
+ end
+ if position>=perfectStart-1e-8 and position<=perfectEnd+1e-8 then return "perfect",28 end
+ if position>=greatStart-1e-8 and position<=greatEnd+1e-8 then return "great",28 end
+ if position<=goodEnd+1e-8 then return "good",28 end
+ return "out",42+18*math.clamp((position-goodEnd)/(Rules.SERVE_METER_TIME-goodEnd),0,1)
+end
+
+-- Equal odds for each timeout outcome, using the current randomized zone.
+function Rules.randomServeHold(category,variation,center)
+ variation=math.clamp(variation,0,1)
+ local goodStart,goodEnd,perfectStart,perfectEnd,greatStart,greatEnd=Rules.serveZoneBounds(center)
+ local position
+ if category==1 then position=goodEnd+0.01+variation*(Rules.SERVE_METER_TIME-goodEnd-0.01)
+ elseif category==2 then position=variation*(goodStart-0.01)
+ elseif category==3 then position=goodStart+0.01+variation*(greatStart-goodStart-0.02)
+ elseif category==4 then position=perfectStart+variation*(perfectEnd-perfectStart)
+ else position=greatStart+0.005+variation*(perfectStart-greatStart-0.01) end
+ return position/Rules.SERVE_METER_SPEED
+end
+
+function Rules.bounceVelocity(incoming,undercharged)
+ if undercharged then return math.clamp(-incoming*0.25,5,8) end
+ return math.clamp(-incoming*0.55,14,20)
+end
+
 Rules.CHARGE_TIME=1
 Rules.HIT_COOLDOWN=0.28
 function Rules.heldBallPosition(character)

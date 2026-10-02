@@ -39,6 +39,7 @@ local nextServe=0
 local servingSide,serveReady,serveX=1,false,10
 local SERVE_TIMEOUT=15
 local serveDeadline=0
+local serveZoneCenter=0.95
 local serverId,receiverId
 ball.shots=0
 local banner="Welcome to Skyline Club"
@@ -144,12 +145,20 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
 end
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
  ball.bodyHitSide=nil
+ ball.undercharged=contact and contact.undercharged==true
+ ball.deadBounce=nil
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  if not slam and not soft then speedScale*=1+0.22*(charge or 0) end
  -- Speed changes flight time and launch velocity; downward gravity stays constant.
  if soft then speedScale*=0.65 end
  local distance=(Vector3.new(target.X,0,target.Z)-Vector3.new(from.X,0,from.Z)).Magnitude
  local gravity=GRAVITY
+ if contact and (contact.serveQuality=="great" or contact.serveQuality=="perfect") then
+  -- Scale time and gravity together so the faster serve keeps its legal arc.
+  local multiplier=contact.serveQuality=="perfect" and Rules.SERVE_PERFECT_SPEED or Rules.SERVE_GREAT_SPEED
+  speedScale*=multiplier
+  gravity*=multiplier^2
+ end
  local duration=slam and math.max(0.12,math.min(distance/(BASE_SPEED*1.8),math.sqrt(2*math.max(0.1,from.Y-FLOOR)/gravity)*0.75)) or math.max(0.7,distance/BASE_SPEED)
  if lob then duration=math.max(duration*1.35,1.5) end
  duration=duration/math.max(0.1,speedScale)
@@ -164,6 +173,33 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
    vy=(FLOOR-from.Y+0.5*gravity*duration*duration)/duration
   end
  end
+ if contact and contact.serveQuality=="perfect" then
+  -- Compare the same flight with a slam, including its net clearance correction.
+  local slamDuration=math.max(0.12,math.min(distance/(BASE_SPEED*1.8),math.sqrt(2*math.max(0.1,from.Y-FLOOR)/GRAVITY)*0.75))
+  slamDuration/=Rules.slamSpeedScale(ball.speed)*(1+0.12*(momentum or 0))
+  if crossing>0 and crossing<1 then
+   local slamVy=(FLOOR-from.Y+0.5*GRAVITY*slamDuration^2)/slamDuration
+   local tc=slamDuration*crossing
+   if from.Y+slamVy*tc-0.5*GRAVITY*tc^2<185.2 then
+    slamDuration=math.sqrt(math.max(0.01,2*(185.2-from.Y-(FLOOR-from.Y)*crossing)/(GRAVITY*crossing*(1-crossing))))
+   end
+  end
+  local perfectDuration=slamDuration/0.92
+  local originalDuration=duration
+  duration=perfectDuration
+  if crossing>0 and crossing<1 then
+   -- Keep flight time (and forward speed), but solve a low arc just above the net.
+   local netHeight=185.15
+   gravity=math.max(0.01,2*(netHeight-from.Y-(FLOOR-from.Y)*crossing)/(duration^2*crossing*(1-crossing)))
+  else gravity*=(originalDuration/perfectDuration)^2 end
+  vy=(FLOOR-from.Y+0.5*gravity*duration^2)/duration
+ end
+ if contact and contact.serveQuality=="great" and crossing>0 and crossing<1 then
+  -- Flatten great serves without changing their flight time or forward speed.
+  local netHeight=185.35
+  gravity=math.max(0.01,2*(netHeight-from.Y-(FLOOR-from.Y)*crossing)/(duration^2*crossing*(1-crossing)))
+  vy=(FLOOR-from.Y+0.5*gravity*duration^2)/duration
+ end
  if mishit then
   -- Keep horizontal aim, but send the ball below net height without clearance assist.
   if crossing>0 and crossing<1 then
@@ -173,7 +209,7 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  end
  ball.lob=lob==true
  ball.p=from
- ball.g=GRAVITY
+ ball.g=gravity
  ball.v=Vector3.new((target.X-from.X)/duration,vy,(target.Z-from.Z)/duration)
  ball.shotId=(ball.shotId or 0)+1
  ball.slamLob=ball.lob and lobCrossesSlamZone(from,ball.v,ball.g,duration)
@@ -366,6 +402,7 @@ local function prepareServe()
  ball.v=Vector3.zero; ball.speed=1; ball.perfects=0; ball.shots=0
  ball.bounces=0; ball.bounceAt=-100; ball.last=servingSide
  serveReady=true
+ serveZoneCenter=Rules.serveZoneCenter(math.random())
  serveDeadline=workspace:GetServerTimeNow()+SERVE_TIMEOUT
  banner="TEAM "..(servingSide==1 and "1" or "2").." / SERVER "..rotation.number.." TO SERVE"
 end
@@ -376,7 +413,7 @@ local function facingTarget(from,r,side,depth)
  local distance=math.abs(-side*depth-from.Z)/math.max(0.25,math.abs(direction.Z))
  return from+direction*math.clamp(distance,12,110),momentum
 end
-local function serve(p,d,r,h,charge,automatic)
+local function serve(p,d,r,h,charge,automatic,serveHeld)
  if not serveReady then return end
  if not automatic and os.clock()<d.lastSwing then return end
  charge=charge or 0
@@ -404,14 +441,27 @@ local function serve(p,d,r,h,charge,automatic)
  serveDeadline=0; d.chargeAt=nil
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  local target,momentum
- if botServing or automatic then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
- else target,momentum=facingTarget(from,r,d.side,28) end
+ if automatic then
+  serveHeld=Rules.randomServeHold(math.random(1,5),math.random(),serveZoneCenter)
+  charge=Rules.chargeAmount(0,serveHeld)
+ elseif botServing then serveHeld=Rules.randomServeHold(3,0.5,serveZoneCenter) end
+ charge=Rules.serveMeterPosition(serveHeld)/Rules.SERVE_METER_TIME
+ local serveQuality,depth=Rules.serveCharge(serveHeld,serveZoneCenter)
+ if botServing or automatic then target=Vector3.new(-serveX,FLOOR,-servingSide*depth)
+ else
+  target,momentum=facingTarget(from,r,d.side,depth)
+  -- Charge controls depth; movement cannot rescue an early release or shorten an overcharge.
+  target=Vector3.new(target.X,FLOOR,-servingSide*depth)
+ end
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
  if p.Character then p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN) end
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,false,charge,{userId=not botServing and p.UserId or nil})
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,serveQuality=="net",charge,{userId=not botServing and p.UserId or nil,serveQuality=serveQuality,undercharged=serveQuality=="short" or serveQuality=="net"})
  if not botServing then
   feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=charge},"swing")
-  if charge>0 then tell(p,"CHARGED SERVE!","perfect") end
+  if not automatic then
+   local message=serveQuality=="perfect" and "PERFECT SERVE!" or serveQuality=="great" and "GREAT SERVE!" or serveQuality=="good" and "GOOD SERVE!" or serveQuality=="out" and "OVERCHARGED SERVE!" or "UNDERPOWERED SERVE!"
+   tell(p,message,(serveQuality=="good" or serveQuality=="great" or serveQuality=="perfect") and "perfect" or "fault")
+  end
  end
  banner="SERVE  /  LET IT BOUNCE"
 end
@@ -514,9 +564,10 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  local now=os.clock()
  -- Release/cancel must survive the flood gate, even for a very quick tap.
  if action=="ChargeCancel" then d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
- local releasedCharge
+ local releasedCharge,serveHeld
  if action=="ChargeRelease" then
   if not d.chargeAt then return end
+  serveHeld=now-d.chargeAt
   releasedCharge=Rules.chargeAmount(d.chargeAt,now); d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   if ball.live and releasedCharge>0 and now<(d.chargeShotAt or 0) then releasedCharge=0; d.chargeCooldownBlocked=true end
  end
@@ -533,9 +584,11 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
    local hit=tryReturn(p,d,r,now,false,false,releasedCharge)
    if hit and d.chargeCooldownBlocked then tell(p,"CHARGED SHOT RECHARGING  /  NORMAL HIT","info") end
    d.chargeCooldownBlocked=nil
-  else serve(p,d,r,h,releasedCharge) end
+  else serve(p,d,r,h,releasedCharge,false,serveHeld) end
  elseif action=="Serve" or (action=="Swing" and not ball.live) then
-  serve(p,d,r,h)
+  if servingSide==-1 and not occupant(-1) and p.UserId==receiverId then
+   serve(p,d,r,h)
+  else tell(p,"HOLD LEFT CLICK / RELEASE IN GREEN TO SERVE","info") end
  elseif action=="Dive" then
   d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   if now<d.diveAt or d.stamina<DIVE_COST then return end
@@ -641,7 +694,9 @@ RunService.Heartbeat:Connect(function(dt)
     elseif ball.bounces>=1 then
      point(ball.last,"Double bounce")
     elseif ball.shots==0 and not Rules.serveLandingValid(ball.p,servingSide,serveX) then
+     local rebound=ball.undercharged and Rules.bounceVelocity(ball.v.Y,true) or nil
      point(-servingSide,"Serve fault: land in the diagonal service court")
+     if rebound then ball.deadBounce={position=impact,started=now,velocity=rebound}; ball.p=impact; ball.g=GRAVITY; ball.v=Vector3.new(0,rebound,0) end
     elseif math.abs(ball.p.X)>20.09 or math.abs(ball.p.Z)>40.09 then
      point(-ball.last,"Out")
     elseif ball.p.Z*ball.last>0 then
@@ -652,7 +707,7 @@ RunService.Heartbeat:Connect(function(dt)
      else
       ball.p=Vector3.new(ball.p.X,FLOOR,ball.p.Z)
       -- Damp steep lob impacts and keep rebounds between 2.2 and 4.4 studs high.
-      ball.v=Vector3.new(ball.v.X,math.clamp(-ball.v.Y*0.55,14,20),ball.v.Z)
+      ball.v=Vector3.new(ball.v.X,Rules.bounceVelocity(ball.v.Y,ball.undercharged),ball.v.Z)
       ball.bounceAt=now
       ball.bouncePoint=ball.p
      end
@@ -663,7 +718,16 @@ RunService.Heartbeat:Connect(function(dt)
     bodyReturn(previous,hasBot)
    end
   end
- else accumulator=0 end
+ else
+  accumulator=0
+  if ball.deadBounce then
+   local elapsed=now-ball.deadBounce.started
+   local height=math.max(0,ball.deadBounce.velocity*elapsed-0.5*GRAVITY*elapsed^2)
+   ball.p=ball.deadBounce.position+Vector3.new(0,height,0)
+   ball.v=Vector3.new(0,ball.deadBounce.velocity-GRAVITY*elapsed,0)
+   if elapsed>=2*ball.deadBounce.velocity/GRAVITY then ball.deadBounce=nil; ball.v=Vector3.zero end
+  end
+ end
  botMoving=false
  if hasBot and ball.live then
   if botShotId~=ball.shotId then
@@ -734,13 +798,15 @@ RunService.Heartbeat:Connect(function(dt)
   end
   for p,d in pairs(users) do
    state:FireClient(p,{
-    outLanding=ball.outLanding,p=ball.p,v=ball.v,g=ball.g,live=ball.live,landing=target,eta=t,
+    deadBounce=ball.deadBounce~=nil,outLanding=ball.outLanding,p=ball.p,v=ball.v,g=ball.g,live=ball.live,landing=target,eta=t,
     slammable=ball.live and ball.slamLob,shotId=ball.shotId,slamReady=slamReady(p,d,now),
     green=ball.live and perfect(now),last=ball.last,bounces=ball.bounces,
     perfects=ball.perfects,speed=ball.speed,score=score,banner=banner,
     serveReady=serveReady,serveDeadline=serveReady and serveDeadline or nil,servingSide=servingSide,serveX=serveX,serverId=serverId,receiverId=receiverId,serverNumber=rotation.number,
     serverName=(serverId and Players:GetPlayerByUserId(serverId) and Players:GetPlayerByUserId(serverId).DisplayName) or "Practice Partner",
-    canServe=serveReady and (p.UserId==serverId or (hasBot and servingSide==-1 and p.UserId==receiverId)),
+    serveZoneCenter=serveZoneCenter,
+    canServe=serveReady and p.UserId==serverId,
+    canRequestBotServe=serveReady and hasBot and serverId==0 and p.UserId==receiverId,
     mustBounce=ball.live and ball.shots<2 and ball.bounces==0,
     side=d.side,bot=hasBot,stamina=d.stamina,maxStamina=MAX_STAMINA,dive=math.max(0,d.diveAt-now,(DIVE_COST-d.stamina)/STAMINA_REGEN),
     homeName=teamName(1),awayName=teamName(-1),
