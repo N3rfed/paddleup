@@ -2,7 +2,7 @@
 local Lobby={}
 Lobby.__index=Lobby
 function Lobby.new(clock)
- return setmetatable({players={},parties={},queue={},invites={},active=nil,serial=0,clock=clock or os.clock},Lobby)
+ return setmetatable({players={},parties={},queue={},invites={},matches={},limits={["1v1"]=20,["2v2"]=20},serial=0,matchSerial=0,clock=clock or os.clock},Lobby)
 end
 function Lobby:add(id)
  if self.players[id] then return end
@@ -18,7 +18,18 @@ function Lobby:queued(id)
  for _,entry in ipairs(self.queue) do if entry.party==party then return entry end end
 end
 function Lobby:playing(id)
- return self.active and table.find(self.active.members,id)~=nil
+ local player=self.players[id]
+ return player and player.matchId~=nil
+end
+function Lobby:match(id)
+ local player=self.players[id]
+ return player and self.matches[player.matchId or player.watching]
+end
+function Lobby:capacity(mode)
+ local pool=mode=="Practice" and "1v1" or mode
+ local occupied={}
+ for _,match in pairs(self.matches) do if match.pool==pool then occupied[match.slot]=true end end
+ for slot=1,self.limits[pool] do if not occupied[slot] then return slot,pool end end
 end
 function Lobby:cancel(id)
  local party=self:party(id)
@@ -75,11 +86,10 @@ function Lobby:enqueue(id,mode,difficulty)
  return true
 end
 function Lobby:takeMatch()
- if self.active then return end
  -- Pick the oldest queue that can form a complete match. Never split a doubles pair.
  local candidates={}
  for _,entry in ipairs(self.queue) do
-  if entry.mode=="Practice" then
+  if entry.mode=="Practice" and self:capacity("Practice") then
    table.insert(candidates,{mode="Practice",entries={entry},order=entry.order,difficulty=entry.difficulty})
    break
   end
@@ -97,7 +107,7 @@ function Lobby:takeMatch()
     end
    end
   end
-  local picked=choose(1,needed,{})
+  local picked=self:capacity(mode) and choose(1,needed,{})
   if picked then table.insert(candidates,{mode=mode,entries=picked,order=picked[1].order}) end
  end
  table.sort(candidates,function(a,b) return a.order<b.order end)
@@ -119,24 +129,38 @@ function Lobby:takeMatch()
  end
  local practice=selected.mode=="Practice"
  if practice then away={0} end
- self.active={mode=selected.mode,home=home,away=away,members=members,bot=practice,difficulty=selected.difficulty}
- return self.active
+ local slot,pool=self:capacity(selected.mode)
+ self.matchSerial+=1
+ local match={id=self.matchSerial,slot=slot,pool=pool,mode=selected.mode,home=home,away=away,members=members,bot=practice,difficulty=selected.difficulty}
+ self.matches[match.id]=match
+ for _,id in ipairs(members) do self.players[id].matchId=match.id end
+ return match
 end
-function Lobby:finish()
- local active=self.active; self.active=nil
- for _,p in pairs(self.players) do p.watching=false end
- return active
+function Lobby:finish(matchId)
+ local match=self.matches[matchId]
+ if not match then return end
+ self.matches[matchId]=nil
+ for _,p in pairs(self.players) do
+  if p.matchId==matchId then p.matchId=nil end
+  if p.watching==matchId then p.watching=false end
+ end
+ return match
 end
-function Lobby:watch(id,watching)
+function Lobby:watch(id,watching,matchId)
  if not self.players[id] or self:playing(id) then return false,"Players cannot spectate their own match." end
- if watching and not self.active then return false,"No match is running yet." end
- self.players[id].watching=watching
+ if watching then
+  if not matchId then
+   for key in pairs(self.matches) do if not matchId or key<matchId then matchId=key end end
+  end
+  if not self.matches[matchId] then return false,"That match is no longer running." end
+ end
+ self.players[id].watching=watching and matchId or false
  return true
 end
 function Lobby:remove(id)
  if not self.players[id] then return end
  self:cancel(id)
- if self:playing(id) then self:finish() end
+ if self:playing(id) then self:finish(self.players[id].matchId) end
  self:leaveParty(id)
  self.parties[id]=nil; self.players[id]=nil; self.invites[id]=nil
  for target,invite in pairs(self.invites) do if invite.leader==id then self.invites[target]=nil end end

@@ -1,7 +1,7 @@
 # Paddle Up! — Skyline Club
 
 Arcade pickleball on an apartment rooftop. Press Play in Studio to spawn on
-the walkable Skyline Club lobby terrace beside the court. Walk to a Singles,
+the floating circular lobby island, well away from the court. Walk to a Singles,
 Doubles, Practice, or Spectate station and press E (or tap the prompt), or
 open PLAY / PARTY. BACK TO TERRACE closes the menu so you can keep exploring.
 The lobby uses the same shift-lock camera as the court. Left-click (or tap)
@@ -9,7 +9,12 @@ to swing your paddle; right-click performs a soft swing. Other players see
 these swings, but they do not hit the match ball. Hold Alt to click PLAY /
 PARTY; an open queue menu keeps the cursor free and blocks paddle swings.
 
-Matchmaking uses players in the same server and one shared court. Singles
+Matchmaking uses players in the same server, with up to 40 simultaneous games:
+20 singles courts and 20 doubles courts. Each game has its own court, ball,
+score, serve rotation, and match feedback. Full capacity with human opponents
+requires 120 players; configure the published place's server player limit to
+allow that population, plus any desired room for lobby visitors and spectators.
+Singles
 waits for two humans; doubles waits for four. Solo queues fill with random
 players. Invite a player from the lobby list; they must accept within 30
 seconds. The party leader chooses the mode and queues the group. Two friends
@@ -19,14 +24,18 @@ its final slot from the solo queue. Leaving a party cancels its queue.
 
 Practice is solo against a bot, with Easy, Normal, or Hard difficulty. Easy
 reacts and moves more slowly and makes more mistakes; Hard reacts faster,
-tracks more accurately, and hits more perfect returns. Practice waits for
-the court if another match is running. Leave a party before choosing practice.
+tracks more accurately, and hits more perfect returns. Practice uses a singles
+court and shares the 20-game singles limit. A full pool leaves its players queued;
+the other pool can continue starting games. Leave a party before choosing practice.
 
-Spectate a running match, including practice, without occupying a court slot.
-You can watch while queued. BACK TO LOBBY returns to the terrace; accepting
+Use the arrows beside the match preview to choose a running match, including
+practice, then spectate without occupying a court slot.
+You can watch while queued. BACK TO LOBBY returns to the island; accepting
 a match automatically switches you into play. During play, hold Alt to click
 LEAVE MATCH and confirm. A win or player departure ends the match and returns
-its players and spectators to the lobby. The next ready queue can then play.
+its players and spectators to the lobby, leaving other matches running. The next
+ready queue in that court's pool can then play. Courts are created when matches
+start and removed when they end; freed slots are reused with new match IDs.
 Friends remain in their party after a match; queue again when ready.
 
 | Input | Action |
@@ -97,9 +106,9 @@ quality. The developer landing marker remains a separate prediction.
 
 The HUD includes clickable abilities and touch swing/dive buttons.
 
-The court glass enclosure, uprights, and rails are removed, including from
-saved courts on the next layout update. The invisible back and sideline
-movement limits are removed. Players can move through the rooftop surround.
+The rooftop deck is smaller, with no perimeter parapets or glass around the
+court. Players can dive or run off its edge; falling players respawn into the
+current match.
 Shot feedback (lob, perfect, slam, dink, drop) floats above the player who
 performed the shot and is visible to everyone. Labels pop, rise, and fade:
 green for clean shots, gray for neutral feedback/lobs, and red for misses,

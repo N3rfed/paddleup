@@ -136,7 +136,9 @@ function Effects:hitActor(userId)
   local player=Players:GetPlayerByUserId(userId)
   return self:actor(player and player.Character)
  end
- local world=workspace:FindFirstChild("PaddleUp")
+ local localPlayer=Players.LocalPlayer
+ local id=localPlayer and localPlayer:GetAttribute("ViewingMatchId")
+ local world=id and workspace:FindFirstChild("MatchCourt_"..id) or workspace:FindFirstChild("PaddleUp")
  return self:actor(world and world:FindFirstChild("Practice Partner"))
 end
 
@@ -180,7 +182,9 @@ function Effects:reset()
 end
 
 function Effects:scan()
- local world=workspace:FindFirstChild("PaddleUp")
+ local localPlayer=Players.LocalPlayer
+ local id=localPlayer and localPlayer:GetAttribute("ViewingMatchId")
+ local world=id and workspace:FindFirstChild("MatchCourt_"..id) or workspace:FindFirstChild("PaddleUp")
  local rig=world and world:FindFirstChild("RallyLights")
  if rig~=self.rig then
   self.rig=rig; table.clear(self.lamps); table.clear(self.strips)
@@ -196,7 +200,7 @@ function Effects:scan()
   end
  end
  for _,player in ipairs(Players:GetPlayers()) do
-  if player:GetAttribute("CourtSide")~=0 then self:actor(player.Character) end
+  if player:GetAttribute("CourtSide")~=0 and player:GetAttribute("ViewingMatchId")==id then self:actor(player.Character) end
  end
  if world then self:actor(world:FindFirstChild("Practice Partner")) end
 end
@@ -257,7 +261,10 @@ function Effects:update(dt,snapshot,localChargeAt)
   else
    local owner=Players:GetPlayerFromCharacter(character)
    local humanoid=character:FindFirstChildOfClass("Humanoid")
-   local visible=actor.root.Name=="Body" and actor.root.Transparency<1 or (humanoid and humanoid.Health>0 and owner and owner:GetAttribute("CourtSide")~=0)
+   local localPlayer=Players.LocalPlayer
+   local selected=localPlayer and localPlayer:GetAttribute("ViewingMatchId")
+   local visible=actor.root.Name=="Body" and actor.root.Transparency<1 and self.rig and character.Parent==self.rig.Parent
+    or (humanoid and humanoid.Health>0 and owner and owner:GetAttribute("CourtSide")~=0 and owner:GetAttribute("ViewingMatchId")==selected)
    local chargeAt=character:GetAttribute("ShotChargeAt")
    local chargeAge=chargeAt and serverNow-chargeAt or 0
    if owner==Players.LocalPlayer and localChargeAt then chargeAge=os.clock()-localChargeAt end
