@@ -4,6 +4,8 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 require(script:WaitForChild("World")).build()
+require(script:WaitForChild("LobbyWorld")).build()
+require(script:WaitForChild("CourtLighting")).start()
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
 local function remote(name)
@@ -133,6 +135,10 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  return false
 end
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
+ ball.bodyHitSide=nil
+ ball.slam=slam==true
+ ball.undercharged=contact and contact.undercharged==true
+ ball.deadBounce=nil
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  if not slam and not soft then speedScale*=1+0.22*(charge or 0) end
  -- Speed changes flight time and launch velocity; downward gravity stays constant.
@@ -173,9 +179,9 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  contact.slam=slam==true; contact.powered=boost==true; contact.charge=charge or 0; contact.soft=soft
  feedback:FireAllClients(contact,"ballHit")
 end
--- Only the receiving team can deflect a shot; changing ball.last prevents
--- the outgoing lob from repeatedly colliding with the same player or teammate.
+-- Only unbounced slams cause body hits; deflections stay visible until landing.
 local function bodyReturn(previous,hasBot)
+ if not ball.slam or ball.bounces~=0 or ball.bodyHitSide then return end
  local earliest,hitPlayer,hitSide
  local function check(character,side,player)
   if not character or side~=-ball.last then return end

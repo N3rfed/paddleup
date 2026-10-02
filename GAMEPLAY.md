@@ -182,7 +182,11 @@ Hold left mouse and release to hit. Taps remain normal returns; charge builds af
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
 
-Body hits automatically deflect incoming balls into the opposite court as a
-slow lob, including hits on the practice partner. These arcade saves require
-no swing and reduce rally speed by 30%; horizontal pace is at least 30% slower
-than the incoming ball. Paddle parts and spectators do not trigger body saves.
+Only slams that have not bounced can cause body hits. Other shots and all
+post-bounce contacts cannot cause body-hit faults.
+Body hits produce a short visible deflection, including hits on the practice
+partner. Horizontal travel reverses, loses 85% of its speed, and caps at 8
+studs per second. A 3-stud-per-second upward bump keeps the ball low. Body
+contact locks out paddle returns and further body hits until the ball lands,
+then awards the rally to the opposing team as a body-hit fault. Paddle parts
+and spectators do not trigger body hits.

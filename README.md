@@ -28,3 +28,5 @@ Visual Studio Code
 12. In a different command prompt window, type the command `codex` in the repository destination
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
+## Environment
+The rooftop uses a fixed evening sky with bright ambient lighting, reduced haze, and no global shadows to keep the court readable during nighttime play. There is no day/night cycle. Court lights remain on and react to rallies. Adjust src/server/CourtLighting.luau to tune the shared lighting.

@@ -162,15 +162,6 @@ function World.build()
  if not base then base=part("Baseplate",Vector3.new(1200,2,1200),Vector3.new(0,-6,0),dark); base.Parent=workspace end
  if base then base.Position=Vector3.new(0,-6,0); base.Size=Vector3.new(1200,2,1200); base.Color=Color3.fromRGB(54,67,73) end
  local lighting=game:GetService("Lighting")
- lighting.ClockTime=17.3
- lighting.Brightness=2.5
- lighting.Ambient=Color3.fromRGB(132,145,166)
- lighting.OutdoorAmbient=Color3.fromRGB(153,158,173)
- lighting.GlobalShadows=true
- local atmosphere=lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",lighting)
- atmosphere.Density=0.26
- atmosphere.Color=Color3.fromRGB(239,210,181)
- atmosphere.Decay=Color3.fromRGB(130,148,174)
  local bloom=lighting:FindFirstChildOfClass("BloomEffect")
  if bloom then bloom.Intensity=0.15; bloom.Size=24; bloom.Threshold=1.5 end
  local dof=lighting:FindFirstChildOfClass("DepthOfFieldEffect")
