@@ -1,3 +1,4 @@
+local Players=game:GetService("Players")
 -- A ground projection, independent of the sun, court lamps, and shadow quality.
 local Shadow={}
 Shadow.__index=Shadow
@@ -29,7 +30,9 @@ function Shadow:update(position,visible)
  if not self.surface.Enabled then return end
  if os.clock()>=self.scanAt then
   self.scanAt=os.clock()+1; table.clear(self.ground)
-  local world=workspace:FindFirstChild("PaddleUp")
+  local localPlayer=Players.LocalPlayer
+  local id=localPlayer and localPlayer:GetAttribute("ViewingMatchId")
+ local world=id and workspace:FindFirstChild("MatchCourt_"..id) or workspace:FindFirstChild("PaddleUp")
   if world then
    -- Ignore players, the net, and fixtures so the projection stays on the floor.
    for _,p in ipairs(world:GetChildren()) do

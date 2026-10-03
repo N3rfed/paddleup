@@ -25,12 +25,16 @@ function Service.new(network,hooks)
   table.sort(people,function(a,b) return a.username<b.username end)
   local counts={["1v1"]=0,["2v2"]=0,Practice=0}
   for _,entry in ipairs(model.queue) do counts[entry.mode]+=#entry.party.members end
-  local match
-  if model.active then
-   match={mode=model.active.mode,difficulty=model.active.difficulty,home={},away={},score=hooks.score()}
-   for _,id in ipairs(model.active.home) do table.insert(match.home,describe(id)) end
-   for _,id in ipairs(model.active.away) do table.insert(match.away,describe(id)) end
+  local matches={}
+  local activeCounts={["1v1"]=0,["2v2"]=0}
+  for _,active in pairs(model.matches) do
+   local match={id=active.id,mode=active.mode,difficulty=active.difficulty,home={},away={},score=hooks.score(active.id)}
+   for _,id in ipairs(active.home) do table.insert(match.home,describe(id)) end
+   for _,id in ipairs(active.away) do table.insert(match.away,describe(id)) end
+   table.insert(matches,match)
+   activeCounts[active.pool]+=1
   end
+  table.sort(matches,function(a,b) return a.id<b.id end)
   for _,p in ipairs(Players:GetPlayers()) do
    local id=p.UserId
    local party=model:party(id)
@@ -41,30 +45,40 @@ function Service.new(network,hooks)
     local invite=model.invites[id]
     if invite and invite.expires<model.clock() then model.invites[id]=nil; invite=nil end
     local status=model:playing(id) and "Playing" or model.players[id].watching and "Spectating" or "Lobby"
+    local selected=model:match(id)
+    local match=matches[1]
+    for _,candidate in ipairs(matches) do if selected and candidate.id==selected.id then match=candidate; break end end
     p:SetAttribute("LobbyStatus",status)
+    p:SetAttribute("ViewingMatchId",selected and selected.id or nil)
+    p:SetAttribute("CourtOffset",selected and selected.offset or Vector3.zero)
+    if hooks.focus then hooks.focus(p,selected) end
     remote:FireClient(p,{status=status,party=members,leader=party.leader,queue=entry and entry.mode,
-     difficulty=entry and entry.difficulty,counts=counts,players=people,match=match,invite=invite and describe(invite.leader),
+     difficulty=entry and entry.difficulty,counts=counts,activeCounts=activeCounts,matches=matches,players=people,match=match,invite=invite and describe(invite.leader),
      message=(not recipient or recipient==id) and message or nil})
    end
   end
  end
  function self:pump()
-  local match=self.model:takeMatch()
-  if match then hooks.start(match) end
+  while true do
+   local match=self.model:takeMatch()
+   if not match then break end
+   hooks.start(match)
+  end
   self:broadcast()
  end
  function self:add(p)
   self.model:add(p.UserId); self:broadcast()
  end
- function self:finish(message)
-  local match=self.model:finish()
-  if match then hooks.stop(match) end
+ function self:finish(matchId,message)
+  local match=self.model:finish(matchId)
+  if not match then return end
+  hooks.stop(match)
   self:broadcast(message)
   -- Give the result and lobby transition a moment before admitting the next queue.
   task.delay(2,function() self:pump() end)
  end
  function self:remove(p)
-  if self.model:playing(p.UserId) then self:finish(p.DisplayName.." left. Match ended.") end
+  if self.model:playing(p.UserId) then self:finish(self.model.players[p.UserId].matchId,p.DisplayName.." left. Match ended.") end
   self.model:remove(p.UserId); self.lastRequest[p.UserId]=nil; self.lastInvite[p.UserId]=nil
   self:pump()
  end
@@ -88,10 +102,12 @@ function Service.new(network,hooks)
   elseif action=="Accept" then ok,message=model:accept(id)
   elseif action=="Decline" then model.invites[id]=nil
   elseif action=="LeaveParty" then ok,message=model:leaveParty(id)
-  elseif action=="Spectate" then ok,message=model:watch(id,true)
+  elseif action=="Spectate" then
+   if value~=nil and (type(value)~="number" or value~=value) then return end
+   ok,message=model:watch(id,true,value)
   elseif action=="Back" then ok,message=model:watch(id,false)
   elseif action=="LeaveMatch" then
-   if model:playing(id) then self:finish(p.DisplayName.." left the match."); return end
+   if model:playing(id) then self:finish(model.players[id].matchId,p.DisplayName.." left the match."); return end
   else return end
   if ok then self:pump() end
   self:broadcast(message,id)
