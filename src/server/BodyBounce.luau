@@ -19,6 +19,7 @@ function BodyBounce.contact(from,to,frame,size)
  return first
 end
 
+-- Preserve the PR's playable body save: a slower lob into the opposite court.
 function BodyBounce.shot(position,velocity,side,speed,floor)
  local target=Vector3.new(math.clamp(position.X,-16,16),floor,-side*27)
  local distance=Vector3.new(target.X-position.X,0,target.Z-position.Z).Magnitude

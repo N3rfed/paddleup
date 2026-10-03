@@ -7,7 +7,7 @@ return function(source,Rules)
  end
  local code=section("local function setMissImmune(","local function rosterChanged(")
   ..section("local function launch(","local function bodyReturn(")
-  ..section("local function tryReturn(","input.OnServerEvent:Connect(")
+  ..section("local function tryReturn(","local function handleInput(")
   .."\nreturn {launch=launch,tryReturn=tryReturn,setStreak=setStreak}"
  for _,side in ipairs({-1,1}) do
   local attributes={PerfectStreak=3,HitReadyAt=0}
@@ -16,7 +16,7 @@ return function(source,Rules)
   local ball={last=side,speed=1,shots=3}
   local misses,events,reachChecks=0,0,0
   local environment=setmetatable({
-   users={[player]=data},ball=ball,Rules=Rules,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,
+   users={[player]=data},ball=ball,Rules=Rules,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,offset=Vector3.zero,
    crowd={shot=function() return false end,streakEnded=function() return false end},
    feedback={FireAllClients=function() events+=1 end},
    workspace={GetServerTimeNow=function() return 10 end},

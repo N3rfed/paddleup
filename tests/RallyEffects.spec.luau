@@ -19,6 +19,7 @@ return function(Effects,World)
   assert(washes==6,"Expected six court washes")
 
   effects=Effects.new(ball,trail)
+  effects.rig=rig -- Bot effects belong to the currently selected court.
   effects.scanAt=math.huge -- Isolate the test from real players and scenery.
   effects:update(1/60,nil) -- Joining before the first state packet must be safe.
   assert(not trail.Enabled)
@@ -35,7 +36,7 @@ return function(Effects,World)
   effects:update(1,snapshot)
   assert(effects.energy>calmEnergy,"Faster rallies must increase lighting energy")
   assert(ball.Color==Color3.fromRGB(55,155,255),"Slammable lobs must retain their blue cue")
-  assert(trail.Lifetime==0.7)
+  assert(math.abs(trail.Lifetime-0.7)<0.0001,"Slammable lob trails retain their duration")
   local chargeLight=actor.light.Brightness
   character:SetAttribute("ChargedShotReadyAt",workspace:GetServerTimeNow()+2)
   effects:update(0.1,snapshot)

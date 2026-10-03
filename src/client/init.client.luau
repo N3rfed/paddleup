@@ -75,6 +75,30 @@ serveNotice.Name="ServeNotice"; serveNotice.AnchorPoint=Vector2.new(0.5,0)
 serveNotice.Position=UDim2.fromScale(0.5,0.27); serveNotice.TextXAlignment=Enum.TextXAlignment.Center
 serveNotice.Font=Enum.Font.GothamBold; serveNotice.TextStrokeTransparency=0.3; serveNotice.Visible=false
 local serveNoticeScale=Instance.new("UIScale",serveNotice)
+local serveMeter=Instance.new("Frame",gui)
+serveMeter.Name="ServeChargeMeter"; serveMeter.AnchorPoint=Vector2.new(0.5,0)
+serveMeter.Position=UDim2.fromScale(0.5,0.37); serveMeter.Size=UDim2.fromOffset(340,70)
+serveMeter.BackgroundColor3=dark; serveMeter.BorderSizePixel=0; serveMeter.Visible=false; round(serveMeter,10)
+local serveMeterScale=Instance.new("UIScale",serveMeter)
+local serveLabel=text(serveMeter,"HOLD LMB / RELEASE IN GREEN",Vector2.new(10,5),Vector2.new(320,24),14,cream)
+serveLabel.TextXAlignment=Enum.TextXAlignment.Center
+local serveTrack=Instance.new("Frame",serveMeter)
+serveTrack.Position=UDim2.fromOffset(16,38); serveTrack.Size=UDim2.fromOffset(308,12)
+serveTrack.BackgroundColor3=Color3.fromRGB(65,75,80); serveTrack.BorderSizePixel=0
+local serveZone=Instance.new("Frame",serveTrack)
+serveZone.Name="GoodZone"; serveZone.BackgroundColor3=Color3.fromRGB(45,160,110); serveZone.BorderSizePixel=0
+local serveGreatZone=Instance.new("Frame",serveTrack)
+serveGreatZone.Name="GreatZone"; serveGreatZone.BackgroundColor3=Color3.fromRGB(115,220,145)
+serveGreatZone.BorderSizePixel=0; serveGreatZone.ZIndex=2
+local serveFastZone=Instance.new("Frame",serveTrack)
+serveFastZone.Name="PerfectZone"; serveFastZone.BackgroundColor3=Color3.fromRGB(210,255,220)
+serveFastZone.BorderSizePixel=0; serveFastZone.ZIndex=3
+local serveLegend=text(serveMeter,"GOOD / GREAT / PERFECT (LIGHTEST)",Vector2.new(10,52),Vector2.new(320,16),10,cream)
+serveLegend.TextXAlignment=Enum.TextXAlignment.Center
+local serveCursor=Instance.new("Frame",serveTrack)
+serveCursor.Name="ChargeMarker"; serveCursor.AnchorPoint=Vector2.new(0.5,0.5)
+serveCursor.Size=UDim2.fromOffset(2,16); serveCursor.BackgroundColor3=cream; serveCursor.BorderSizePixel=0; serveCursor.ZIndex=4
+
 local developerLabel=text(canvas,"",Vector2.new(28,590),Vector2.new(820,58),12,mint)
 developerLabel.TextWrapped=true
 developerLabel.Text="DEV HITBOXES [HOME]  /  Gold: hit  |  Green: perfect range  |  Blue: overhead zone  |  Purple: slam distance cap\nSlams need blue/purple overlap. Contact behind the red rear-limit plane is rejected."
@@ -150,6 +174,10 @@ end
 devToggle.Activated:Connect(function() setDeveloperMode(not developerMode) end)
 setDeveloperMode(false)
 local snapshot,receivedAt=nil,0
+local function matchWorld()
+ local id=player:GetAttribute("ViewingMatchId")
+ return id and workspace:FindFirstChild("MatchCourt_"..id) or workspace:FindFirstChild("PaddleUp")
+end
 local localHitReadyAt=0
 local function hitInputReady()
  if not playing() then return false end
@@ -180,6 +208,10 @@ local function swing(softRequested)
   input:FireServer("LobbySwing",softRequested==true)
   return
  end
+ if snapshot and not snapshot.live then
+  if playing() and snapshot.canRequestBotServe then input:FireServer("Serve") end
+  return
+ end
  if not hitInputReady() then return end
  animateSwing(false)
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
@@ -193,6 +225,19 @@ local function dive()
 end
 UIS.TouchTapInWorld:Connect(function(_,processed) if not processed and not developerMode then swing() end end)
 touchSwing.Activated:Connect(swing)
+touchSwing.InputBegan:Connect(function(key)
+ if key.UserInputType~=Enum.UserInputType.Touch or not playing() or not snapshot or not snapshot.canServe then return end
+ chargeStarted=os.clock(); chargeCanShow=true
+ input:FireServer("ChargeStart")
+end)
+touchSwing.InputEnded:Connect(function(key)
+ if key.UserInputType~=Enum.UserInputType.Touch or not chargeStarted then return end
+ if not hitInputReady() then cancelCharge(); return end
+ local held=os.clock()-chargeStarted
+ animateSwing(false,math.clamp((held-0.4)/0.6,0,1))
+ chargeStarted=nil; chargeCanShow=false; chargeTrack.Visible=false
+ input:FireServer("ChargeRelease")
+end)
 touchDive.Activated:Connect(dive)
 UIS.InputBegan:Connect(function(key,processed)
  if UIS:GetFocusedTextBox() then return end
@@ -206,6 +251,8 @@ UIS.InputBegan:Connect(function(key,processed)
   return
  end
  if key.UserInputType==Enum.UserInputType.MouseButton1 then
+  if snapshot and snapshot.canRequestBotServe then swing(); return end
+  if not snapshot or (not snapshot.live and not snapshot.canServe) then return end
   chargeStarted=os.clock()
   local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
   chargeCanShow=(snapshot and snapshot.canServe) or not readyAt or workspace:GetServerTimeNow()>=readyAt
@@ -251,6 +298,9 @@ local a0=Instance.new("Attachment",visual); a0.Position=Vector3.new(0,0.48,0)
 local a1=Instance.new("Attachment",visual); a1.Position=Vector3.new(0,-0.48,0)
 local trail=Instance.new("Trail",visual); trail.Attachment0=a0; trail.Attachment1=a1; trail.Lifetime=0.35; trail.Color=ColorSequence.new(Color3.fromRGB(245,255,126)); trail.Transparency=NumberSequence.new(0.15,1)
 local effects=RallyEffects.new(visual,trail)
+player:GetAttributeChangedSignal("ViewingMatchId"):Connect(function()
+ snapshot=nil; trail:Clear(); effects:reset(); effects.scanAt=0; ballShadow.scanAt=0; cancelCharge()
+end)
 script.Destroying:Connect(function()
  RunService:UnbindFromRenderStep("PaddleUpView")
  effects:destroy()
@@ -278,6 +328,7 @@ local landingGui=Instance.new("BillboardGui",marker); landingGui.Size=UDim2.from
 local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); countdown.TextXAlignment=Enum.TextXAlignment.Center; countdown.Font=Enum.Font.GothamBold; countdown.TextStrokeTransparency=0.4
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
+ if data.matchId~=player:GetAttribute("ViewingMatchId") then return end
  if snapshot and snapshot.serveReady and not data.serveReady then cancelCharge() end
  if not snapshot or snapshot.shotId~=data.shotId or not data.live then trail:Clear() end
  snapshot=data; receivedAt=os.clock()
@@ -290,7 +341,7 @@ state.OnClientEvent:Connect(function(data)
   outMarker.Position=Vector3.new(data.outLanding.X,groundY+0.015,data.outLanding.Z)
  end
  lastOutLanding=data.outLanding
- touchSwing.Text=data.live and "SWING" or (data.canServe and "SERVE" or "WAIT")
+ touchSwing.Text=data.live and "SWING" or (data.canRequestBotServe and "START BOT SERVE" or data.canServe and "SERVE" or "WAIT")
  scoreDigits[1].Text=tostring(data.score[1]); scoreDigits[2].Text=tostring(data.score[2]); scoreDigits[3].Text=tostring(data.serverNumber or 1)
  serveAccent.Position=UDim2.fromOffset(data.servingSide==1 and 22 or 107,53)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
@@ -309,10 +360,8 @@ local function playRallySound(name)
  local shared=ReplicatedStorage:FindFirstChild("Shared")
  local hello=shared and shared:FindFirstChild("Hello")
  local template=hello and hello:FindFirstChild(name)
- -- Existing Studio sessions may still have the imported assets in Workspace.
  if not template and studioSoundNames[name] then template=workspace:FindFirstChild(studioSoundNames[name]) end
  if not template or not template:IsA("Sound") then return end
- -- Independent voices preserve rapid impacts and the original sample's pitch.
  local sound=template:Clone()
  sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
  sound.Ended:Once(function() sound:Destroy() end)
@@ -320,10 +369,11 @@ local function playRallySound(name)
  sound:Play()
 end
 feedback.OnClientEvent:Connect(function(message,kind)
+ if type(message)=="table" and message.matchId and message.matchId~=player:GetAttribute("ViewingMatchId") then return end
  if kind=="crowdGasp" then playRallySound("crowd gasp"); return end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
-  local world=workspace:FindFirstChild("PaddleUp")
+  local world=matchWorld()
   local character=actor and actor.Character or (message.userId==0 and world and world:FindFirstChild("Practice Partner"))
   FloatingText.show(character,message.text,message.tone)
   return
@@ -389,7 +439,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   local humanoid=character and character:FindFirstChildOfClass("Humanoid")
   if not humanoid or humanoid.Health<=0 then cancelCharge()
   else
-   chargeTrack.Visible=chargeCanShow==true and now-chargeStarted>=0.4
+   chargeTrack.Visible=chargeCanShow==true and snapshot and snapshot.live and now-chargeStarted>=0.4
    chargeFill.Size=UDim2.fromScale(math.clamp((now-chargeStarted-0.4)/0.6,0,1),1)
   end
  end
@@ -398,11 +448,30 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  devToggle.Visible=lobbyStatus=="Playing"
  staminaPanel.Visible=lobbyStatus=="Playing"
  announcement.Visible=lobbyStatus~="Lobby" and now<announcementUntil
+ serveMeterScale.Scale=scale.Scale
+ serveMeter.Visible=lobbyStatus=="Playing" and snapshot~=nil and snapshot.serveReady==true and not snapshot.live and snapshot.serverId==player.UserId and Rules~=nil
+ if serveMeter.Visible then
+  local held=chargeStarted and now-chargeStarted or 0
+  local serverStarted=chargeStarted and player.Character and player.Character:GetAttribute("ShotChargeAt")
+  if serverStarted then held=math.max(0,workspace:GetServerTimeNow()-serverStarted) end
+  local center=snapshot.serveZoneCenter
+  local quality=Rules.serveCharge(held,center)
+  local goodStart,goodEnd,perfectStart,perfectEnd,greatStart,greatEnd=Rules.serveZoneBounds(center)
+  serveZone.Position=UDim2.fromScale(goodStart/Rules.SERVE_METER_TIME,0)
+  serveZone.Size=UDim2.fromScale((goodEnd-goodStart)/Rules.SERVE_METER_TIME,1)
+  serveGreatZone.Position=UDim2.fromScale(greatStart/Rules.SERVE_METER_TIME,0)
+  serveGreatZone.Size=UDim2.fromScale((greatEnd-greatStart)/Rules.SERVE_METER_TIME,1)
+  serveFastZone.Position=UDim2.fromScale(perfectStart/Rules.SERVE_METER_TIME,0)
+  serveFastZone.Size=UDim2.fromScale((perfectEnd-perfectStart)/Rules.SERVE_METER_TIME,1)
+  serveCursor.Position=UDim2.fromScale(Rules.serveMeterPosition(held)/Rules.SERVE_METER_TIME,0.5)
+  serveCursor.BackgroundColor3=quality=="perfect" and serveFastZone.BackgroundColor3 or quality=="great" and serveGreatZone.BackgroundColor3 or quality=="good" and serveZone.BackgroundColor3 or quality=="out" and coral or cream
+  serveLabel.Text=not chargeStarted and "HOLD LMB / RELEASE IN GREEN" or quality=="perfect" and "RELEASE NOW! PERFECT SERVE" or quality=="great" and "RELEASE NOW! GREAT SERVE" or quality=="good" and "RELEASE NOW! GOOD SERVE" or quality=="out" and "OVERCHARGED / KEEP HOLDING" or "CHARGING / RELEASE IN GREEN"
+ end
  serveNoticeScale.Scale=scale.Scale
  serveNotice.Visible=lobbyStatus~="Lobby" and snapshot~=nil and snapshot.serveReady==true
  if serveNotice.Visible then
   local remaining=math.max(0,math.ceil((snapshot.serveDeadline or workspace:GetServerTimeNow())-workspace:GetServerTimeNow()))
-  serveNotice.Text=(snapshot.serverName or "Player").."'s serve\nAuto-serve in "..remaining.."s"
+  serveNotice.Text=(snapshot.serverName or "Player").."'s serve\n"..(snapshot.serverId==0 and "Auto-serve in " or "Serve within ")..remaining.."s"
  end
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
@@ -416,7 +485,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
   if snapshot.serveReady and Rules then
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
-   local world=workspace:FindFirstChild("PaddleUp")
+   local world=matchWorld()
    local holder=server and server.Character or (snapshot.bot and world and world:FindFirstChild("Practice Partner"))
    predicted=Rules.heldBallPosition(holder) or predicted
   end
@@ -441,8 +510,9 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   if h then h.AutoRotate=not locked end
   local desired,focus
   if lobbyStatus=="Spectating" then
-    focus=Vector3.new(0,182,0)
-    desired=CFrame.lookAt(Vector3.new(50,235,72),focus)
+    local offset=player:GetAttribute("CourtOffset") or Vector3.zero
+    focus=Vector3.new(0,182,0)+offset
+    desired=CFrame.lookAt(Vector3.new(50,235,72)+offset,focus)
   else
    local heading=CFrame.Angles(0,yaw,0)
    if locked then r.CFrame=CFrame.new(r.Position)*heading end
@@ -454,7 +524,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
     distance=math.min(distance,math.max(0,(focus.Y-183)/orbit.LookVector.Y))
    end
    local position=focus-orbit.LookVector*distance+orbit.RightVector*2
-   position=Vector3.new(position.X,math.max(183,position.Y),position.Z)
+   position=Vector3.new(position.X,lobbyStatus=="Lobby" and math.max(255,position.Y) or math.max(183,position.Y),position.Z)
    desired=CFrame.lookAt(position,position+orbit.LookVector)
   end
   camera.CFrame=desired
@@ -481,12 +551,16 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  HitboxOverlay.update(developerMode)
  FloatingText.update(dt)
  effects:update(dt,snapshot,chargeCanShow and chargeStarted or nil)
- ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady))
- if not snapshot then return end
- visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live
+ ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady or snapshot.deadBounce))
+ if not snapshot then
+  visual.Transparency=1; trail.Enabled=false; outGui.Enabled=false; landingGui.Enabled=false
+  for _,part in ipairs(ring) do part.Transparency=1 end
+  return
+ end
+ visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady or snapshot.deadBounce) and 0 or 1; trail.Enabled=snapshot.live
  local eta=math.max(0,snapshot.eta-age)
  local color=snapshot.green and mint or (eta<0.6 and Color3.fromRGB(255,214,97) or coral)
- local visible=developerMode and snapshot.live and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46
+ local visible=developerMode and snapshot.live and math.abs(snapshot.landing.X-(snapshot.offset or Vector3.zero).X)<=24 and math.abs(snapshot.landing.Z)<=46
  local radius=1.6+math.sin(now*9)*0.2+math.min(eta,1.5)*0.6
  for i,p in ipairs(ring) do
   local angle=i*math.pi*2/#ring
@@ -500,7 +574,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  countdown.TextColor3=color
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
- timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
+ timingText.Text=not snapshot.live and ((snapshot.canServe or snapshot.canRequestBotServe) and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=courtSide==0 and "SPECTATING  /  Return to lobby to manage your queue" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")

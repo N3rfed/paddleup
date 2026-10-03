@@ -1,7 +1,7 @@
 -- makeService injects fake Players and task scheduling into the service module.
 return function(makeService)
  local players={}
- for id=1,2 do
+ for id=1,6 do
   local p={UserId=id,DisplayName="Player "..id,Name="Player"..id,attributes={}}
   function p:SetAttribute(key,value) self.attributes[key]=value end
   players[id]=p
@@ -31,14 +31,22 @@ return function(makeService)
  assert(starts==1,"A full singles queue must start exactly one match")
  assert(updates[1].status=="Playing" and updates[2].status=="Playing","Match must replicate playing status")
  assert(updates[1].queue==nil and updates[2].queue==nil,"Matched players must leave the queue")
- service:finish("Finished")
+ local singlesId=service.model.players[1].matchId
+ for id=3,6 do handler(players[id],"Queue","2v2") end
+ local doublesId=service.model.players[3].matchId
+ assert(starts==2 and singlesId~=doublesId,"Singles and doubles must start simultaneously")
+ assert(updates[1].match.id==singlesId and updates[3].match.id==doublesId,"Each roster must receive its own match")
+ assert(updates[1].activeCounts["1v1"]==1 and updates[1].activeCounts["2v2"]==1,"Both active pools must replicate")
+ service:finish(service.model.players[1].matchId,"Finished")
  assert(stops==1 and updates[1].status=="Lobby","Finishing must return players to the lobby")
+ assert(updates[3].status=="Playing" and service.model:match(3).id==doublesId,"Finishing singles must leave doubles playing")
  for _,callback in ipairs(pending) do callback() end
- assert(starts==1,"Completed players must not be automatically requeued")
+ assert(starts==2,"Completed players must not be automatically requeued")
  service.lastRequest[1]=nil
  handler(players[1],"Practice","Normal")
- assert(starts==2 and service.model.active.bot,"Solo practice must start with a bot")
+ assert(starts==3 and service.model:match(1).bot,"Solo practice must start with a bot alongside doubles")
  service:remove(players[1])
  assert(stops==2 and service.model.players[1]==nil,"Disconnect must end the match and remove queue state")
- return "Lobby remote synchronization, queue admission, match start, finish, practice and disconnect checks passed"
+ assert(service.model:match(3).id==doublesId,"Practice disconnect must leave doubles running")
+ return "Lobby synchronization, simultaneous matches, roster routing, isolated finish, practice and disconnect checks passed"
 end

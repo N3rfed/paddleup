@@ -45,6 +45,7 @@ function LobbyUI.start(network)
  local difficulty="Normal"
  local menuOpen=false
  local data
+ local selectedMatchId
  local render
  local singles=button(left,"1 v 1",20,55,132,56,function() mode="1v1"; if render then render() end end,true)
  local doubles=button(left,"2 v 2",165,55,132,56,function() mode="2v2"; if render then render() end end)
@@ -64,8 +65,17 @@ function LobbyUI.start(network)
   end
  end,true)
  local counts=label(left,"",20,266,422,30,13,muted)
- local matchText=label(left,"Court available",20,301,422,38,14)
- local watch=button(left,"SPECTATE MATCH",20,345,422,34,function() if data and data.match then remote:FireServer("Spectate") end end)
+ local matchText=label(left,"Court available",65,301,332,38,14)
+ local function cycleMatch(delta)
+  if not data or not data.matches or #data.matches==0 then return end
+  local index=1
+  for i,match in ipairs(data.matches) do if match.id==selectedMatchId then index=i; break end end
+  selectedMatchId=data.matches[(index-1+delta)%#data.matches+1].id
+  if render then render() end
+ end
+ button(left,"<",20,301,36,38,function() cycleMatch(-1) end)
+ button(left,">",406,301,36,38,function() cycleMatch(1) end)
+ local watch=button(left,"SPECTATE MATCH",20,345,422,34,function() if data and data.match then remote:FireServer("Spectate",selectedMatchId) end end)
  local right=frame(canvas,505,150,511,394,Color3.fromRGB(24,44,52))
  right.Name="PartyControls"
  label(right,"02   PARTY WITH FRIENDS",20,16,470,25,13,mint)
@@ -81,7 +91,7 @@ function LobbyUI.start(network)
  local inviteText=label(inviteBar,"",14,4,640,40,15)
  button(inviteBar,"ACCEPT",690,7,136,34,function() remote:FireServer("Accept") end,true)
  button(inviteBar,"DECLINE",838,7,136,34,function() remote:FireServer("Decline") end)
- local footer=label(canvas,"One rooftop court. Full teams only. First to 11, win by two.",30,601,965,30,13,muted)
+ local footer=label(canvas,"20 singles courts (including practice). 20 doubles courts. First to 11, win by two.",30,601,965,30,13,muted)
  button(canvas,"BACK TO TERRACE",798,27,212,43,function() menuOpen=false; if render then render() end end)
  local lobbyBar=frame(gui,0,0,630,76)
  lobbyBar.Name="LobbyBar"
@@ -140,15 +150,19 @@ function LobbyUI.start(network)
    queueButton.Text=not leader and "WAITING FOR PARTY LEADER" or mode=="Practice" and ("PRACTICE / "..string.upper(difficulty)) or #data.party>1 and "QUEUE WITH PARTY" or "QUEUE WITH RANDOMS"
   end
   queueButton.Active=data.queue~=nil or leader; queueButton.AutoButtonColor=queueButton.Active
-  counts.Text=string.format("IN QUEUE    1v1: %d players    /    2v2: %d players",data.counts["1v1"],data.counts["2v2"])
+  counts.Text=string.format("QUEUED: %d singles / %d doubles   ACTIVE: %d/20 / %d/20",data.counts["1v1"],data.counts["2v2"],data.activeCounts["1v1"],data.activeCounts["2v2"])
   local match=data.match
+  if data.status=="Lobby" then
+   for _,candidate in ipairs(data.matches or {}) do if candidate.id==selectedMatchId then match=candidate; break end end
+  end
+  selectedMatchId=match and match.id or nil
   local description="Court available / waiting for players"
   if match then
    local function team(teamPlayers)
     local result={}; for _,p in ipairs(teamPlayers) do table.insert(result,p.name) end
     return table.concat(result," + ")
    end
-   description=match.mode..(match.difficulty and " ("..match.difficulty..")" or "").."  /  "..team(match.home).." vs "..team(match.away)
+   description="#"..match.id.."  "..match.mode..(match.difficulty and " ("..match.difficulty..")" or "").."  /  "..team(match.home).." vs "..team(match.away)
   end
   matchText.Text=description
   viewing.Text=(data.status=="Spectating" and "WATCHING  " or "Alt: menu  /  ")..description
@@ -189,7 +203,7 @@ function LobbyUI.start(network)
  ProximityPromptService.PromptTriggered:Connect(function(prompt)
   local station=prompt.Parent and prompt.Parent:GetAttribute("LobbyStation")
   if not station or not data or data.status~="Lobby" then return end
-  if station=="Spectate" and data.match then remote:FireServer("Spectate"); return end
+  if station=="Spectate" and data.match then remote:FireServer("Spectate",selectedMatchId); return end
   if station~="Spectate" then mode=station end
   menuOpen=true; render()
  end)
