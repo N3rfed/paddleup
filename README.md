@@ -29,4 +29,4 @@ Visual Studio Code
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
 ## Environment
-The rooftop cycles through sunrise, daylight, sunset, and night every 12 real-world minutes. Each server starts at 06:00 and shares the same lighting with all players. Court lights remain on for nighttime play. Adjust CYCLE_SECONDS and START_HOUR in src/server/DayNightCycle.luau to change the duration or starting time.
+The rooftop uses a fixed evening sky with bright ambient lighting, reduced haze, and no global shadows to keep the court readable during nighttime play. Court lights remain on and react to rallies. Adjust src/server/CourtLighting.luau to tune the shared lighting.

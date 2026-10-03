@@ -121,7 +121,7 @@ function LobbyUI.start(network)
   lobbyBar.Visible=data.status=="Lobby" and not menuOpen
   gui:SetAttribute("MenuOpen",canvas.Visible)
   lobbyHint.Text=data.queue and ("QUEUED: "..data.queue.."  /  Explore while you wait.")
-   or "Walk to a station. Click to swing. Hold Alt to use menus."
+   or "Click PLAY / PARTY or walk to a queue station."
   singles.BackgroundColor3=mode=="1v1" and mint or Color3.fromRGB(37,61,69)
   doubles.BackgroundColor3=mode=="2v2" and mint or Color3.fromRGB(37,61,69)
   singles.TextColor3=mode=="1v1" and dark or cream; doubles.TextColor3=mode=="2v2" and dark or cream

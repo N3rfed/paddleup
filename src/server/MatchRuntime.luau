@@ -24,8 +24,10 @@ local function heldBallPosition(character)
  return position and position-offset
 end
 local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
-local WALK_SPEED,SLOWED_SPEED=18,10
-local MAX_STAMINA,DIVE_COST,STAMINA_REGEN=70,35,8
+local WALK_SPEED,SLOWED_SPEED=22,10
+local STREAK_CAP=10
+local MAX_STAMINA,DIVE_COST,STAMINA_REGEN=100,35,22
+local crowd=require(script.Parent:WaitForChild("CrowdReactions")).new()
 local rulesModule=script.Parent:WaitForChild("MatchRules")
 local Rules=require(rulesModule)
 local BodyBounce=require(script.Parent:WaitForChild("BodyBounce"))
@@ -89,7 +91,20 @@ end
 local function syncServing()
  servingSide=rotation.side; serverId=rotation.serverId; receiverId=rotation:receiverId(); serveX=rotation:serveX()
 end
+local function setMissImmune(p,d,immune)
+ d.missImmune=immune
+ if p.Character then p.Character:SetAttribute("MissImmune",immune) end
+end
+local function setStreak(p,d,count,react)
+ if react and count==0 and crowd:streakEnded(d.perfectStreak or 0) then
+  feedback:FireAllClients({},"crowdGasp")
+ end
+ d.perfectStreak=count
+ if count==0 then setMissImmune(p,d,false) end
+ if p.Character then p.Character:SetAttribute("PerfectStreak",count) end
+end
 local function rosterChanged()
+ crowd:reset()
  local home,away={},{}
  for _,p in ipairs(teamPlayers(1)) do table.insert(home,p.UserId) end
  for _,p in ipairs(teamPlayers(-1)) do table.insert(away,p.UserId) end
@@ -100,6 +115,7 @@ local function rosterChanged()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
  ball.outLanding=nil; serveReady=false; nextServe=os.clock()+1
  for p,d in pairs(users) do
+  setStreak(p,d,0)
   d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil
   if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  end
@@ -142,7 +158,7 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  return false
 end
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
- ball.bodyHitSide=nil
+ ball.slam=slam==true
  ball.undercharged=contact and contact.undercharged==true
  ball.deadBounce=nil
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
@@ -214,13 +230,18 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  ball.bounces=0; ball.bounceAt=-100; ball.live=true
  -- All viewers receive the same accepted contact, including practice-partner hits.
  contact=contact or {}
+ for p,d in pairs(users) do
+  if d.side~=ball.last then setMissImmune(p,d,false)
+  elseif p.UserId==contact.userId then setMissImmune(p,d,contact.clean==true) end
+ end
  contact.position=from; contact.direction=ball.v.Unit; contact.speed=ball.speed
  contact.slam=slam==true; contact.powered=boost==true; contact.charge=charge or 0; contact.soft=soft
  feedback:FireAllClients(contact,"ballHit")
+ if crowd:shot(ball.speed,ball.lob) then feedback:FireAllClients({},"crowdGasp") end
 end
--- Body hits stay visible until landing, but cannot be returned or deflected twice.
+-- Only unbounced slams cause body saves; the slow lob remains playable.
 local function bodyReturn(previous,hasBot)
- if ball.bodyHitSide then return end
+ if not ball.slam or ball.bounces~=0 then return end
  local earliest,hitPlayer,hitSide
  local function check(character,side,player)
   if not character or side~=-ball.last then return end
@@ -239,19 +260,19 @@ local function bodyReturn(previous,hasBot)
  end
  if hasBot then check(bot,-1,nil) end
  if not earliest then return end
+ if hitPlayer then setStreak(hitPlayer,users[hitPlayer],0,true) end
  local position=previous:Lerp(ball.p,earliest)
- ball.p=position
- ball.v=BodyBounce.deflect(ball.v,hitSide)
- ball.g=GRAVITY; ball.lob=false; ball.slamLob=false
- ball.bodyHitSide=hitSide
- ball.shotId=(ball.shotId or 0)+1
- feedback:FireAllClients({position=position,direction=ball.v.Unit,speed=ball.speed,
-  userId=hitPlayer and hitPlayer.UserId or 0,slam=false,powered=false,charge=0},"ballHit")
- if hitPlayer then tell(hitPlayer,"BODY HIT / DEAD BALL","miss") end
+ local target,speed,duration=BodyBounce.shot(position,ball.v,hitSide,ball.speed,FLOOR)
+ ball.speed=speed; ball.last=hitSide; ball.shots+=1
+ lastHitter[hitSide]=hitPlayer
+ launch(position,target,false,true,false,0,nil,false,0,{userId=hitPlayer and hitPlayer.UserId or 0,minDuration=duration})
+ if hitPlayer then tell(hitPlayer,"BODY BOUNCE / SLOW LOB","info") end
 end
 local function point(winner,reason)
  if not ball.live then return end
  ball.live=false; ball.v=Vector3.zero; ball.perfects=0; ball.speed=1
+ for p,d in pairs(users) do setStreak(p,d,0,true) end
+ crowd:reset()
  local index=winner==1 and 1 or 2
  local outcome=rotation:award(winner)
  local scored=outcome=="point"
@@ -302,6 +323,7 @@ local function spawnCharacter(p,c)
  local r=c:WaitForChild("HumanoidRootPart",10)
  local h=c:WaitForChild("Humanoid",10)
  if not r or not h or not matchActive then return end
+ setStreak(p,d,0)
  h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
  local position=d.side==0 and Vector3.new(112,185,20) or Vector3.new(0,185,d.side*28)
  c:PivotTo(CFrame.lookAt(position,Vector3.new(0,185,0))+offset)
@@ -448,17 +470,18 @@ end
 local function slamReady(p,d,now)
  local r,h=rootOf(p)
  if not r or not h or h.Health<=0 or d.side==0 then return false end
- if ball.bodyHitSide or not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
+ if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
  if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault((r.Position-offset),ball.p,d.side,now<d.diveUntil)) then return false end
  local _,overhead=overheadStatus(p,r)
  return overhead and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
 end
 local function tryReturn(p,d,r,now,automatic,softRequested,charge)
+  if d.missImmune and ball.live and ball.last==d.side then return false end
   charge=charge or 0
   local distance,overhead=overheadStatus(p,r)
   local inReach=Rules.contactInFront(ball.p,(r.CFrame-offset)) and (distance<=Rules.HIT_RANGE or overhead)
-  local valid=ball.live and not ball.bodyHitSide and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
+  local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
   if automatic and not valid then return false end
   local clean=valid and (distance<=Rules.PERFECT_RANGE or overhead) and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
   if not Rules.hitReady(now,d.lastSwing,clean) then return false end
@@ -466,6 +489,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
   local backhand=(r.CFrame-offset):PointToObjectSpace(ball.p).X<0
   if not valid then
+   setStreak(p,d,0,true)
    feedback:FireAllClients({userId=p.UserId,backhand=backhand,soft=softRequested and Rules.softShot((r.Position-offset),d.side) or nil},"swing")
    if not automatic then tell(p,"Miss!","miss") end
    return
@@ -484,12 +508,14 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   local slam=clean and overhead and not soft
   local restored=clean and ball.speed<1
   if clean then ball.perfects+=1 end
+  setStreak(p,d,clean and (d.perfectStreak or 0)+1 or 0,true)
   local charged=charge>0 and not softRequested and not slam
   if charged then
    d.chargeShotAt=now+1
    p.Character:SetAttribute("ChargedShotReadyAt",workspace:GetServerTimeNow()+1)
   end
   ball.speed=Rules.returnSpeed(ball.speed,clean,slam,charged)
+  if not soft then ball.speed+=math.min(d.perfectStreak,STREAK_CAP)*0.03 end
   local target,momentum=facingTarget(ball.p,r,d.side,soft and (soft=="dink" and 7 or 10) or (slam and 35 or 27))
   if charged and not clean then
    local timingError=math.min(timeToBounce,now-ball.bounceAt)
@@ -507,6 +533,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   elseif charged and quality~="net" then message="MISTIMED CHARGE  /  WIDE RETURN" end
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
   elseif quality=="net" then message="BAD TIMING  /  LOW CONTACT" end
+  if clean then message..="  /  STREAK "..d.perfectStreak end
   feedback:FireAllClients({userId=p.UserId,text=message,tone=clean and "good" or (quality=="net" or charged) and "bad" or "neutral"},"playerText")
   d.diveUntil=0
   return true
@@ -580,7 +607,7 @@ local function step(dt)
   d.stamina=math.min(MAX_STAMINA,d.stamina+dt*STAMINA_REGEN)
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
-   h.WalkSpeed=now<d.slowUntil and SLOWED_SPEED or WALK_SPEED
+   h.WalkSpeed=now<d.slowUntil and SLOWED_SPEED or WALK_SPEED+math.min(d.perfectStreak or 0,STREAK_CAP)*0.8
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local inKitchen=Rules.inKitchen((r.Position-offset),1)
    if grounded then d.kitchenTouched=inKitchen end
@@ -638,9 +665,7 @@ local function step(dt)
     if ball.bounces==0 and (math.abs(impact.X)>20.09 or math.abs(impact.Z)>40.09) then
      ball.outLanding=Vector3.new(impact.X,FLOOR,impact.Z)
     end
-    if ball.bodyHitSide then
-     point(-ball.bodyHitSide,"Body hit")
-    elseif ball.bounces>=1 then
+    if ball.bounces>=1 then
      point(ball.last,"Double bounce")
     elseif ball.shots==0 and not Rules.serveLandingValid(ball.p,servingSide,serveX) then
      local rebound=ball.undercharged and Rules.bounceVelocity(ball.v.Y,true) or nil
@@ -703,7 +728,7 @@ local function step(dt)
   local rootFrame=CFrame.lookAt(rootPosition,rootPosition+Vector3.new(0,0,1))
   local center=Vector3.new(botX,184.5,botZ+1)
   local distance=(ball.p-center).Magnitude
-  if not ball.bodyHitSide and ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
+  if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
    and ball.p.Z< -2 and distance<6.5 and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
@@ -774,6 +799,10 @@ for _,id in ipairs(match.members) do
 end
 start()
 return {step=step,input=handleInput,spawn=spawnCharacter,focus=court:FindFirstChild("Playing surface"),score=function() return {score[1],score[2]} end,
- destroy=function() matchActive=false; bot:Destroy(); court:Destroy() end}
+ destroy=function()
+  matchActive=false; crowd:reset()
+  for p,d in pairs(users) do setStreak(p,d,0) end
+  bot:Destroy(); court:Destroy()
+ end}
 end
 return Runtime

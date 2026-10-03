@@ -2,7 +2,7 @@ local Players=game:GetService("Players")
 local Queue=require(script.Parent:WaitForChild("LobbyQueue"))
 local Service={}
 function Service.new(network,hooks)
- local self={model=Queue.new(),hooks=hooks,lastRequest={},lastInvite={}}
+ local self={model=Queue.new(),hooks=hooks,lastRequest={},lastInvite={},lastRefresh={}}
  local remote=network:FindFirstChild("Lobby") or Instance.new("RemoteEvent")
  remote.Name="Lobby"; remote.Parent=network
  self.remote=remote
@@ -80,19 +80,25 @@ function Service.new(network,hooks)
  function self:remove(p)
   if self.model:playing(p.UserId) then self:finish(self.model.players[p.UserId].matchId,p.DisplayName.." left. Match ended.") end
   self.model:remove(p.UserId); self.lastRequest[p.UserId]=nil; self.lastInvite[p.UserId]=nil
+  self.lastRefresh[p.UserId]=nil
   self:pump()
  end
  remote.OnServerEvent:Connect(function(p,action,value)
   local id=p.UserId
   if type(action)~="string" or not self.model.players[id] then return end
   local now=os.clock()
+  -- UI synchronization must not consume the first queue request's rate limit.
+  if action=="Refresh" then
+   if now-(self.lastRefresh[id] or -100)>=0.15 then
+    self.lastRefresh[id]=now; self:broadcast()
+   end
+   return
+  end
   if now-(self.lastRequest[id] or -100)<0.15 then return end
   self.lastRequest[id]=now
   local model=self.model
   local ok,message=true,nil
-  if action=="Refresh" then
-   self:broadcast(); return
-  elseif action=="Queue" then ok,message=model:enqueue(id,value)
+  if action=="Queue" then ok,message=model:enqueue(id,value)
   elseif action=="Practice" then ok,message=model:enqueue(id,"Practice",value)
   elseif action=="CancelQueue" then model:cancel(id)
   elseif action=="Invite" then

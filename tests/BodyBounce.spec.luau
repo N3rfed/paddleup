@@ -10,19 +10,15 @@ return function(Bounce)
  local rotated=frame*CFrame.Angles(0,math.pi/2,0)
  assert(Bounce.contact(from,to,rotated,Vector3.new(6,2,1)),"Rotated body parts must be supported")
  for _,side in ipairs({-1,1}) do
-  for _,pace in ipairs({0,10,56,200}) do
-   for _,vertical in ipairs({-50,0,80}) do
-    local incoming=Vector3.new(pace*0.6,vertical,side*pace*0.8)
-    local outgoing=Bounce.deflect(incoming,side)
-    local horizontal=Vector3.new(outgoing.X,0,outgoing.Z)
-    assert(math.abs(horizontal.Magnitude-math.min(pace*0.15,8))<1e-8,"Body hits must lose 85% of horizontal speed and cap at 8 studs/second")
-    assert(outgoing.Y==3,"Body hits must use a small fixed bump regardless of incoming vertical speed")
-    assert(outgoing.Y^2/(2*45)<=0.11,"Deflection must rise no more than 0.11 studs under game gravity")
-    if pace>0 then
-     assert(horizontal:Dot(Vector3.new(incoming.X,0,incoming.Z))<0,"Visible deflection must reverse incoming horizontal travel")
-    end
-   end
+  for _,pace in ipairs({10,56,200}) do
+   local position=Vector3.new(22,184,side*20)
+   local target,speed,duration=Bounce.shot(position,Vector3.new(0,-20,side*pace),side,2,181.7)
+   assert(target.Z*side<0 and math.abs(target.X)<=16,"Lob must target the opposite court")
+   assert(math.abs(speed-1.4)<1e-8,"Body contact must reduce rally speed by 30 percent")
+   local distance=Vector3.new(target.X-position.X,0,target.Z-position.Z).Magnitude
+   assert(distance/duration<=pace*0.7+1e-8,"Lob must have slower horizontal pace")
+   assert(duration>=1.5,"Body return must have lob airtime")
   end
  end
- return "Swept body contacts and low, heavily damped deflections passed"
+ return "Swept contact, misses, overlap, rotated parts, opposite-court targets, and slower lob pace passed"
 end

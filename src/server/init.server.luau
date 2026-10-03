@@ -5,7 +5,7 @@ local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 local template=require(script:WaitForChild("World")).build()
 require(script:WaitForChild("LobbyWorld")).build()
-require(script:WaitForChild("DayNightCycle")).start()
+require(script:WaitForChild("CourtLighting")).start()
 local shared=ReplicatedStorage:FindFirstChild("Shared") or Instance.new("Folder",ReplicatedStorage)
 shared.Name="Shared"
 if not shared:FindFirstChild("MatchRules") then script.MatchRules:Clone().Parent=shared end
@@ -52,7 +52,8 @@ local function spawnLobby(player,character)
  end
  player:SetAttribute("CourtSide",0)
  character:SetAttribute("ShotChargeAt",nil)
- humanoid.WalkSpeed=18; humanoid.UseJumpPower=true; humanoid.JumpPower=38
+ character:SetAttribute("PerfectStreak",0); character:SetAttribute("MissImmune",false)
+ humanoid.WalkSpeed=22; humanoid.UseJumpPower=true; humanoid.JumpPower=38
  character:PivotTo(CFrame.lookAt(Vector3.new(-850,257.7,32),Vector3.new(-850,257.7,0)))
  root.AssemblyLinearVelocity=Vector3.zero
  if not character:FindFirstChild("PaddleFace") then paddle(character) end

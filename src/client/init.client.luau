@@ -182,6 +182,7 @@ local localHitReadyAt=0
 local function hitInputReady()
  if not playing() then return false end
  local character=player.Character
+ if character and character:GetAttribute("MissImmune") then return false end
  local readyAt=character and character:GetAttribute("HitReadyAt") or 0
  local perfect=snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)
  return perfect or (os.clock()>=localHitReadyAt and workspace:GetServerTimeNow()>=readyAt)
@@ -345,14 +346,31 @@ state.OnClientEvent:Connect(function(data)
  serveAccent.Position=UDim2.fromOffset(data.servingSide==1 and 22 or 107,53)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
- staminaFill.Size=UDim2.fromScale(math.clamp(data.stamina/(data.maxStamina or 70),0,1),1)
+ staminaFill.Size=UDim2.fromScale(math.clamp(data.stamina/(data.maxStamina or 100),0,1),1)
  staminaLabel.Text=data.dive>0 and string.format("DIVE %.1fs",data.dive) or "STAMINA"
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
+local studioSoundNames={
+ ["pickleball floor"]="Pickleball Floor (Tire Drop Bounce 19 (SFX))",
+ ["crowd gasp"]="Crowd Gasp",
+}
+local function playRallySound(name)
+ local shared=ReplicatedStorage:FindFirstChild("Shared")
+ local hello=shared and shared:FindFirstChild("Hello")
+ local template=hello and hello:FindFirstChild(name)
+ if not template and studioSoundNames[name] then template=workspace:FindFirstChild(studioSoundNames[name]) end
+ if not template or not template:IsA("Sound") then return end
+ local sound=template:Clone()
+ sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
+ sound.Ended:Once(function() sound:Destroy() end)
+ Debris:AddItem(sound,30)
+ sound:Play()
+end
 feedback.OnClientEvent:Connect(function(message,kind)
  if type(message)=="table" and message.matchId and message.matchId~=player:GetAttribute("ViewingMatchId") then return end
+ if kind=="crowdGasp" then playRallySound("crowd gasp"); return end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
   local world=matchWorld()
@@ -362,16 +380,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
  end
  effects:feedback(message,kind)
  if kind=="ballBounce" then
-  if message.onCourt~=false then
-   local shared=ReplicatedStorage:FindFirstChild("Shared")
-   local hello=shared and shared:FindFirstChild("Hello")
-   local template=hello and (hello:FindFirstChild("pickleball bounce") or hello:FindFirstChild("pickleball hit"))
-   if template and template:IsA("Sound") then
-    local sound=template:Clone(); sound.Name="Pickleball bounce"
-    sound.Looped=false; sound.TimePosition=0; sound.Volume=0.35; sound.PlaybackSpeed=0.8; sound.Parent=SoundService
-    sound.Ended:Once(function() sound:Destroy() end); Debris:AddItem(sound,5); sound:Play()
-   end
-  end
+  playRallySound("pickleball floor")
   return
  end
  if kind=="fault" then cancelCharge(); return end
@@ -388,17 +397,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="ballHit" then
-  local shared=ReplicatedStorage:FindFirstChild("Shared")
-  local hello=shared and shared:FindFirstChild("Hello")
-  local template=hello and hello:FindFirstChild("pickleball hit")
-  if template and template:IsA("Sound") then
-   -- A separate voice per impact lets rapid rallies overlap naturally.
-   local sound=template:Clone()
-   sound.Looped=false; sound.TimePosition=0; sound.Parent=SoundService
-   sound.Ended:Once(function() sound:Destroy() end)
-   Debris:AddItem(sound,10)
-   sound:Play()
-  end
+  playRallySound("pickleball hit")
   return
  end
  if kind=="diveMotion" then
@@ -498,7 +497,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    yaw=side==1 and 0 or math.pi
    pitch=math.rad(-18)
   end
-  local locked=lobbyStatus~="Spectating" and h and h.Health>0
+  local locked=playing() and h and h.Health>0
   local aiming=locked and not lobbyMenuOpen() and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming

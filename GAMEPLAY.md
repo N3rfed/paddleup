@@ -4,10 +4,10 @@ Arcade pickleball on an apartment rooftop. Press Play in Studio to spawn on
 the floating circular lobby island, well away from the court. Walk to a Singles,
 Doubles, Practice, or Spectate station and press E (or tap the prompt), or
 open PLAY / PARTY. BACK TO TERRACE closes the menu so you can keep exploring.
-The lobby uses the same shift-lock camera as the court. Left-click (or tap)
+The lobby keeps the cursor free. Left-click (or tap)
 to swing your paddle; right-click performs a soft swing. Other players see
-these swings, but they do not hit the match ball. Hold Alt to click PLAY /
-PARTY; an open queue menu keeps the cursor free and blocks paddle swings.
+these swings, but they do not hit the match ball. Click PLAY / PARTY to queue;
+an open queue menu blocks paddle swings.
 
 Matchmaking uses players in the same server, with up to 40 simultaneous games:
 20 singles courts and 20 doubles courts. Each game has its own court, ball,
@@ -49,7 +49,7 @@ Friends remain in their party after a match; queue again when ready.
 | Q | Arm a power shot for 5 seconds; 10-second cooldown |
 | E | Slow the opponent for 2.5 seconds; 12-second cooldown |
 
-Gameplay uses an always-on shift-lock camera. Serves and returns follow the
+On-court gameplay uses a shift-lock camera. Serves and returns follow the
 character's horizontal facing direction at impact, including during dives.
 The ground marker shows that direction; shot height follows the arcade arc.
 Aim serves into the diagonal service court. Shots are not clamped in bounds.
@@ -68,9 +68,16 @@ The landing ring pulses red, yellow, then green. Returns within 0.23 seconds
 before a bounce or 0.28 seconds afterward count as perfect. Perfect hits have
 no swing cooldown and multiply rally speed by 1.05. Other swings have a
 0.28-second cooldown. A point resets rally speed. Stamina regenerates at
-8 per second, with a maximum of 70 and a cost of 35 per dive. Two quick dives
-leave roughly 3.3 seconds before another dive is available. Power shots add
+22 per second, with a maximum of 100 and a cost of 35 per dive. Power shots add
 a temporary 22% speed boost.
+
+Players walk at 22 studs/second. Consecutive legal perfect returns add
+0.8 studs/second of movement speed and 0.03 to rally speed per streak hit,
+with bonuses capped at 10 hits. Perfect dinks and drops build the streak but
+keep their soft-shot power. Follow-up swings after a perfect hit cannot count
+as misses or add a cooldown until the opposing team returns the ball or the
+point ends. Misses, non-perfect returns, body contacts, rally ends, and respawns
+reset the streak. A growing blue-to-gold aura and movement trails show the streak.
 
 First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.
@@ -123,11 +130,15 @@ cooldown; perfect timing bypasses it. Only an explicit missed click/release
 shows "Miss!"; holding and automatic dive reach checks do not create misses.
 Right-click always plays an underhand dink/drop motion, even on a miss.
 Accepted contacts reconcile the animation without replaying it.
-Each on-court bounce plays a separate, softer, lower-pitched voice of the
-existing pickleball sample, configured as `pickleball bounce` in the project.
+Each floor impact, including out balls, plays `pickleball floor` at its original
+pitch. Paddle contacts play `pickleball hit`. A streak of at least five ending,
+or a lob following three consecutive shots at 1.3x speed or higher, triggers a
+crowd gasp. Gasps have a four-second cooldown per match and only reach that
+match's players and spectators. Lobby and respawn resets do not trigger gasps.
 
-- `src/server/init.server.luau`: ball simulation, hit validation, scoring,
-  abilities, player slots, and practice partner.
+- `src/server/init.server.luau`: matchmaking and court lifecycle coordination.
+- `src/server/MatchRuntime.luau`: isolated ball simulation, hit validation,
+  scoring, abilities, player slots, and practice partner for each match.
 - `src/server/World.luau`: repeat-safe rooftop, court, pool, lounge, and skyline.
 - `src/client/init.client.luau`: input, camera, ball visuals, landing assist, HUD.
 - `src/client/DiveController.luau`: smooth dive movement,
@@ -223,9 +234,9 @@ Hold left mouse and release to hit. Taps remain normal returns; charge builds af
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
 
-Body hits produce a short visible deflection, including hits on the practice
-partner. Horizontal travel reverses, loses 85% of its speed, and caps at 8
-studs per second. A 3-stud-per-second upward bump keeps the ball low. Body
-contact locks out paddle returns and further body hits until the ball lands,
-then awards the rally to the opposing team as a body-hit fault. Paddle parts
-and spectators do not trigger body hits.
+Only unbounced slams cause body contacts, including against the practice bot.
+Body contact automatically saves the incoming slam as a playable slow lob into
+the opposite court, reducing rally speed by 30% and keeping horizontal pace at
+least 30% below the incoming ball. The opposing side can return this lob; its
+landing does not automatically award a body-hit fault. Other shots, post-bounce
+contacts, paddle parts, and spectators do not trigger body saves.
