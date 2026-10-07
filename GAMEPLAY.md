@@ -1,9 +1,46 @@
 # Paddle Up! — Skyline Club
 
-Arcade pickleball on an apartment rooftop. Press Play in Studio. The first
-player faces a practice partner; a second player replaces it. A third player
-creates 2v1 and a fourth creates 2v2. Further players spectate and fill vacant
-slots in join order. Team changes reset the rally without awarding a point.
+Arcade pickleball on an apartment rooftop. Players arrive in a separate
+penthouse lobby facing reception. The menu directly admits players to the
+existing shared court: Practice reserves the free court for one player and
+the existing bot, 1V1 allows one player per side, and 2V2 allows two per side.
+Multiplayer waits for a player on both sides; partial doubles uses the existing
+2v1 rules. The court keeps its selected format until everyone leaves.
+A busy or incompatible court returns a message without changing the player's
+current session. Spectate uses the existing elevated court camera and never
+automatically promotes viewers. Return to Lobby (M on keyboard, or the button with Alt held during play)
+releases the court slot.
+Respawns preserve the chosen role. All testers must join the same Roblox server.
+
+Lobby geometry lives in src/server/Lobby.luau, separate from the rooftop World.
+The versioned lobby expands the original floor area by 32.4%, keeping the arrival
+point and relative area layout. LobbyFurniture.luau supplies cloned, anchored
+furniture and decorations for the Main Lounge, Cafe Seating, Window Conversation,
+and Reading Corner. Elevators are mounted against the rear wall; a shallow Hall
+of Fame gallery between them replaces the former freestanding achievement board.
+The Shop is an open boutique with wall paddles, hanging jerseys, an outfit
+mannequin, plinths, and a checkout counter. Signage uses small plaques and
+integrated lettering; gallery records/leaderboards remain visual placeholders.
+LobbyCamera.luau provides free orbit with wall collision: right-drag and mouse
+wheel on desktop, right-side swipe/pinch on touch, or the controller right stick
+and R3 to cycle zoom. Court aiming and the spectator camera retain
+their existing controls. All lighting is local to the lobby; the rooftop day/night
+cycle remains shared and unchanged. Fixtures use shadow-free lights, and small
+props have collision, touch, query, and shadow work disabled. Seats are usable.
+Elevators carry TeamFormat, Mode, and Placeholder attributes for future wiring;
+Classic, Arcade, and Chaotic are visual labels only. Shop, Cafe, and achievement
+displays have no transactions, powerups, or persistent statistics yet.
+The future flow remains Menu ? Lobby ? Elevator ? Queue ? Voting ? Rooftop.
+MainMenu.luau contains presentation; admission uses the server's existing roster,
+serve rotation, ball simulation, input remotes, and practice partner.
+
+Studio acceptance check: start a four-player local server, verify all players
+start at reception, then join 2V2 and confirm 2 players on each side. Test 1V1
+with two players, full/incompatible court rejection, a fifth spectator, leaving
+and rejoining, and character resets. With an empty court, test Practice through
+a bot serve and rally. Lobby players and spectators must not swing or dive.
+Inspect the six labeled elevators, shop displays, cafe props, trophies,
+warm fixtures, window walls, and unobstructed central arrival path.
 
 | Input | Action |
 | --- | --- |
