@@ -19,7 +19,6 @@ return function(Effects,World)
   assert(washes==6,"Expected six court washes")
 
   effects=Effects.new(ball,trail)
-  effects.rig=rig -- Bot effects belong to the currently selected court.
   effects.scanAt=math.huge -- Isolate the test from real players and scenery.
   effects:update(1/60,nil) -- Joining before the first state packet must be safe.
   assert(not trail.Enabled)
@@ -36,21 +35,11 @@ return function(Effects,World)
   effects:update(1,snapshot)
   assert(effects.energy>calmEnergy,"Faster rallies must increase lighting energy")
   assert(ball.Color==Color3.fromRGB(55,155,255),"Slammable lobs must retain their blue cue")
-  assert(math.abs(trail.Lifetime-0.7)<0.0001,"Slammable lob trails retain their duration")
+  assert(trail.Lifetime==0.7)
   local chargeLight=actor.light.Brightness
   character:SetAttribute("ChargedShotReadyAt",workspace:GetServerTimeNow()+2)
   effects:update(0.1,snapshot)
   assert(not actor.charge.Enabled and actor.light.Brightness<chargeLight,"Charge cooldown must suppress charge effects")
-  character:SetAttribute("PerfectStreak",1)
-  effects:update(0.1,snapshot)
-  assert(actor.aura.Enabled and actor.highlight.Enabled,"Perfect streak must show an aura without charging")
-  local initialRate=actor.aura.Rate
-  character:SetAttribute("PerfectStreak",10)
-  effects:update(0.1,snapshot)
-  assert(actor.aura.Rate>initialRate,"Aura must grow with the streak")
-  character:SetAttribute("PerfectStreak",0)
-  effects:update(0.1,snapshot)
-  assert(not actor.aura.Enabled,"Broken streak must disable the aura")
 
   local message={position=Vector3.new(0,185,20),direction=Vector3.new(0,0,-1),speed=2,clean=true,userId=-999999}
   for _=1,12 do effects:feedback(message,"ballHit"); effects:update(0.25,snapshot) end
@@ -64,7 +53,6 @@ return function(Effects,World)
   assert(#effects.transients==0,"Expired impacts must be destroyed")
   assert(not trail.Enabled and not effects.embers.Enabled and effects.ballLight.Brightness==0)
   assert(not actor.highlight.Enabled and not actor.charge.Enabled and not actor.paddleTrail.Enabled)
-  assert(not actor.aura.Enabled,"Rally end must disable the streak aura")
   assert(effects.energy<0.001,"Lighting must settle between rallies")
   character:Destroy(); effects:update(0.1,snapshot)
   assert(next(effects.actors)==nil,"Removed characters must release effect references")

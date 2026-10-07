@@ -3,10 +3,10 @@ local World = {}
 -- A versioned rig also installs on saved courts without rebuilding the scenery.
 function World.addCourtLights(root)
  local existing=root:FindFirstChild("RallyLights")
- if existing and existing:GetAttribute("Version")==2 then return existing end
+ if existing and existing:GetAttribute("Version")==1 then return existing end
  if existing then existing:Destroy() end
  local rig=Instance.new("Model")
- rig.Name="RallyLights"; rig:SetAttribute("Version",2)
+ rig.Name="RallyLights"; rig:SetAttribute("Version",1)
  local idle=Color3.fromRGB(92,211,201)
  local function fixture(name,size,position,color,neon)
   local p=Instance.new("Part")
@@ -26,12 +26,12 @@ function World.addCourtLights(root)
    light.Brightness=0.85; light.Color=Color3.fromRGB(220,239,230); light.Shadows=false; light.Parent=lamp
   end
   -- Segments run outside the playing lines; pulses travel along the sidelines.
-  for i=1,9 do
-   local strip=fixture("Tempo strip",Vector3.new(0.24,0.12,10),Vector3.new(x,181.36,-48+(i-1)*12),idle,true)
+  for i=1,14 do
+   local strip=fixture("Tempo strip",Vector3.new(0.24,0.12,10),Vector3.new(x,181.36,-78+(i-1)*12),idle,true)
    strip.Transparency=0.25
   end
  end
- for _,z in ipairs({-55,55}) do
+ for _,z in ipairs({-82,82}) do
   fixture("End accent",Vector3.new(59,0.12,0.24),Vector3.new(0,181.36,z),idle,true)
  end
  rig.Parent=root
@@ -41,12 +41,15 @@ end
 function World.updateLayout(root)
  for _,p in ipairs(root:GetChildren()) do
   if p.Name=="Club sign" or p.Name=="Court glass fence" or p.Name=="Court end glass"
-   or p.Name=="Fence upright" or p.Name=="Fence top rail"
-   or p.Name=="Rooftop parapet" or p.Name=="Safety glass" then p:Destroy()
+   or p.Name=="Fence upright" or p.Name=="Fence top rail" then p:Destroy()
   elseif p:IsA("BasePart") then
    local pos=p.Position
-   if p.Name=="Court surround" then p.Size=Vector3.new(52,0.12,96)
-   elseif p.Name=="Roof deck" then p.Size=Vector3.new(112,3,148)
+   if p.Name=="Court surround" then p.Size=Vector3.new(64,0.12,168)
+   elseif p.Name=="Roof deck" then p.Size=Vector3.new(132,3,180)
+   elseif p.Name=="Safety glass" then p.Size=Vector3.new(0.2,4,180)
+   elseif p.Name=="Rooftop parapet" then
+    if p.Size.Z>p.Size.X then p.Size=Vector3.new(1,3,180)
+    else p.Position=Vector3.new(pos.X,pos.Y,math.sign(pos.Z)*89) end
    end
   end
  end
@@ -55,11 +58,7 @@ function World.updateLayout(root)
 end
 function World.build()
  local existing = workspace:FindFirstChild("PaddleUp")
- if existing then
-  local base=workspace:FindFirstChild("Baseplate")
-  if base then base.Size=Vector3.new(1200,2,1200) end
-  return World.updateLayout(existing)
- end
+ if existing then return World.updateLayout(existing) end
  local root = Instance.new("Model")
  root.Name = "PaddleUp"
  root.Parent = workspace
@@ -88,7 +87,7 @@ function World.build()
    end
   end
  end
- part("Roof deck",Vector3.new(112,3,148),Vector3.new(0,179.5,0),cream,Enum.Material.Concrete)
+ part("Roof deck",Vector3.new(132,3,144),Vector3.new(0,179.5,0),cream,Enum.Material.Concrete)
  part("Court surround",Vector3.new(52,0.12,96),Vector3.new(0,181.06,0),Color3.fromRGB(206,116,91))
  part("Playing surface",Vector3.new(40,0.16,80),Vector3.new(0,181.16,0),teal)
  for _,z in ipairs({-7,7}) do
@@ -103,11 +102,19 @@ function World.build()
  part("Net white tape",Vector3.new(42,0.15,0.22),Vector3.new(0,184.4,0),white)
  for x=-20,20,1 do part("Net cord",Vector3.new(0.035,3,0.035),Vector3.new(x,182.8,0),dark).CanCollide=false end
  for y=181.5,184.25,0.5 do part("Net cord",Vector3.new(42,0.035,0.035),Vector3.new(0,y,0),dark).CanCollide=false end
- part("Pool coping",Vector3.new(25,0.45,49),Vector3.new(-39,181.3,0),white)
- local water=part("Rooftop pool",Vector3.new(22,0.1,46),Vector3.new(-39,181.56,0),Color3.fromRGB(61,173,192),Enum.Material.Glass)
+ for _,x in ipairs({-65,65}) do
+  part("Rooftop parapet",Vector3.new(1,3,144),Vector3.new(x,182.5,0),cream)
+  local g=part("Safety glass",Vector3.new(0.2,4,144),Vector3.new(x,186,0),Color3.fromRGB(164,208,207),Enum.Material.Glass)
+  g.Transparency=0.55
+ end
+ for _,z in ipairs({-71,71}) do
+  part("Rooftop parapet",Vector3.new(132,3,1),Vector3.new(0,182.5,z),cream)
+ end
+ part("Pool coping",Vector3.new(25,0.45,49),Vector3.new(-46,181.3,0),white)
+ local water=part("Rooftop pool",Vector3.new(22,0.1,46),Vector3.new(-46,181.56,0),Color3.fromRGB(61,173,192),Enum.Material.Glass)
  water.Transparency=0.22
  water.Reflectance=0.25
- for z=-18,18,6 do part("Pool lane tile",Vector3.new(20,0.025,0.09),Vector3.new(-39,181.63,z),Color3.fromRGB(128,217,218)) end
+ for z=-18,18,6 do part("Pool lane tile",Vector3.new(20,0.025,0.09),Vector3.new(-46,181.63,z),Color3.fromRGB(128,217,218)) end
  local function plant(x,z)
   part("Planter",Vector3.new(4,2.5,4),Vector3.new(x,182.25,z),dark,Enum.Material.Concrete)
   part("Tree trunk",Vector3.new(0.7,7,0.7),Vector3.new(x,185,z),Color3.fromRGB(111,83,58),Enum.Material.Wood)
@@ -121,8 +128,8 @@ function World.build()
   for _,x in ipairs({41,49}) do part("Lounge legs",Vector3.new(0.4,2,3),Vector3.new(x,182,z),dark) end
   part("Side table",Vector3.new(3,2,3),Vector3.new(54,182,z),dark)
  end
- for _,x in ipairs({32,52}) do for _,z in ipairs({-38,38}) do part("Pergola pillar",Vector3.new(0.5,12,0.5),Vector3.new(x,187,z),dark,Enum.Material.Metal) end end
- for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(41,193,z),Color3.fromRGB(143,100,65),Enum.Material.Wood) end
+ for _,x in ipairs({35,57}) do for _,z in ipairs({-38,38}) do part("Pergola pillar",Vector3.new(0.5,12,0.5),Vector3.new(x,187,z),dark,Enum.Material.Metal) end end
+ for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(46,193,z),Color3.fromRGB(143,100,65),Enum.Material.Wood) end
  local rng=Random.new(82)
  for i=1,30 do
   local angle=i*math.pi*2/30
@@ -155,6 +162,15 @@ function World.build()
  if not base then base=part("Baseplate",Vector3.new(1200,2,1200),Vector3.new(0,-6,0),dark); base.Parent=workspace end
  if base then base.Position=Vector3.new(0,-6,0); base.Size=Vector3.new(1200,2,1200); base.Color=Color3.fromRGB(54,67,73) end
  local lighting=game:GetService("Lighting")
+ lighting.ClockTime=17.3
+ lighting.Brightness=2.5
+ lighting.Ambient=Color3.fromRGB(132,145,166)
+ lighting.OutdoorAmbient=Color3.fromRGB(153,158,173)
+ lighting.GlobalShadows=true
+ local atmosphere=lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere",lighting)
+ atmosphere.Density=0.26
+ atmosphere.Color=Color3.fromRGB(239,210,181)
+ atmosphere.Decay=Color3.fromRGB(130,148,174)
  local bloom=lighting:FindFirstChildOfClass("BloomEffect")
  if bloom then bloom.Intensity=0.15; bloom.Size=24; bloom.Threshold=1.5 end
  local dof=lighting:FindFirstChildOfClass("DepthOfFieldEffect")
