@@ -4,6 +4,8 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 require(script:WaitForChild("World")).build()
+local Lobby=require(script:WaitForChild("Lobby"))
+Lobby.build()
 require(script:WaitForChild("DayNightCycle")).start()
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
@@ -13,6 +15,8 @@ local function remote(name)
  return r
 end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
+local session=remote("Session")
+local courtMode=nil
 local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
 local WALK_SPEED,SLOWED_SPEED=18,10
 local rulesModule=script:WaitForChild("MatchRules")
@@ -85,7 +89,7 @@ local function rosterChanged()
  local home,away={},{}
  for _,p in ipairs(teamPlayers(1)) do table.insert(home,p.UserId) end
  for _,p in ipairs(teamPlayers(-1)) do table.insert(away,p.UserId) end
- if #home>0 and #away==0 then away={0} end -- Bot service follows singles rules.
+ if courtMode=="Practice" and #home>0 and #away==0 then away={0} end -- Bot service follows singles rules.
  rotation:setTeams(home,away)
  if #home==0 and #away==0 then rotation:reset(); score=rotation.score end
  syncServing()
@@ -256,50 +260,99 @@ local function spawnCharacter(p,c)
  local r=c:WaitForChild("HumanoidRootPart",10)
  local h=c:WaitForChild("Humanoid",10)
  if not r or not h then return end
+ -- Release lobby furniture before relocating an avatar to the court or spectator deck.
+ local seatedAt=h.SeatPart
+ h.Sit=false
+ if seatedAt then
+  local weld=seatedAt:FindFirstChild("SeatWeld")
+  if weld and weld:IsA("Weld") and weld.Part1 and weld.Part1:IsDescendantOf(c) then weld:Destroy() end
+ end
  h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
  local z=d.side==0 and 58 or d.side*28
- c:PivotTo(CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,185,z),Vector3.new(0,185,0)))
- if not c:FindFirstChild("PaddleFace") then paddle(c) end
+ c:PivotTo(d.mode=="Lobby" and Lobby.Spawn or CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,185,z),Vector3.new(0,185,0)))
+ r.AssemblyLinearVelocity=Vector3.zero; r.AssemblyAngularVelocity=Vector3.zero
+ for _,name in ipairs({"PaddleFace","PaddleGrip"}) do
+  local existing=c:FindFirstChild(name)
+  if existing and d.side==0 then existing:Destroy() end
+ end
+ if d.side~=0 and not c:FindFirstChild("PaddleFace") then paddle(c) end
  d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
- if not ball.live then serveReady=false end
+ if d.side~=0 and not ball.live then serveReady=false end
 end
 local function addPlayer(p)
  if users[p] then return end
- local home,away=#teamPlayers(1),#teamPlayers(-1)
- local side=home<2 and (home<=away or away>=2) and 1 or (away<2 and -1 or 0)
+ local side=0
  joinSerial+=1
- users[p]={side=side,slot=side~=0 and availableSlot(side) or 0,joined=joinSerial,stamina=100,lastSwing=0,diveAt=0,powerAt=0,slowAt=0,powerUntil=0,slowUntil=0,lastInput=0}
+ users[p]={mode="Lobby",sessionAt=0,side=side,slot=side~=0 and availableSlot(side) or 0,joined=joinSerial,stamina=100,lastSwing=0,diveAt=0,powerAt=0,slowAt=0,powerUntil=0,slowUntil=0,lastInput=0}
  p:SetAttribute("CourtSide",side)
+ p:SetAttribute("SessionMode","Lobby")
  if side~=0 then rosterChanged() end
  p.CharacterAdded:Connect(function(c) spawnCharacter(p,c) end)
  if p.Character then task.spawn(spawnCharacter,p,p.Character) end
 end
 Players.PlayerAdded:Connect(addPlayer)
 for _,p in ipairs(Players:GetPlayers()) do addPlayer(p) end
-Players.PlayerRemoving:Connect(function(p)
- local leaving=users[p]
- users[p]=nil
- if leaving and leaving.side~=0 then
-  local waiting=teamPlayers(0)[1]
-  if waiting then
-   local d=users[waiting]
-   d.slot=availableSlot(leaving.side); d.side=leaving.side; waiting:SetAttribute("CourtSide",d.side)
-   if waiting.Character then task.spawn(spawnCharacter,waiting,waiting.Character) end
+-- Admission to the existing roster, with no matchmaking or additional court simulation.
+local function leaveCourt(p)
+ local d=users[p]
+ if not d then return end
+ local active=d.side~=0
+ d.side=0; d.slot=0
+ p:SetAttribute("CourtSide",0)
+ if not active then return end
+ if not occupant(1) then
+  local remaining,other=occupant(-1)
+  if remaining then
+   other.slot=availableSlot(1); other.side=1; remaining:SetAttribute("CourtSide",1)
+   if remaining.Character then task.spawn(spawnCharacter,remaining,remaining.Character) end
   end
-  if not occupant(1) then
-   local remaining,d=occupant(-1)
-   if remaining then
-    d.slot=availableSlot(1); d.side=1; remaining:SetAttribute("CourtSide",1)
-    if remaining.Character then task.spawn(spawnCharacter,remaining,remaining.Character) end
-   end
+ end
+ if not occupant(1) and not occupant(-1) then
+  courtMode=nil; rotation:reset(); score=rotation.score; ball.resetScore=false
+ end
+ rosterChanged()
+end
+session.OnServerEvent:Connect(function(p,mode)
+ local d=users[p]
+ if not d or type(mode)~="string" then return end
+ if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" then return end
+ local now=os.clock()
+ if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
+ d.sessionAt=now
+ if mode==d.mode then session:FireClient(p,true,"Already connected."); return end
+ if mode=="Lobby" or mode=="Spectate" then
+  leaveCourt(p); d.mode=mode
+ else
+  -- Validate before leaving, so a rejected choice never disrupts a live match.
+  if courtMode and courtMode~=mode then
+   session:FireClient(p,false,"Court is in "..courtMode..". Spectate or wait for players to return to the lobby.")
+   return
   end
+  local limit=mode=="2V2" and 2 or 1
+  local home,away=#teamPlayers(1),#teamPlayers(-1)
+  if (mode=="Practice" and home+away>0) or (home>=limit and away>=limit) then
+   session:FireClient(p,false,"Court is full. Choose Spectate to watch.")
+   return
+  end
+  courtMode=mode
+  d.side=(home<limit and (home<=away or away>=limit)) and 1 or -1
+  d.slot=availableSlot(d.side); d.mode=mode
+  p:SetAttribute("CourtSide",d.side)
+  d.stamina=100; d.powerUntil=0; d.slowUntil=0
   rosterChanged()
  end
+ p:SetAttribute("SessionMode",d.mode)
+ if p.Character then task.spawn(spawnCharacter,p,p.Character) end
+ session:FireClient(p,true,"Connected.")
+end)
+Players.PlayerRemoving:Connect(function(p)
+ leaveCourt(p)
+ users[p]=nil
 end)
 local function prepareServe()
  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false end
  syncServing()
- if not occupant(servingSide) and servingSide==1 then return end
+ if not occupant(1) or (courtMode~="Practice" and not occupant(-1)) then return end
  table.clear(lastHitter)
  for p,d in pairs(users) do
   local r,h=rootOf(p)
@@ -527,7 +580,7 @@ RunService.Heartbeat:Connect(function(dt)
    end
   end
  end
- local hasBot=occupant(-1)==nil
+ local hasBot=courtMode=="Practice" and occupant(1)~=nil and occupant(-1)==nil
  for _,p in ipairs(bot:GetChildren()) do if p:IsA("BasePart") then p.Transparency=hasBot and 0 or 1 end end
  tag.Enabled=hasBot
  if not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end

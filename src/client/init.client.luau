@@ -13,9 +13,12 @@ local RallyEffects=require(script:WaitForChild("RallyEffects"))
 local BallShadow=require(script:WaitForChild("BallShadow"))
 local FloatingText=require(script:WaitForChild("FloatingText"))
 local developerMode=false
+local lobbyCamera=require(script:WaitForChild("LobbyCamera")).new(player,UIS)
 local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
+require(script:WaitForChild("MainMenu")).start(player,network)
+local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -141,6 +144,7 @@ setDeveloperMode(false)
 local snapshot,receivedAt=nil,0
 local localHitReadyAt=0
 local function hitInputReady()
+ if not playing() then return false end
  local character=player.Character
  local readyAt=character and character:GetAttribute("HitReadyAt") or 0
  local perfect=snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)
@@ -162,6 +166,7 @@ local function swing()
  input:FireServer(snapshot and not snapshot.live and "Serve" or "Swing")
 end
 local function dive()
+ if not playing() then return end
  cancelCharge()
  local character=player.Character
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
@@ -175,7 +180,7 @@ UIS.InputBegan:Connect(function(key,processed)
  if key.KeyCode==Enum.KeyCode.Home then
   setDeveloperMode(not developerMode); return
  end
- if processed then return end
+ if processed or not playing() then return end
  if key.UserInputType==Enum.UserInputType.MouseButton1 then
   chargeStarted=os.clock()
   local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
@@ -207,7 +212,7 @@ game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
- if UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+ if not playing() or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
  arrows[key.KeyCode]=status==Enum.UserInputState.Begin or status==Enum.UserInputState.Change
  return Enum.ContextActionResult.Sink
 end,false,3000,Enum.KeyCode.Up,Enum.KeyCode.Down,Enum.KeyCode.Left,Enum.KeyCode.Right)
@@ -338,7 +343,7 @@ local windowFocused=true
 UIS.WindowFocusReleased:Connect(function() windowFocused=false end)
 UIS.WindowFocused:Connect(function() windowFocused=true end)
 UIS.TouchMoved:Connect(function(touch,processed)
- if processed or touch.Position.X<workspace.CurrentCamera.ViewportSize.X*0.5 then return end
+ if not playing() or processed or touch.Position.X<workspace.CurrentCamera.ViewportSize.X*0.5 then return end
  yaw-=touch.Delta.X*0.004
  pitch=math.clamp(pitch-touch.Delta.Y*0.004,math.rad(-65),math.rad(30))
 end)
@@ -365,7 +370,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
  local h=c and c:FindFirstChildOfClass("Humanoid")
- local courtSide=(snapshot and snapshot.side) or player:GetAttribute("CourtSide") or 1
+ local courtSide=player:GetAttribute("CourtSide") or 0
+ local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
+ canvas.Visible=not inLobby; devToggle.Visible=not inLobby
+ if not inLobby then lobbyCamera:disable() end
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and math.min(now-receivedAt,0.12) or 0
  local predicted
@@ -379,7 +387,13 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    predicted=Rules.heldBallPosition(holder) or predicted
   end
  end
- if r then
+ if inLobby then
+  cancelCharge()
+  lobbyCamera:update(camera,r,h,dt)
+  crosshair.Visible=false; aim.Transparency=1
+  cameraRoot=nil
+ elseif r then
+  lobbyCamera:disable()
   camera.CameraType=Enum.CameraType.Scriptable; camera.FieldOfView=65
   local reset=cameraRoot~=r or cameraSide~=courtSide or trackedCamera~=camera
   if reset then
@@ -461,5 +475,5 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
- sub.Text=snapshot.side==0 and "SPECTATING  /  You will join when a court slot opens" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
+ sub.Text=snapshot.side==0 and "SPECTATING  /  Return to lobby to choose a mode" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)
