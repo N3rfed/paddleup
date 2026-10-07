@@ -274,6 +274,9 @@ local function leaveCourt(p)
  if not d then return end
  local active=d.side~=0
  d.side=0; d.slot=0
+ d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil; d.chargeCooldownBlocked=nil
+ d.powerUntil=0; d.slowUntil=0
+ if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  p:SetAttribute("CourtSide",0)
  if not active then return end
  if not occupant(1) then

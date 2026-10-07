@@ -18,7 +18,7 @@ local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
-local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 end
+local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -116,11 +116,22 @@ local function showServeTiming(grade)
  meterFeedbackTween:Play()
  meterFeedbackUntil=os.clock()+0.6; meterFeedback.Visible=true
 end
-local serveCountdown=Instance.new("TextLabel",gui)
-serveCountdown.Name="ServeCountdown"; serveCountdown.AnchorPoint=Vector2.new(0.5,0)
-serveCountdown.Position=UDim2.fromScale(0.5,0.15); serveCountdown.Size=UDim2.fromOffset(360,36)
+local serveCountdownCapsule=Instance.new("Frame",gui)
+serveCountdownCapsule.Name="ServeCountdownCapsule"; serveCountdownCapsule.AnchorPoint=Vector2.new(0.5,0)
+serveCountdownCapsule.Position=UDim2.new(0.5,0,1,10); serveCountdownCapsule.Size=UDim2.fromOffset(186,34)
+serveCountdownCapsule.BackgroundColor3=Color3.fromRGB(13,22,31)
+serveCountdownCapsule.BackgroundTransparency=0.35; serveCountdownCapsule.BorderSizePixel=0
+serveCountdownCapsule.Visible=false
+local countdownCorner=Instance.new("UICorner",serveCountdownCapsule); countdownCorner.CornerRadius=UDim.new(1,0)
+local countdownBorder=Instance.new("UIStroke",serveCountdownCapsule)
+countdownBorder.Color=Color3.fromRGB(34,50,66); countdownBorder.Thickness=1.5
+local serveCountdown=Instance.new("TextLabel",serveCountdownCapsule)
+serveCountdown.Name="ServeCountdown"; serveCountdown.Size=UDim2.fromScale(1,1)
 serveCountdown.BackgroundTransparency=1; serveCountdown.Font=Enum.Font.GothamBold
-serveCountdown.TextSize=24; serveCountdown.TextColor3=mint; serveCountdown.Visible=false
+serveCountdown.TextSize=18; serveCountdown.TextColor3=Color3.new(1,1,1)
+local countdownTextStroke=Instance.new("UIStroke",serveCountdown)
+countdownTextStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
+countdownTextStroke.Color=Color3.fromRGB(11,17,24); countdownTextStroke.Thickness=2.5; countdownTextStroke.Transparency=0
 local chargeStarted,chargeCanShow,chargeInput
 local function cancelCharge(preserveMeterFade)
  if chargeCanShow then DiveController.charge(player.UserId,false) end
@@ -157,6 +168,7 @@ text(brand,"PADDLE UP!",Vector2.new(18,9),Vector2.new(260,34),29).Font=Enum.Font
 text(brand,"SKYLINE CLUB  /  ROOFTOP 18",Vector2.new(19,47),Vector2.new(270,20),11,mint)
 local scorePanel=panel(Vector2.new(528,24),Vector2.new(224,62))
 scorePanel.Name="Score"
+serveCountdownCapsule.Parent=scorePanel
 scorePanel.BackgroundColor3=Color3.new(1,1,1); scorePanel.BackgroundTransparency=0.05
 local scoreGradient=Instance.new("UIGradient",scorePanel)
 scoreGradient.Color=ColorSequence.new(Color3.fromRGB(27,58,63),Color3.fromRGB(12,23,33)); scoreGradient.Rotation=25
@@ -218,7 +230,7 @@ touchSwing.Visible=UIS.TouchEnabled
 local touchDive=touchSwing:Clone(); touchDive.Parent=canvas; touchDive.Position=UDim2.fromOffset(1070,590); touchDive.Size=UDim2.fromOffset(180,45); touchDive.Text="DIVE"
 local devToggle=Instance.new("TextButton",gui)
 devToggle.Name="DeveloperToggle"; devToggle.AnchorPoint=Vector2.new(1,0)
-devToggle.Position=UDim2.new(1,-16,0,16); devToggle.Size=UDim2.fromOffset(190,32)
+devToggle.Position=UDim2.new(1,-80,0,24); devToggle.Size=UDim2.fromOffset(190,32)
 devToggle.BackgroundColor3=dark; devToggle.TextColor3=cream; devToggle.Font=Enum.Font.GothamMedium; devToggle.TextSize=12
 round(devToggle,8)
 local function setDeveloperMode(enabled)
@@ -314,6 +326,9 @@ UIS.WindowFocusReleased:Connect(cancelCharge)
 UIS.TextBoxFocused:Connect(cancelCharge)
 game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
+player:GetAttributeChangedSignal("LeaveConfirmationOpen"):Connect(function()
+ if player:GetAttribute("LeaveConfirmationOpen") then cancelCharge() end
+end)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
  if not playing() or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -474,11 +489,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  diveLabel.TextColor3=diveCooling and Color3.fromRGB(147,155,165) or electric
  touchDive.BackgroundColor3=diveCooling and diveGray or electric
  touchDive.AutoButtonColor=not diveCooling
- serveCountdown.Visible=playing() and snapshot~=nil and snapshot.canServe==true
- if serveCountdown.Visible then
+ serveCountdownCapsule.Visible=playing() and snapshot~=nil and snapshot.canServe==true
+ if serveCountdownCapsule.Visible then
   local remaining=math.max(0,(snapshot.serveDeadline or workspace:GetServerTimeNow())-workspace:GetServerTimeNow())
   serveCountdown.Text="SERVE IN "..math.ceil(remaining).."s"
-  serveCountdown.TextColor3=remaining<=3 and coral or mint
  end
  local canTime=playing() and snapshot and snapshot.canServe and Rules
  if canTime and meterDeadline~=snapshot.serveDeadline then
@@ -542,7 +556,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=aiming==true and not (snapshot and snapshot.canServe)
