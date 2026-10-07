@@ -2,6 +2,16 @@ return function(Rules)
  assert(not Rules.hitReady(10,10.28,false),"Ordinary attempts must respect the hit cooldown")
  assert(Rules.hitReady(10,10.28,true),"Perfect timing must bypass an existing hit cooldown")
  assert(Rules.hitReady(10.28,10.28,false),"Hit cooldown must expire at its deadline")
+ assert(Rules.SERVE_TIMEOUT==15)
+ for _,side in ipairs({1,-1}) do
+  for _,serveX in ipairs({10,-10}) do
+   for _,target in ipairs({Vector3.new(999,0,999),Vector3.new(-999,0,-999),Vector3.new(0/0,0,0),Vector3.new(math.huge,0,0)}) do
+    assert(Rules.serveLandingValid(Rules.serveTarget(target,side,serveX),side,serveX),"Remote aim must stay in the legal diagonal box")
+   end
+   assert(Rules.serveLandingValid(Rules.serveTarget(nil,side,serveX),side,serveX),"Auto serve must target a legal box")
+   assert(Rules.serveTarget("spoof",side,serveX)==Rules.serveTarget(nil,side,serveX))
+  end
+ end
  assert(Rules.chargeAmount(nil,10)==0)
  assert(Rules.chargeAmount(10,10.1)==0)
  assert(math.abs(Rules.chargeAmount(10,10.7)-0.5)<1e-8,"Half charge follows the 0.4-second hold threshold")

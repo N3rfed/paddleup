@@ -33,6 +33,7 @@ local joinSerial=0
 local lastHitter={}
 local ball={p=Vector3.new(0,187,-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,speed=1,bounceAt=-100}
 local nextServe=0
+local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
 ball.shots=0
@@ -94,7 +95,7 @@ local function rosterChanged()
  if #home==0 and #away==0 then rotation:reset(); score=rotation.score end
  syncServing()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
- ball.outLanding=nil; serveReady=false; nextServe=os.clock()+1
+ ball.outLanding=nil; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
  for p,d in pairs(users) do
   d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil
   if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
@@ -166,6 +167,15 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
    vy=(183.3-from.Y+0.5*gravity*tc*tc)/tc
   else vy=math.min(vy,-3) end
  end
+ -- Preserve the landing target while bounding the complete serve launch velocity.
+ if contact and contact.maxVelocity then
+  for _=1,100 do
+   local velocity=Vector3.new((target.X-from.X)/duration,vy,(target.Z-from.Z)/duration)
+   if velocity.Magnitude<=contact.maxVelocity then break end
+   duration*=1.01
+   vy=(FLOOR-from.Y+0.5*gravity*duration*duration)/duration
+  end
+ end
  ball.lob=lob==true
  ball.p=from
  ball.g=GRAVITY
@@ -218,7 +228,7 @@ local function point(winner,reason)
  local scored=outcome=="point"
  syncServing()
  banner="TEAM "..(servingSide==1 and "1" or "2")..(scored and " POINT / " or outcome=="secondServer" and " SECOND SERVER / " or " SIDE OUT / ")..reason
- serveReady=false
+ serveReady=false; serveDeadline=nil
  for p,d in pairs(users) do d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end end
  nextServe=os.clock()+2.5
  local scorer=lastHitter[winner] or occupant(winner)
@@ -277,7 +287,7 @@ local function spawnCharacter(p,c)
  end
  if d.side~=0 and not c:FindFirstChild("PaddleFace") then paddle(c) end
  d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
- if d.side~=0 and not ball.live then serveReady=false end
+ if d.side~=0 and not ball.live then serveReady=false; serveDeadline=nil end
 end
 local function addPlayer(p)
  if users[p] then return end
@@ -373,6 +383,7 @@ local function prepareServe()
  ball.v=Vector3.zero; ball.speed=1; ball.perfects=0; ball.shots=0
  ball.bounces=0; ball.bounceAt=-100; ball.last=servingSide
  serveReady=true
+ serveDeadline=workspace:GetServerTimeNow()+Rules.SERVE_TIMEOUT
  banner="TEAM "..(servingSide==1 and "1" or "2").." / SERVER "..rotation.number.." TO SERVE"
 end
 local function facingTarget(from,r,side,depth)
@@ -382,10 +393,11 @@ local function facingTarget(from,r,side,depth)
  local distance=math.abs(-side*depth-from.Z)/math.max(0.25,math.abs(direction.Z))
  return from+direction*math.clamp(distance,12,110),momentum
 end
-local function serve(p,d,r,h,charge)
+local function serve(p,d,r,h)
  if not serveReady then return end
  if os.clock()<d.lastSwing then return end
- charge=charge or 0
+ if not serveDeadline or workspace:GetServerTimeNow()>=serveDeadline then return end
+ local _,offset,accuracy,grade=Rules.serveTiming(serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
  local botServing=servingSide==-1 and not occupant(-1)
  if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
   tell(p,"WAIT FOR THE DESIGNATED SERVER","info"); return
@@ -399,16 +411,16 @@ local function serve(p,d,r,h,charge)
   from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z)
  end
  if not botServing then lastHitter[servingSide]=p end
- serveReady=false; ball.last=servingSide; ball.shots=0
- local target,momentum
- if botServing then target=Vector3.new(-serveX,FLOOR,-servingSide*28)
- else target,momentum=facingTarget(from,r,d.side,28) end
+ d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+ serveReady=false; serveDeadline=nil; ball.last=servingSide; ball.shots=0
+ local target=Rules.timedServeTarget(servingSide,serveX,offset)
+ ball.speed=Rules.servePower(accuracy)
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,momentum,nil,false,charge,{userId=not botServing and p.UserId or nil})
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,0,nil,false,0,{userId=not botServing and p.UserId or nil,maxVelocity=Rules.MAX_SERVE_VELOCITY})
+ feedback:FireClient(p,{grade=grade,offset=offset,accuracy=accuracy},"serveTiming")
  if not botServing then
-  feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=charge},"swing")
-  if charge>0 then tell(p,"CHARGED SERVE!","perfect") end
+  feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=accuracy},"swing")
  end
  banner="SERVE  /  LET IT BOUNCE"
 end
@@ -507,6 +519,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  local r,h=rootOf(p)
  if not r or not h or h.Health<=0 then return end
  if action=="ChargeStart" then
+  if not ball.live and not (serveReady and (p.UserId==serverId or (servingSide==-1 and not occupant(-1) and p.UserId==receiverId))) then return end
   d.chargeAt=d.chargeAt or now
   p.Character:SetAttribute("ShotChargeAt",workspace:GetServerTimeNow())
  elseif action=="ChargeRelease" then
@@ -514,8 +527,8 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
    local hit=tryReturn(p,d,r,now,false,false,releasedCharge)
    if hit and d.chargeCooldownBlocked then tell(p,"CHARGED SHOT RECHARGING  /  NORMAL HIT","info") end
    d.chargeCooldownBlocked=nil
-  else serve(p,d,r,h,releasedCharge) end
- elseif action=="Serve" or (action=="Swing" and not ball.live) then
+  else serve(p,d,r,h) end
+ elseif action=="ServeTimingStop" or action=="Serve" or (action=="Swing" and not ball.live) then
   serve(p,d,r,h)
  elseif action=="Dive" then
   d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
@@ -584,6 +597,23 @@ RunService.Heartbeat:Connect(function(dt)
  for _,p in ipairs(bot:GetChildren()) do if p:IsA("BasePart") then p.Transparency=hasBot and 0 or 1 end end
  tag.Enabled=hasBot
  if not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
+ if serveReady and serveDeadline and workspace:GetServerTimeNow()>=serveDeadline then
+  local server=serverId and Players:GetPlayerByUserId(serverId)
+  for player,data in pairs(users) do
+   data.chargeAt=nil
+   if player.Character then player.Character:SetAttribute("ShotChargeAt",nil) end
+  end
+  serveReady=false; serveDeadline=nil
+  ball.last=servingSide; ball.shots=0; ball.speed=Rules.servePower(0)
+  local controller=server or (receiverId and Players:GetPlayerByUserId(receiverId))
+  if server then lastHitter[servingSide]=server end
+  local from=Vector3.new(serveX,184,servingSide*46)
+  launch(from,Rules.serveTarget(nil,servingSide,serveX),false,false,false,0,nil,false,0,
+   {userId=server and server.UserId or nil,maxVelocity=Rules.MAX_SERVE_VELOCITY})
+  if controller then feedback:FireClient(controller,{grade="TIMEOUT / WEAK",offset=-1,accuracy=0},"serveTiming") end
+  if server then feedback:FireAllClients({userId=server.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=0},"swing") end
+  banner="AUTO SERVE  /  LET IT BOUNCE"
+ end
  if ball.live then
   accumulator+=math.min(dt,0.1)
   while accumulator>=1/120 and ball.live do
@@ -712,6 +742,7 @@ RunService.Heartbeat:Connect(function(dt)
     perfects=ball.perfects,speed=ball.speed,score=score,banner=banner,
     serveReady=serveReady,servingSide=servingSide,serveX=serveX,serverId=serverId,receiverId=receiverId,serverNumber=rotation.number,
     serverName=(serverId and Players:GetPlayerByUserId(serverId) and Players:GetPlayerByUserId(serverId).DisplayName) or "Practice Partner",
+    serveDeadline=serveDeadline,serveRemaining=serveDeadline and math.max(0,serveDeadline-workspace:GetServerTimeNow()) or 0,
     canServe=serveReady and (p.UserId==serverId or (hasBot and servingSide==-1 and p.UserId==receiverId)),
     mustBounce=ball.live and ball.shots<2 and ball.bounces==0,
     side=d.side,bot=hasBot,stamina=d.stamina,dive=math.max(0,d.diveAt-now),
