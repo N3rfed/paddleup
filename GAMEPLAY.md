@@ -219,12 +219,7 @@ Hold left mouse and release to hit. Taps remain normal returns; charge builds af
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
 
-Body hits produce a short visible deflection, including hits on the practice
-partner. Horizontal travel reverses, loses 85% of its speed, and caps at 8
-studs per second. A 3-stud-per-second upward bump keeps the ball low. Body
-contact locks out paddle returns and further body hits until the ball lands,
-then awards the rally to the opposing team as a body-hit fault. Paddle parts
-and spectators do not trigger body hits.
+The ball passes through player and practice-partner bodies without deflecting, blocking paddle returns, or awarding a body-hit fault.
 
 
 ### Serve timing meter
@@ -234,3 +229,5 @@ Serve control starts a 15-second countdown and a slim 10-by-140-pixel capsule tr
 Accuracy continuously scales launch power from 0.6 at the edges to 1.22 at dead center, subject to net clearance and the server velocity cap. Center serves target the legal diagonal box; timing error shifts placement toward the sidelines and service-box boundaries, with edge hits able to fault. Foot-fault rules still apply. Timeout automatically sends a minimum-power serve into the legal box, clears held inputs, and hides the meter. Round changes, focus loss, menus, and respawns clear meter input. Rally hold-to-charge behavior is unchanged.
 
 The serve meter uses a dark translucent rounded capsule, muted outer zones, a neon cyan target window, and a white pill needle with cyan glow. It fades and scales in over 0.2 seconds, freezes on input release, and fades out over 0.16 seconds after the server confirms the hit.
+
+Dive balance: each accepted dive costs 35 stamina and starts a strict 3.5-second server cooldown. Stamina recovery waits 1.5 seconds after spending, then restores 12.1 points per second (55% of the previous 22). The dedicated dive HUD bar turns #3A4048 while cooling down; its dark overlay drains smoothly using the server deadline, and the full cyan ready bar returns at expiry. Cooldown input is blocked on both client and server.

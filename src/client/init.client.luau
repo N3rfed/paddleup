@@ -189,11 +189,21 @@ local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
 text(hitPanel,"HOLD LMB / RELEASE HIT  /  RMB SOFT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
-local staminaPanel=panel(Vector2.new(490,738),Vector2.new(300,42))
+local staminaPanel=panel(Vector2.new(490,720),Vector2.new(300,60))
 staminaPanel.Name="Stamina"
 local staminaLabel=text(staminaPanel,"STAMINA",Vector2.new(12,3),Vector2.new(270,18),10)
 local staminaTrack=Instance.new("Frame",staminaPanel); staminaTrack.Position=UDim2.fromOffset(12,28); staminaTrack.Size=UDim2.fromOffset(276,5); staminaTrack.BackgroundColor3=Color3.fromRGB(52,70,73); staminaTrack.BorderSizePixel=0
 local staminaFill=Instance.new("Frame",staminaTrack); staminaFill.Size=UDim2.fromScale(1,1); staminaFill.BackgroundColor3=mint; staminaFill.BorderSizePixel=0
+local diveGray=Color3.fromRGB(58,64,72)
+local diveLabel=text(staminaPanel,"DIVE READY",Vector2.new(12,33),Vector2.new(270,14),10,electric)
+local diveTrack=Instance.new("Frame",staminaPanel)
+diveTrack.Name="DiveCooldown"; diveTrack.Position=UDim2.fromOffset(12,51); diveTrack.Size=UDim2.fromOffset(276,5)
+diveTrack.BackgroundColor3=electric; diveTrack.BorderSizePixel=0; round(diveTrack,3)
+local diveOverlay=Instance.new("Frame",diveTrack)
+diveOverlay.Name="CooldownSweep"; diveOverlay.AnchorPoint=Vector2.new(1,0); diveOverlay.Position=UDim2.fromScale(1,0)
+diveOverlay.Size=UDim2.fromScale(0,1); diveOverlay.BackgroundColor3=Color3.fromRGB(20,25,32)
+diveOverlay.BackgroundTransparency=0.15; diveOverlay.BorderSizePixel=0; round(diveOverlay,3)
+local diveReadyAt=0
 local abilities=panel(Vector2.new(902,659),Vector2.new(350,112))
 local function button(label,y,action)
  local b=Instance.new("TextButton",abilities); b.Position=UDim2.fromOffset(12,y); b.Size=UDim2.fromOffset(326,40); b.BackgroundColor3=Color3.fromRGB(38,66,72); b.BorderSizePixel=0; b.Text=label; b.TextColor3=cream; b.Font=Enum.Font.GothamMedium; b.TextSize=14; round(b,8)
@@ -242,7 +252,7 @@ local function animateSwing(softRequested,charge)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
 local function dive()
- if not playing() then return end
+ if not playing() or workspace:GetServerTimeNow()<diveReadyAt or (snapshot and snapshot.stamina<(Rules and Rules.DIVE_STAMINA_COST or 35)) then return end
  cancelCharge()
  local character=player.Character
  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
@@ -364,7 +374,7 @@ state.OnClientEvent:Connect(function(data)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
  staminaFill.Size=UDim2.fromScale(data.stamina/100,1)
- staminaLabel.Text=data.dive>0 and string.format("DIVE %.1fs",data.dive) or "STAMINA"
+ diveReadyAt=data.diveReadyAt or (workspace:GetServerTimeNow()+data.dive)
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
@@ -421,6 +431,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="diveMotion" then
+  if message.userId==player.UserId then diveReadyAt=message.diveReadyAt or (workspace:GetServerTimeNow()+3.5) end
   DiveController.play(message.userId,message.direction)
   return
  end
@@ -454,6 +465,15 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   if module then Rules=require(module) end
  end
  local now=os.clock()
+ local diveRemaining=math.max(0,diveReadyAt-workspace:GetServerTimeNow())
+ local diveCooling=diveRemaining>0
+ diveTrack.BackgroundColor3=diveCooling and diveGray or electric
+ diveOverlay.Visible=diveCooling
+ diveOverlay.Size=UDim2.fromScale(math.clamp(diveRemaining/(Rules and Rules.DIVE_COOLDOWN or 3.5),0,1),1)
+ diveLabel.Text=diveCooling and string.format("DIVE %.1fs",diveRemaining) or "DIVE READY"
+ diveLabel.TextColor3=diveCooling and Color3.fromRGB(147,155,165) or electric
+ touchDive.BackgroundColor3=diveCooling and diveGray or electric
+ touchDive.AutoButtonColor=not diveCooling
  serveCountdown.Visible=playing() and snapshot~=nil and snapshot.canServe==true
  if serveCountdown.Visible then
   local remaining=math.max(0,(snapshot.serveDeadline or workspace:GetServerTimeNow())-workspace:GetServerTimeNow())

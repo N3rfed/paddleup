@@ -1,6 +1,20 @@
 -- Court coordinates match the painted lines in World.
 local Rules={HALF_WIDTH=20,BASELINE=40,KITCHEN=14,HIT_RANGE=12,PERFECT_RANGE=9,SLAM_RANGE=16,SLAM_HORIZONTAL=8,REAR_REACH=1.5,SLAM_MIN_HEIGHT=0.5,SLAM_EXTRA_HEIGHT=5,BACK_LIMIT=60}
 
+Rules.DIVE_COOLDOWN=3.5
+Rules.DIVE_STAMINA_COST=35
+Rules.STAMINA_RECOVERY_DELAY=1.5
+Rules.STAMINA_REGEN_RATE=22*0.55
+
+function Rules.canDive(stamina,readyAt,now)
+ return now>=readyAt and stamina>=Rules.DIVE_STAMINA_COST
+end
+
+function Rules.recoverStamina(stamina,recoveryAt,now,dt)
+ local elapsed=math.min(math.max(0,dt),math.max(0,now-recoveryAt))
+ return math.min(100,stamina+elapsed*Rules.STAMINA_REGEN_RATE)
+end
+
 Rules.SERVE_TIMEOUT=15
 Rules.MAX_SERVE_VELOCITY=90
 
