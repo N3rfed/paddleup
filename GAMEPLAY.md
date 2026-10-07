@@ -183,7 +183,7 @@ windup/chop animation. Their shot speed starts at 90% of the previous base;
 the multiplier grows by 0.2 for each extra 1x rally speed, capped at 1.3.
 
 Only the serving side scores. A receiving-side rally win advances to the next
-server or causes a side-out without adding a point. Ball gravity remains 45 studs/s? for every shot; speed affects
+server or causes a side-out without adding a point. Base gravity is 45 studs/s^2; lob descent and post-bounce arcs use 72 studs/s^2. Speed affects
 launch velocity and flight time. Net clearance can limit shot speed.
 The camera stays toward the opponent, with 25? left/right aim limits and subtle
 movement sway. Stamina stays visible in normal play. Out first landings show
@@ -230,4 +230,6 @@ Accuracy continuously scales launch power from 0.6 at the edges to 1.22 at dead 
 
 The serve meter uses a dark translucent rounded capsule, muted outer zones, a neon cyan target window, and a white pill needle with cyan glow. It fades and scales in over 0.2 seconds, freezes on input release, and fades out over 0.16 seconds after the server confirms the hit.
 
-Dive balance: each accepted dive costs 35 stamina and starts a strict 3.5-second server cooldown. Stamina recovery waits 1.5 seconds after spending, then restores 12.1 points per second (55% of the previous 22). The dedicated dive HUD bar turns #3A4048 while cooling down; its dark overlay drains smoothly using the server deadline, and the full cyan ready bar returns at expiry. Cooldown input is blocked on both client and server.
+Dive balance: each accepted dive costs 35 stamina and starts a strict 1.75-second server cooldown. Stamina recovery waits 1.0 second after spending, then restores 12.1 points per second (55% of the previous 22). The dedicated dive HUD bar turns #3A4048 while cooling down; its dark overlay drains smoothly using the server deadline, and the full cyan ready bar returns at expiry. Cooldown input is blocked on both client and server.
+
+Lob physics: upward flight uses gravity 45 studs/s^2; descent and the entire post-bounce arc use 72 studs/s^2 (1.6x). Lob court contact applies 0.45 vertical restitution with no minimum upward rebound, and retains 75% of both horizontal velocity components. Launch targeting, landing predictions, and client extrapolation use the same apex-split trajectory. The normal double-bounce fault still ends an unreturned rally at the next court contact.

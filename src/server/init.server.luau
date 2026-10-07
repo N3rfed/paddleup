@@ -116,7 +116,7 @@ end
 local function landing()
  if not ball.live then return ball.p,0 end
  local h=math.max(0,ball.p.Y-FLOOR)
- local t=(ball.v.Y+math.sqrt(ball.v.Y*ball.v.Y+2*ball.g*h))/ball.g
+ local t=Rules.ballLandingTime(h,ball.v.Y,GRAVITY,ball.lob,ball.bounces>0)
  return ball.p+Vector3.new(ball.v.X*t,-h,ball.v.Z*t),t
 end
 local function perfect(now)
@@ -128,7 +128,7 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  -- A blue arc advertises an overhead opportunity, not a guaranteed legal hit.
  for step=0,120 do
   local t=duration*step/120
-  local position=from+velocity*t-Vector3.new(0,0.5*gravity*t*t,0)
+  local position=Rules.advanceBall(from,velocity,gravity,t,true,false)
   local side=-ball.last
   local root=Vector3.new(math.clamp(position.X,-Rules.HALF_WIDTH,Rules.HALF_WIDTH),184,side*(Rules.KITCHEN+2))
   local headTop,armLength=187,4
@@ -140,7 +140,7 @@ end
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
  local speedScale=(slam and Rules.slamSpeedScale(ball.speed) or ball.speed)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  if not slam and not soft then speedScale*=1+0.22*(charge or 0) end
- -- Speed changes flight time and launch velocity; downward gravity stays constant.
+ -- Speed changes flight time; lobs use heavier gravity after their apex.
  if soft then speedScale*=0.65 end
  local distance=(Vector3.new(target.X,0,target.Z)-Vector3.new(from.X,0,from.Z)).Magnitude
  local gravity=GRAVITY
@@ -156,6 +156,17 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
   if netY<185.2 then
    duration=math.sqrt(math.max(0.01,2*(185.2-from.Y-(FLOOR-from.Y)*crossing)/(gravity*crossing*(1-crossing))))
    vy=(FLOOR-from.Y+0.5*gravity*duration*duration)/duration
+  end
+ end
+ if lob then
+  vy=Rules.lobLaunchY(from.Y-FLOOR,duration,GRAVITY)
+  if not mishit and crossing>0 and crossing<1 then
+   for _=1,100 do
+    local sample=Rules.advanceBall(from,Vector3.new(0,vy,0),GRAVITY,duration*crossing,true,false)
+    if sample.Y>=185.2 then break end
+    duration*=1.03
+    vy=Rules.lobLaunchY(from.Y-FLOOR,duration,GRAVITY)
+   end
   end
  end
  if mishit then
@@ -176,10 +187,10 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  end
  ball.lob=lob==true
  ball.p=from
- ball.g=GRAVITY
+ ball.g=ball.lob and vy<=0 and GRAVITY*Rules.LOB_GRAVITY_SCALE or GRAVITY
  ball.v=Vector3.new((target.X-from.X)/duration,vy,(target.Z-from.Z)/duration)
  ball.shotId=(ball.shotId or 0)+1
- ball.slamLob=ball.lob and lobCrossesSlamZone(from,ball.v,ball.g,duration)
+ ball.slamLob=ball.lob and lobCrossesSlamZone(from,ball.v,GRAVITY,duration)
  ball.bounces=0; ball.bounceAt=-100; ball.live=true
  -- All viewers receive the same accepted contact, including practice-partner hits.
  contact=contact or {}
@@ -598,8 +609,7 @@ RunService.Heartbeat:Connect(function(dt)
    end
    if not ball.live then break end
    local previous=ball.p
-   ball.p+=ball.v*step+Vector3.new(0,-0.5*ball.g*step*step,0)
-   ball.v+=Vector3.new(0,-ball.g*step,0)
+   ball.p,ball.v,ball.g=Rules.advanceBall(ball.p,ball.v,GRAVITY,step,ball.lob,ball.bounces>0)
    if previous.Z*ball.p.Z<=0 and math.abs(ball.p.X)<21 and ball.p.Y<184.65 then
     point(-ball.last,"Net")
    elseif ball.p.Y<=FLOOR then
@@ -622,7 +632,8 @@ RunService.Heartbeat:Connect(function(dt)
      if ball.bounces>=2 then point(ball.last,"Double bounce")
      else
       ball.p=Vector3.new(ball.p.X,FLOOR,ball.p.Z)
-      ball.v=Vector3.new(ball.v.X,math.max(15,-ball.v.Y*0.78),ball.v.Z)
+      ball.v=Rules.bounceVelocity(ball.v,ball.lob)
+      ball.g=GRAVITY*(ball.lob and Rules.LOB_GRAVITY_SCALE or 1)
       ball.bounceAt=now
       ball.bouncePoint=ball.p
      end
@@ -702,7 +713,7 @@ RunService.Heartbeat:Connect(function(dt)
   end
   for p,d in pairs(users) do
    state:FireClient(p,{
-    outLanding=ball.outLanding,p=ball.p,v=ball.v,g=ball.g,live=ball.live,landing=target,eta=t,
+    outLanding=ball.outLanding,p=ball.p,v=ball.v,g=ball.g,lob=ball.lob,live=ball.live,landing=target,eta=t,
     slammable=ball.live and ball.slamLob,shotId=ball.shotId,slamReady=slamReady(p,d,now),
     green=ball.live and perfect(now),last=ball.last,bounces=ball.bounces,
     perfects=ball.perfects,speed=ball.speed,score=score,banner=banner,

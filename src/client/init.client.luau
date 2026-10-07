@@ -446,7 +446,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   return
  end
  if kind=="diveMotion" then
-  if message.userId==player.UserId then diveReadyAt=message.diveReadyAt or (workspace:GetServerTimeNow()+3.5) end
+  if message.userId==player.UserId then diveReadyAt=message.diveReadyAt or (workspace:GetServerTimeNow()+(Rules and Rules.DIVE_COOLDOWN or 1.75)) end
   DiveController.play(message.userId,message.direction)
   return
  end
@@ -484,7 +484,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local diveCooling=diveRemaining>0
  diveTrack.BackgroundColor3=diveCooling and diveGray or electric
  diveOverlay.Visible=diveCooling
- diveOverlay.Size=UDim2.fromScale(math.clamp(diveRemaining/(Rules and Rules.DIVE_COOLDOWN or 3.5),0,1),1)
+ diveOverlay.Size=UDim2.fromScale(math.clamp(diveRemaining/(Rules and Rules.DIVE_COOLDOWN or 1.75),0,1),1)
  diveLabel.Text=diveCooling and string.format("DIVE %.1fs",diveRemaining) or "DIVE READY"
  diveLabel.TextColor3=diveCooling and Color3.fromRGB(147,155,165) or electric
  touchDive.BackgroundColor3=diveCooling and diveGray or electric
@@ -533,7 +533,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local age=snapshot and math.min(now-receivedAt,0.12) or 0
  local predicted
  if snapshot then
-  predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0)
+  if Rules then predicted=Rules.advanceBall(snapshot.p,snapshot.v,45,age,snapshot.lob,(snapshot.bounces or 0)>0)
+  else predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0) end
   predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
   if snapshot.serveReady and Rules then
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
