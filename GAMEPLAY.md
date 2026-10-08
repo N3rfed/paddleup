@@ -183,7 +183,7 @@ windup/chop animation. Their shot speed starts at 90% of the previous base;
 the multiplier grows by 0.2 for each extra 1x rally speed, capped at 1.3.
 
 Only the serving side scores. A receiving-side rally win advances to the next
-server or causes a side-out without adding a point. Ball gravity remains 45 studs/s? for every shot; speed affects
+server or causes a side-out without adding a point. Base gravity is 45 studs/s^2; lob descent and post-bounce arcs use 72 studs/s^2. Speed affects
 launch velocity and flight time. Net clearance can limit shot speed.
 The camera stays toward the opponent, with 25? left/right aim limits and subtle
 movement sway. Stamina stays visible in normal play. Out first landings show
@@ -215,13 +215,21 @@ The score-only HUD keeps Team 1 and Team 2 in fixed order, followed by server nu
 
 Charging now winds the paddle arm back with torso rotation and a balancing off arm. Release swings continue across the body before easing into locomotion; slams use a longer downward follow-through. Charge poses replicate to opponents. Successful returns include contact position and launch direction so the R15 arm solve puts the broad paddle face against the ball, within natural arm reach. The existing generous gameplay hitboxes remain in place, so far contacts can exceed the visual arm reach.
 
-Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.4 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves accept the same charge-dependent launch boost, subject to net clearance. The ball stays in the designated server's off hand until release and launches from that hand; diagonal service and foot-fault checks still apply.
+Hold left mouse and release to hit. Taps remain normal returns; charge builds after 0.4 seconds and caps at one second, with a meter below the crosshair. Clean charged returns increase rally speed by 7% and gain up to 22% launch speed over normal returns, below the spike speed profile. Spikes retain their +10% rally increase. Serves use the timing meter described below. The ball stays in the designated server's off hand until release and launches from that hand; diagonal service and foot-fault checks still apply.
 
 Mistimed charged returns keep the lob/net timing rules and -5% rally penalty. Higher charge adds progressively more sideways variance and long-distance overshoot; targets are not clamped to the court. Dive, focus loss, menus, respawn, and rally results cancel charging. Charge duration and random shot error are calculated by the server.
 
-Body hits produce a short visible deflection, including hits on the practice
-partner. Horizontal travel reverses, loses 85% of its speed, and caps at 8
-studs per second. A 3-stud-per-second upward bump keeps the ball low. Body
-contact locks out paddle returns and further body hits until the ball lands,
-then awards the rally to the opposing team as a body-hit fault. Paddle parts
-and spectators do not trigger body hits.
+The ball passes through player and practice-partner bodies without deflecting, blocking paddle returns, or awarding a body-hit fault.
+
+
+### Serve timing meter
+
+Serve control starts a 15-second countdown and a slim 10-by-140-pixel capsule track to the right of the avatar, with a needle that repeats an up/down/up cycle every 1.6 seconds. Hold mouse, F, or a world touch and release at the center; the touch serve button supports the same input. The center green zone is Perfect (normalized offset within 0.12), the adjacent yellow zones are Good (within 0.4), and outer red zones are Early/Late and weak. Release immediately stops and hides the meter. The unlabeled bar shows only its track, center highlight, and needle. Accuracy text appears above the avatar only after the server launches the ball, then fades out within 0.6 seconds. The server calculates the result using its own clock.
+
+Accuracy continuously scales launch power from 0.6 at the edges to 1.22 at dead center, subject to net clearance and the server velocity cap. Center serves target the legal diagonal box; timing error shifts placement toward the sidelines and service-box boundaries, with edge hits able to fault. Foot-fault rules still apply. Timeout automatically sends a minimum-power serve into the legal box, clears held inputs, and hides the meter. Round changes, focus loss, menus, and respawns clear meter input. Rally hold-to-charge behavior is unchanged.
+
+The serve meter uses a dark translucent rounded capsule, muted outer zones, a neon cyan target window, and a white pill needle with cyan glow. It fades and scales in over 0.2 seconds, freezes on input release, and fades out over 0.16 seconds after the server confirms the hit.
+
+Dive balance: each accepted dive costs 35 stamina and starts a strict 1.75-second server cooldown. Stamina recovery waits 1.0 second after spending, then restores 12.1 points per second (55% of the previous 22). The dedicated dive HUD bar turns #3A4048 while cooling down; its dark overlay drains smoothly using the server deadline, and the full cyan ready bar returns at expiry. Cooldown input is blocked on both client and server.
+
+Lob physics: upward flight uses gravity 45 studs/s^2; descent and the entire post-bounce arc use 72 studs/s^2 (1.6x). Lob court contact applies 0.45 vertical restitution with no minimum upward rebound, and retains 75% of both horizontal velocity components. Launch targeting, landing predictions, and client extrapolation use the same apex-split trajectory. The normal double-bounce fault still ends an unreturned rally at the next court contact.

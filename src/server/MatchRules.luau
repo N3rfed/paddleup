@@ -1,6 +1,113 @@
 -- Court coordinates match the painted lines in World.
 local Rules={HALF_WIDTH=20,BASELINE=40,KITCHEN=14,HIT_RANGE=12,PERFECT_RANGE=9,SLAM_RANGE=16,SLAM_HORIZONTAL=8,REAR_REACH=1.5,SLAM_MIN_HEIGHT=0.5,SLAM_EXTRA_HEIGHT=5,BACK_LIMIT=60}
 
+Rules.DIVE_COOLDOWN=1.75
+Rules.DIVE_STAMINA_COST=35
+Rules.STAMINA_RECOVERY_DELAY=1.0
+Rules.STAMINA_REGEN_RATE=22*0.55
+
+function Rules.canDive(stamina,readyAt,now)
+ return now>=readyAt and stamina>=Rules.DIVE_STAMINA_COST
+end
+
+function Rules.recoverStamina(stamina,recoveryAt,now,dt)
+ local elapsed=math.min(math.max(0,dt),math.max(0,now-recoveryAt))
+ return math.min(100,stamina+elapsed*Rules.STAMINA_REGEN_RATE)
+end
+
+Rules.LOB_RESTITUTION=0.45
+Rules.LOB_GRAVITY_SCALE=1.6
+Rules.LOB_HORIZONTAL_RETENTION=0.75
+
+-- Split a frame at the apex so heavier descent gravity never changes ascent.
+function Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce)
+ if lob and not postBounce and velocity.Y>0 then
+  local ascent=math.min(dt,velocity.Y/gravity)
+  position+=velocity*ascent-Vector3.new(0,0.5*gravity*ascent*ascent,0)
+  velocity-=Vector3.new(0,gravity*ascent,0)
+  dt-=ascent
+ end
+ local acceleration=gravity*(lob and (postBounce or velocity.Y<=0) and Rules.LOB_GRAVITY_SCALE or 1)
+ position+=velocity*dt-Vector3.new(0,0.5*acceleration*dt*dt,0)
+ velocity-=Vector3.new(0,acceleration*dt,0)
+ return position,velocity,acceleration
+end
+
+function Rules.ballLandingTime(height,vy,gravity,lob,postBounce)
+ height=math.max(0,height)
+ if lob and not postBounce and vy>0 then
+  local ascent=vy/gravity
+  local peak=height+vy*vy/(2*gravity)
+  return ascent+math.sqrt(2*peak/(gravity*Rules.LOB_GRAVITY_SCALE))
+ end
+ local acceleration=gravity*(lob and Rules.LOB_GRAVITY_SCALE or 1)
+ return (vy+math.sqrt(vy*vy+2*acceleration*height))/acceleration
+end
+
+-- Solve the launch arc with the same piecewise gravity used by simulation.
+function Rules.lobLaunchY(height,duration,gravity)
+ local descending=(0.5*gravity*Rules.LOB_GRAVITY_SCALE*duration*duration-height)/duration
+ if descending<=0 then return descending end
+ local low,high=0,gravity*duration
+ for _=1,40 do
+  local vy=(low+high)/2
+  local descent=duration-vy/gravity
+  local y=height+vy*vy/(2*gravity)-0.5*gravity*Rules.LOB_GRAVITY_SCALE*descent*descent
+  if y>0 then high=vy else low=vy end
+ end
+ return (low+high)/2
+end
+
+function Rules.bounceVelocity(velocity,lob)
+ if lob then
+  return Vector3.new(velocity.X*Rules.LOB_HORIZONTAL_RETENTION,
+   math.max(0,-velocity.Y)*Rules.LOB_RESTITUTION,velocity.Z*Rules.LOB_HORIZONTAL_RETENTION)
+ end
+ return Vector3.new(velocity.X,math.max(15,-velocity.Y*0.78),velocity.Z)
+end
+
+Rules.SERVE_TIMEOUT=15
+Rules.MAX_SERVE_VELOCITY=90
+
+Rules.SERVE_METER_PERIOD=1.6
+Rules.SERVE_PERFECT_OFFSET=0.12
+Rules.SERVE_GOOD_OFFSET=0.4
+
+-- A full left/right/left cycle; offset is signed and normalized to [-1,1].
+function Rules.serveTiming(started,now)
+ local phase=math.max(0,now-started)%Rules.SERVE_METER_PERIOD/Rules.SERVE_METER_PERIOD
+ local needle=phase<0.5 and phase*2 or (1-phase)*2
+ local offset=needle*2-1
+ local accuracy=1-math.abs(offset)
+ local grade=math.abs(offset)<=Rules.SERVE_PERFECT_OFFSET and "PERFECT!"
+  or math.abs(offset)<=Rules.SERVE_GOOD_OFFSET and "GOOD"
+  or offset<0 and "EARLY" or "LATE"
+ return needle,offset,accuracy,grade
+end
+
+function Rules.servePower(accuracy)
+ return 0.6+0.62*math.clamp(accuracy,0,1)
+end
+
+function Rules.timedServeTarget(side,serveX,offset)
+ offset=math.clamp(offset,-1,1)
+ local error=math.abs(offset)
+ -- Center hits land deep in the diagonal box. Edge hits can miss the lines.
+ return Vector3.new(-math.sign(serveX)*(10+12*error*error),181.7,-side*(28+14*offset*error))
+end
+
+-- Ignore invalid remote targets and keep aim inside the diagonal service box.
+function Rules.serveTarget(target,side,serveX)
+ local fallback=Vector3.new(-serveX,181.7,-side*28)
+ if typeof(target)~="Vector3" then return fallback end
+ for _,value in ipairs({target.X,target.Y,target.Z}) do
+  if value~=value or math.abs(value)==math.huge then return fallback end
+ end
+ local x=math.clamp(target.X* -math.sign(serveX),1,Rules.HALF_WIDTH-1)
+ local depth=math.clamp(-target.Z*side,Rules.KITCHEN+2,Rules.BASELINE-2)
+ return Vector3.new(-math.sign(serveX)*x,181.7,-side*depth)
+end
+
 function Rules.serveX(side,score)
  return side*(score%2==0 and 10 or -10)
 end
