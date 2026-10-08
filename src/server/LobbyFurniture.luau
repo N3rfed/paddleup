@@ -2,11 +2,12 @@
 -- No animation loops, scripts, external assets, or gameplay dependencies.
 local Furniture={}
 Furniture.Palette={
- ivory=Color3.fromRGB(229,222,206), linen=Color3.fromRGB(210,204,185),
- forest=Color3.fromRGB(40,69,58), teal=Color3.fromRGB(65,91,81),
- walnut=Color3.fromRGB(83,59,44), brass=Color3.fromRGB(157,133,88),
- sage=Color3.fromRGB(125,145,111), ink=Color3.fromRGB(38,45,40),
- warm=Color3.fromRGB(255,232,197),
+ ivory=Color3.fromRGB(248,240,220), linen=Color3.fromRGB(216,200,175), beige=Color3.fromRGB(194,174,146), upholstery=Color3.fromRGB(57,103,92),
+ forest=Color3.fromRGB(16,110,88), teal=Color3.fromRGB(32,143,139),
+ walnut=Color3.fromRGB(55,34,31), brass=Color3.fromRGB(231,181,67),
+ sage=Color3.fromRGB(113,152,99), ink=Color3.fromRGB(28,37,61),
+ warm=Color3.fromRGB(255,241,215), blue=Color3.fromRGB(40,105,255),
+ pink=Color3.fromRGB(241,70,160), purple=Color3.fromRGB(132,66,214), orange=Color3.fromRGB(255,145,55),
 }
 function Furniture.new()
  local P=Furniture.Palette
@@ -62,7 +63,7 @@ function Furniture.new()
   end
   for _,x in ipairs({-5.9,5.9}) do
    part("Soft armrest",Vector3.new(1,2.5,5),Vector3.new(x,2.3,0),P.forest,Enum.Material.Fabric,true)
-   local pillow=ball("Linen throw pillow",Vector3.new(2,2,0.9),Vector3.new(x*0.74,3,-0.1),P.linen,Enum.Material.Fabric)
+   local pillow=ball("Linen throw pillow",Vector3.new(2,2,0.9),Vector3.new(x*0.74,3,-0.1),x>0 and P.teal or P.orange,Enum.Material.Fabric)
    pillow.CFrame*=CFrame.Angles(0,0,x>0 and 0.15 or -0.15)
   end
   part("Sage blanket on cushion",Vector3.new(2.2,0.12,3.5),Vector3.new(-2.6,2.3,-0.3),P.sage,Enum.Material.Fabric)
@@ -79,19 +80,19 @@ function Furniture.new()
  end)
  blueprint("CafeChair",function()
   legs(3.4,3.4,1.8)
-  seat("Cafe seat",Vector3.new(3.4,0.5,3.4),Vector3.new(0,2,-0.1),P.teal)
-  part("Curved look back",Vector3.new(3.4,2.5,0.6),Vector3.new(0,3.3,1.4),P.teal,Enum.Material.Fabric,true)
+  seat("Cafe seat",Vector3.new(3.4,0.5,3.4),Vector3.new(0,2,-0.1),P.linen)
+  part("Curved look back",Vector3.new(3.4,2.5,0.6),Vector3.new(0,3.3,1.4),P.linen,Enum.Material.Fabric,true)
  end)
  blueprint("BarStool",function()
   disc("Stool foot",2.5,0.2,Vector3.new(0,0.1,0),P.ink,Enum.Material.Metal,true)
   part("Brass stem",Vector3.new(0.35,3,0.35),Vector3.new(0,1.6,0),P.brass,Enum.Material.Metal)
   disc("Footrest",1.8,0.15,Vector3.new(0,1.3,0),P.brass,Enum.Material.Metal)
-  seat("Leather stool",Vector3.new(2.8,0.5,2.7),Vector3.new(0,3.25,0),P.forest)
-  part("Stool back",Vector3.new(2.8,1.2,0.5),Vector3.new(0,4.1,1.15),P.forest,Enum.Material.Fabric,true)
+  seat("Leather stool",Vector3.new(2.8,0.5,2.7),Vector3.new(0,3.25,0),P.upholstery)
+  part("Stool back",Vector3.new(2.8,1.2,0.5),Vector3.new(0,4.1,1.15),P.upholstery,Enum.Material.Fabric,true)
  end)
  blueprint("CoffeeTable",function()
   legs(8,4.5,1.6)
-  part("Walnut coffee table",Vector3.new(8,0.4,4.5),Vector3.new(0,1.8,0),P.walnut,Enum.Material.Wood,true)
+  part("Walnut coffee table",Vector3.new(8,0.4,4.5),Vector3.new(0,1.8,0),P.ivory,Enum.Material.Marble,true)
   part("Brass edge",Vector3.new(8.1,0.1,4.6),Vector3.new(0,1.61,0),P.brass,Enum.Material.Metal)
  end)
  blueprint("SideTable",function()
@@ -229,6 +230,22 @@ function Furniture.new()
    end
   end
   part("Engraved trophy plate",Vector3.new(1.1,0.18,0.05),Vector3.new(0,0.22,0.83),P.brass,Enum.Material.Metal)
+ end)
+ blueprint("Refreshments",function()
+  part("Serving tray",Vector3.new(3.4,0.15,2.2),Vector3.new(0,0.1,0),P.brass,Enum.Material.Metal)
+  for _,x in ipairs({-0.9,0.9}) do
+   disc("Smoothie glass",0.75,1.4,Vector3.new(x,0.85,0),x<0 and P.pink or P.orange)
+   part("Striped straw",Vector3.new(0.08,1,0.08),Vector3.new(x,1.8,0),P.ivory)
+  end
+  ball("Fresh orange",Vector3.new(0.8,0.8,0.8),Vector3.new(0,0.6,0.5),P.orange)
+ end)
+ blueprint("BallSculpture",function()
+  disc("Marble sculpture plinth",4,2,Vector3.new(0,1,0),P.ivory,Enum.Material.Marble,true)
+  ball("Golden pickleball",Vector3.new(3.5,3.5,3.5),Vector3.new(0,3.8,0),P.brass,Enum.Material.Metal)
+  for i=1,8 do
+   local a=i*math.pi/4
+   ball("Pickleball perforation",Vector3.new(0.45,0.45,0.12),Vector3.new(math.sin(a)*1.1,3.8+math.cos(a)*1.1,1.42),P.ink)
+  end
  end)
  local self={}
  function self.place(kind,parent,frame)

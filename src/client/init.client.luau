@@ -18,7 +18,7 @@ local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
-local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 end
+local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -127,7 +127,7 @@ touchSwing.Visible=UIS.TouchEnabled
 local touchDive=touchSwing:Clone(); touchDive.Parent=canvas; touchDive.Position=UDim2.fromOffset(1070,590); touchDive.Size=UDim2.fromOffset(180,45); touchDive.Text="DIVE"
 local devToggle=Instance.new("TextButton",gui)
 devToggle.Name="DeveloperToggle"; devToggle.AnchorPoint=Vector2.new(1,0)
-devToggle.Position=UDim2.new(1,-16,0,16); devToggle.Size=UDim2.fromOffset(190,32)
+devToggle.Position=UDim2.new(1,-80,0,24); devToggle.Size=UDim2.fromOffset(190,32)
 devToggle.BackgroundColor3=dark; devToggle.TextColor3=cream; devToggle.Font=Enum.Font.GothamMedium; devToggle.TextSize=12
 round(devToggle,8)
 local function setDeveloperMode(enabled)
@@ -210,6 +210,9 @@ UIS.WindowFocusReleased:Connect(cancelCharge)
 UIS.TextBoxFocused:Connect(cancelCharge)
 game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
+player:GetAttributeChangedSignal("LeaveConfirmationOpen"):Connect(function()
+ if player:GetAttribute("LeaveConfirmationOpen") then cancelCharge() end
+end)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
  if not playing() or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -337,6 +340,8 @@ feedback.OnClientEvent:Connect(function(message,kind)
   TweenService:Create(visual,TweenInfo.new(0.25),{Size=Vector3.new(0.85,0.85,0.85)}):Play()
  end
 end)
+local flyPosition=Vector3.new(40,210,65)
+local wasSpectating=false
 local cameraRoot,cameraSide,trackedCamera
 local yaw,pitch=0,math.rad(-18)
 local windowFocused=true
@@ -387,7 +392,33 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    predicted=Rules.heldBallPosition(holder) or predicted
   end
  end
- if inLobby then
+ local spectating=player:GetAttribute("SessionMode")=="Spectate"
+ if wasSpectating and not spectating then
+  UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
+  camera.CameraType=Enum.CameraType.Custom; camera.CameraSubject=h
+  if h then h.AutoRotate=true end
+  cameraRoot=nil
+ end
+ local enteredSpectate=spectating and not wasSpectating
+ wasSpectating=spectating
+ if spectating then
+  if enteredSpectate then flyPosition=Vector3.new(40,210,65); yaw=math.rad(30); pitch=math.rad(-20) end
+  local available=windowFocused and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local looking=available and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+  UIS.MouseBehavior=looking and Enum.MouseBehavior.LockCurrentPosition or Enum.MouseBehavior.Default
+  UIS.MouseIconEnabled=not looking
+  if looking then local delta=UIS:GetMouseDelta(); yaw-=delta.X*0.004; pitch=math.clamp(pitch-delta.Y*0.004,-1.5,1.5) end
+  local orbit=CFrame.Angles(0,yaw,0)*CFrame.Angles(pitch,0,0)
+  local movement=Vector3.zero
+  if available then
+   local function key(code) return UIS:IsKeyDown(code) and 1 or 0 end
+   movement=orbit.RightVector*(key(Enum.KeyCode.D)-key(Enum.KeyCode.A))+orbit.LookVector*(key(Enum.KeyCode.W)-key(Enum.KeyCode.S))+Vector3.yAxis*(key(Enum.KeyCode.E)+key(Enum.KeyCode.Space)-key(Enum.KeyCode.Q)-key(Enum.KeyCode.LeftControl))
+   if movement.Magnitude>0 then flyPosition+=movement.Unit*dt*(key(Enum.KeyCode.LeftShift)==1 and 70 or 32) end
+  end
+  camera.CameraType=Enum.CameraType.Scriptable; camera.FieldOfView=70
+  camera.CFrame=CFrame.new(flyPosition)*orbit; camera.Focus=CFrame.new(flyPosition+orbit.LookVector*25)
+  crosshair.Visible=false; aim.Transparency=1; cancelCharge()
+ elseif inLobby then
   cancelCharge()
   lobbyCamera:update(camera,r,h,dt)
   crosshair.Visible=false; aim.Transparency=1
@@ -401,7 +432,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=aiming==true
@@ -475,5 +506,5 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
- sub.Text=snapshot.side==0 and "SPECTATING  /  Return to lobby to choose a mode" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
+ sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)

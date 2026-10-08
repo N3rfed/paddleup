@@ -4,6 +4,7 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 require(script:WaitForChild("World")).build()
+local Spectator=require(script:WaitForChild("Spectator"))
 local Lobby=require(script:WaitForChild("Lobby"))
 Lobby.build()
 require(script:WaitForChild("DayNightCycle")).start()
@@ -259,7 +260,8 @@ local function spawnCharacter(p,c)
  local d=users[p]; if not d then return end
  local r=c:WaitForChild("HumanoidRootPart",10)
  local h=c:WaitForChild("Humanoid",10)
- if not r or not h then return end
+ if not r or not h or p.Character~=c then return end
+ Spectator.leave(p)
  -- Release lobby furniture before relocating an avatar to the court or spectator deck.
  local seatedAt=h.SeatPart
  h.Sit=false
@@ -278,6 +280,7 @@ local function spawnCharacter(p,c)
  if d.side~=0 and not c:FindFirstChild("PaddleFace") then paddle(c) end
  d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  if d.side~=0 and not ball.live then serveReady=false end
+ if d.mode=="Spectate" then Spectator.enter(p,c) end
 end
 local function addPlayer(p)
  if users[p] then return end
@@ -287,6 +290,10 @@ local function addPlayer(p)
  p:SetAttribute("CourtSide",side)
  p:SetAttribute("SessionMode","Lobby")
  if side~=0 then rosterChanged() end
+ p.CharacterRemoving:Connect(function() Spectator.leave(p) end)
+ p.CharacterAppearanceLoaded:Connect(function(c)
+  if users[p] and users[p].mode=="Spectate" and p.Character==c then spawnCharacter(p,c) end
+ end)
  p.CharacterAdded:Connect(function(c) spawnCharacter(p,c) end)
  if p.Character then task.spawn(spawnCharacter,p,p.Character) end
 end
@@ -346,6 +353,7 @@ session.OnServerEvent:Connect(function(p,mode)
  session:FireClient(p,true,"Connected.")
 end)
 Players.PlayerRemoving:Connect(function(p)
+ Spectator.leave(p)
  leaveCourt(p)
  users[p]=nil
 end)
@@ -555,7 +563,7 @@ RunService.Heartbeat:Connect(function(dt)
   d.stamina=math.min(100,d.stamina+dt*22)
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
-   h.WalkSpeed=now<d.slowUntil and SLOWED_SPEED or WALK_SPEED
+   h.WalkSpeed=d.mode=="Spectate" and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local inKitchen=Rules.inKitchen(r.Position,1)
    if grounded then d.kitchenTouched=inKitchen end

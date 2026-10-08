@@ -2,7 +2,7 @@
 local Lobby={}
 local Furniture=require(script.Parent:WaitForChild("LobbyFurniture"))
 local P=Furniture.Palette
-local VERSION=3
+local VERSION=5
 local O=Vector3.new(0,181,600)
 -- Keep the established arrival point and its view of reception.
 Lobby.Spawn=CFrame.lookAt(Vector3.new(0,185,650),Vector3.new(0,185,608))
@@ -59,22 +59,22 @@ function Lobby.build()
  end
  local function rug(parent,x,z,width,depth)
   decor(parent,"Woven rug border",Vector3.new(width,0.05,depth),Vector3.new(x,0.04,z),P.linen,Enum.Material.Fabric)
-  decor(parent,"Muted sage rug",Vector3.new(width-0.7,0.05,depth-0.7),Vector3.new(x,0.09,z),Color3.fromRGB(109,126,107),Enum.Material.Fabric)
+  decor(parent,"Warm neutral woven rug",Vector3.new(width-0.7,0.05,depth-0.7),Vector3.new(x,0.09,z),P.beige,Enum.Material.Fabric)
   for _,dx in ipairs({-width/2+1.4,width/2-1.4}) do
-   decor(parent,"Woven rug detail",Vector3.new(0.12,0.02,depth-2.8),Vector3.new(x+dx,0.13,z),P.linen,Enum.Material.Fabric)
+   decor(parent,"Woven rug detail",Vector3.new(0.12,0.02,depth-2.8),Vector3.new(x+dx,0.13,z),P.upholstery,Enum.Material.Fabric)
   end
  end
  local function art(parent,x,y,z,width,height,style)
   decor(parent,"Walnut picture frame",Vector3.new(width,height,0.3),Vector3.new(x,y,z),P.walnut,Enum.Material.Wood)
   decor(parent,"Ivory art mat",Vector3.new(width-0.4,height-0.4,0.12),Vector3.new(x,y,z+0.21),P.ivory)
-  decor(parent,"Sage abstract field",Vector3.new(width*0.58,height*0.52,0.05),Vector3.new(x-width*0.1,y+0.4,z+0.3),P.sage)
-  local p=decor(parent,"Abstract forest shape",Vector3.new(width*0.25,height*0.7,0.07),Vector3.new(x+width*0.2,y-0.15,z+0.35),P.teal)
+  decor(parent,"Sage abstract field",Vector3.new(width*0.58,height*0.52,0.05),Vector3.new(x-width*0.1,y+0.4,z+0.3),P.blue)
+  local p=decor(parent,"Abstract forest shape",Vector3.new(width*0.25,height*0.7,0.07),Vector3.new(x+width*0.2,y-0.15,z+0.35),P.pink)
   if style then p.Shape=Enum.PartType.Ball end
   decor(parent,"Brass art line",Vector3.new(width*0.72,0.08,0.09),Vector3.new(x,y-height*0.25,z+0.42),P.brass,Enum.Material.Metal)
  end
  -- +32.4% usable floor area, preserving all original area relationships.
  part(shell,"Penthouse foundation",Vector3.new(182,180,158),Vector3.new(0,-91,12),P.walnut,Enum.Material.Concrete)
- part(shell,"Warm limestone floor",Vector3.new(180,2,156),Vector3.new(0,-1,12),P.ivory,Enum.Material.Concrete)
+ part(shell,"Cream marble floor",Vector3.new(180,2,156),Vector3.new(0,-1,12),P.ivory,Enum.Material.Marble)
  part(shell,"Ivory ceiling",Vector3.new(180,1,156),Vector3.new(0,27,12),P.ivory)
  part(shell,"Reception feature wall",Vector3.new(180,26,2),Vector3.new(0,13,-65),P.ivory)
  for _,x in ipairs({-89,89}) do
@@ -129,7 +129,7 @@ function Lobby.build()
   local bankRoot=Instance.new("Model"); bankRoot.Name=bank.name; bankRoot.Parent=elevators
   local wallZ=-63.7
   part(bankRoot,"Walnut bank backdrop",Vector3.new(46,22,0.8),Vector3.new(bank.x,11,wallZ),P.walnut,Enum.Material.Wood)
-  sign(bankRoot,bank.name.." header",bank.name,Vector3.new(bank.x,17.5,wallZ+0.6),7,1.4,P.brass,false)
+  sign(bankRoot,bank.name.." header",bank.name,Vector3.new(bank.x,18,wallZ+0.6),12,2.6,P.brass,false)
   for index,mode in ipairs({"CLASSIC","ARCADE","CHAOTIC"}) do
    local x=bank.x+(index-2)*14
    local frame=part(bankRoot,bank.name.." "..mode.." elevator",Vector3.new(12,13.5,2),Vector3.new(x,6.75,wallZ+1.5),P.ivory,Enum.Material.Concrete)
@@ -304,6 +304,51 @@ function Lobby.build()
  -- Decorative art, planting, and recessed niches soften the architecture.
  for _,x in ipairs({-82,82}) do place("Plant",shell,x,0,-13) end
  place("Plant",shop,-84,0,21); place("Plant",cafe,85,0,37)
+ -- Repeated accents use the existing blueprint library, with no running decor scripts.
+ for _,x in ipairs({-85,85}) do
+  decor(shell,"Electric blue ceiling ribbon",Vector3.new(0.18,0.12,146),Vector3.new(x,25.5,12),P.blue,Enum.Material.Neon)
+ end
+ for _,x in ipairs({-52,52}) do
+  decor(elevators,"Emerald bank crown",Vector3.new(43,0.2,0.18),Vector3.new(x,22,-63),P.teal,Enum.Material.Neon)
+ end
+ for x=39,81,3 do
+  decor(cafe,"Glossy teal backsplash tile",Vector3.new(2.8,2.3,0.12),Vector3.new(x,2,8.4),P.teal)
+ end
+ part(cafe,"Cafe canopy",Vector3.new(49,0.5,19),Vector3.new(60,16,16),P.forest)
+ decor(cafe,"Cafe pink fascia inlay",Vector3.new(47,0.15,0.12),Vector3.new(60,15.7,25.6),P.pink,Enum.Material.Neon)
+ sign(cafe,"Integrated cafe fascia","THE RALLY CAFE",Vector3.new(60,16,25.65),14,1.1,P.ivory,false)
+ for _,x in ipairs({43,60,77}) do
+  place("CafeChair",cafeSeats,x-5,0,45,-90)
+  place("CafeChair",cafeSeats,x+5,0,45,90)
+  place("Refreshments",cafeSeats,x,3.3,46.5)
+ end
+ -- Additional social island stays clear of the arrival spine and shop entrance.
+ rug(lounges,-31,68,27,18)
+ place("Sofa",lounges,-31,0,74)
+ place("LoungeChair",lounges,-40,0,64,180)
+ place("LoungeChair",lounges,-22,0,64,180)
+ place("CoffeeTable",lounges,-31,0,67)
+ place("Refreshments",lounges,-31,2.03,67)
+ place("SideTable",lounges,-22,0,74); place("TableLamp",lounges,-22,2.5,74)
+ place("BallSculpture",reception,-24,0,-12)
+ place("BallSculpture",reception,24,0,-12)
+ for _,x in ipairs({-10,10}) do
+  part(reception,"Club paddle pedestal",Vector3.new(3.5,2.5,3.5),Vector3.new(x,1.25,-20),P.ivory,Enum.Material.Marble)
+  local paddle=place("DisplayPaddle",reception,x,2.5,-20)
+  paddle["Forest paddle face"].Color=x<0 and P.blue or P.pink
+ end
+ art(shop,-60,11,5.4,7,5,true)
+ -- Neutral upholstery dominates; one emerald sofa anchors the club palette.
+ local index=0
+ for _,model in ipairs(lounges:GetDescendants()) do
+  if model:IsA("Model") and model.Name=="Sofa" then
+   index+=1
+   local color=({P.ivory,P.upholstery,P.linen,P.beige,P.ivory})[(index-1)%5+1]
+   for _,piece in ipairs(model:GetChildren()) do
+    if piece:IsA("BasePart") and (piece.Name=="Upholstered base" or piece.Name=="Back cushion" or piece.Name=="Soft armrest" or piece.Name=="Sofa cushion") then piece.Color=color end
+   end
+  end
+ end
  furniture.destroyTemplates()
  -- Swap only this generated lobby; saved older geometry is refreshed automatically.
  if old then old:Destroy() end
