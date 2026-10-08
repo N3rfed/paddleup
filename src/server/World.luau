@@ -53,7 +53,18 @@ function World.updateLayout(root)
    end
   end
  end
+ if not root:GetAttribute("CourtFacingBenches") then
+  for _,item in ipairs(root:GetChildren()) do
+   if item:IsA("BasePart") and (item.Name=="Lounge seat" or item.Name=="Lounge back" or item.Name=="Lounge legs") then
+    local z=item.Name=="Lounge back" and item.Position.Z+2 or item.Position.Z
+    local pivot=CFrame.new(45,183,z)
+    item.CFrame=pivot*CFrame.Angles(0,-math.pi/2,0)*pivot:ToObjectSpace(item.CFrame)
+   end
+  end
+  root:SetAttribute("CourtFacingBenches",true)
+ end
  World.addCourtLights(root)
+ require(script.Parent:WaitForChild("CourtsideClub")).build(root)
  return root
 end
 function World.build()
