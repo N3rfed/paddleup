@@ -64,6 +64,7 @@ function World.updateLayout(root)
   root:SetAttribute("CourtFacingBenches",true)
  end
  World.addCourtLights(root)
+ require(script.Parent:WaitForChild("CourtsideClub")).build(root)
  return root
 end
 function World.build()
