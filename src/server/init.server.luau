@@ -201,6 +201,17 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
 end
 local function point(winner,reason)
  if not ball.live then return end
+ if reason=="Double bounce" then
+  -- A missed return is confirmed only once the second bounce closes the rally.
+  local losingSide=-winner
+  local players=teamPlayers(losingSide)
+  for _,player in ipairs(players) do
+   feedback:FireAllClients({userId=player.UserId,text="Miss!",tone="bad"},"playerText")
+  end
+  if losingSide==-1 and #players==0 and courtMode=="Practice" then
+   feedback:FireAllClients({userId=0,text="Miss!",tone="bad"},"playerText")
+  end
+ end
  ball.live=false; ball.v=Vector3.zero; ball.perfects=0; ball.speed=1
  local index=winner==1 and 1 or 2
  local outcome=rotation:award(winner)
@@ -407,7 +418,7 @@ local function serve(p,d,r,h,forced)
  if not botServing then lastHitter[servingSide]=p end
  d.chargeAt=nil; d.serveChargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  serveReady=false; serveDeadline=nil; ball.last=servingSide; ball.shots=0
- local velocity,target,power=Rules.chargedServeVelocity(from,servingSide,serveX,charge,GRAVITY)
+ local velocity,target,power=Rules.chargedServeVelocity(from,servingSide,serveX,charge,GRAVITY,botServing and Rules.PRACTICE_SERVE_DEPTH or nil)
  ball.speed=power
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)

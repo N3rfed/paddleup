@@ -73,6 +73,7 @@ Rules.SERVE_CHARGE_DURATION=0.8
 Rules.SERVE_SWEET_MIN=0.45
 Rules.SERVE_SWEET_MAX=0.55
 Rules.SERVE_SWEET_CENTER=0.5
+Rules.PRACTICE_SERVE_DEPTH=24
 
 function Rules.serveCharge(started,now)
  return started and math.clamp((now-started)/Rules.SERVE_CHARGE_DURATION,0,1) or 0
@@ -86,12 +87,13 @@ end
 
 -- Solve a low diagonal arc at the requested speed. Overcharge retains maximum
 -- speed but pushes the landing beyond the baseline; very weak serves hit the net.
-function Rules.chargedServeVelocity(from,side,serveX,charge,gravity)
+function Rules.chargedServeVelocity(from,side,serveX,charge,gravity,targetDepth)
  charge=math.clamp(charge,0,1)
  local over=charge>Rules.SERVE_SWEET_MAX
  local power=math.min(1,charge/Rules.SERVE_SWEET_MIN)
  local overshoot=math.max(0,(charge-Rules.SERVE_SWEET_MAX)/(1-Rules.SERVE_SWEET_MAX))
  local depth=over and (Rules.BASELINE+2+18*overshoot) or (18+16*power)
+ if targetDepth then depth=math.clamp(targetDepth,Rules.KITCHEN+2,Rules.BASELINE-2) end
  local target=Vector3.new(-math.sign(serveX)*10,181.7,-side*depth)
  local delta=target-from
  local speed=Rules.MAX_SERVE_VELOCITY*math.max(0.25,power)
@@ -107,7 +109,7 @@ function Rules.chargedServeVelocity(from,side,serveX,charge,gravity)
  end
  local vy=delta.Y/duration+0.5*gravity*duration
  if charge<Rules.SERVE_SWEET_MIN*0.5 then
-  local fullVelocity=Rules.chargedServeVelocity(from,side,serveX,Rules.SERVE_SWEET_CENTER,gravity)
+  local fullVelocity=Rules.chargedServeVelocity(from,side,serveX,Rules.SERVE_SWEET_CENTER,gravity,targetDepth)
   return fullVelocity*math.max(0.05,power),target,power
  end
  return horizontal/duration+Vector3.new(0,vy,0),target,power
