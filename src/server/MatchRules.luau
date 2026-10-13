@@ -22,15 +22,30 @@ Rules.LOB_HORIZONTAL_RETENTION=0.75
 -- Split a frame at the apex so heavier descent gravity never changes ascent.
 function Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce)
  if lob and not postBounce and velocity.Y>0 then
-  local ascent=math.min(dt,velocity.Y/gravity)
+  local timeToApex=velocity.Y/gravity
+  local ascent=math.min(dt,timeToApex)
   position+=velocity*ascent-Vector3.new(0,0.5*gravity*ascent*ascent,0)
   velocity-=Vector3.new(0,gravity*ascent,0)
+  -- Floating-point residue at the apex must not defer the heavier descent.
+  if dt>=timeToApex then velocity=Vector3.new(velocity.X,0,velocity.Z) end
   dt-=ascent
  end
  local acceleration=gravity*(lob and (postBounce or velocity.Y<=0) and Rules.LOB_GRAVITY_SCALE or 1)
  position+=velocity*dt-Vector3.new(0,0.5*acceleration*dt*dt,0)
  velocity-=Vector3.new(0,acceleration*dt,0)
  return position,velocity,acceleration
+end
+
+-- Offensive topspin switches gravity at the net plane, splitting crossing frames.
+function Rules.advanceFlight(position,velocity,gravity,dt,lob,postBounce,offensive,side)
+ if not offensive then return Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce) end
+ if position.Z*side<=0 then return Rules.advanceBall(position,velocity,gravity*1.8,dt,lob,postBounce) end
+ local crossing=velocity.Z~=0 and -position.Z/velocity.Z or math.huge
+ if crossing>=0 and crossing<=dt then
+  position,velocity=Rules.advanceBall(position,velocity,gravity,crossing,lob,postBounce)
+  return Rules.advanceBall(position,velocity,gravity*1.8,dt-crossing,lob,postBounce)
+ end
+ return Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce)
 end
 
 function Rules.ballLandingTime(height,vy,gravity,lob,postBounce)

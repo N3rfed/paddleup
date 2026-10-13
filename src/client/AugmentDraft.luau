@@ -1,12 +1,13 @@
 local AugmentDraft={}
+local Art=require(script.Parent:WaitForChild("AugmentArt"))
 function AugmentDraft.start(player,network)
  local TweenService=game:GetService("TweenService")
  local RunService=game:GetService("RunService")
  local UIS=game:GetService("UserInputService")
  local GuiService=game:GetService("GuiService")
  local remote=network:WaitForChild("Augment")
- local colors={Color3.fromRGB(104,239,159),Color3.fromRGB(255,211,93),Color3.fromRGB(255,91,109)}
- local names={"GREEN / UNCOMMON","YELLOW / RARE","RED / MYTHIC"}
+ local colors={Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)}
+ local names={"SILVER","GOLD","PRISMATIC"}
  local gui=Instance.new("ScreenGui",player:WaitForChild("PlayerGui"))
  gui.Name="AugmentDraft"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=15
  local function frame(parent,size,position,color)
@@ -38,7 +39,7 @@ function AugmentDraft.start(player,network)
  local cards=frame(panel,UDim2.fromOffset(908,362),UDim2.fromOffset(16,132),Color3.new())
  cards.BackgroundTransparency=1
  local footer=text(panel,"",508,24,14,Color3.fromRGB(226,232,245))
- text(panel,"SHARED RARITY  /  PERSONAL OFFERS  /  STACKING UPGRADES",540,18,10,Color3.fromRGB(126,145,173))
+ text(panel,"SHARED RARITY  /  PERSONAL OFFERS  /  MATCH-LONG EFFECTS",540,18,10,Color3.fromRGB(126,145,173))
  local build=text(gui,"",112,38,12,Color3.fromRGB(211,224,240)); build.Visible=false
  build.Size=UDim2.fromOffset(540,38); build.Position=UDim2.new(0.5,-270,0,112)
  build.TextStrokeTransparency=0.35
@@ -72,12 +73,24 @@ function AugmentDraft.start(player,network)
    b.Name="Augment"..index; b.Position=UDim2.fromOffset((index-1)*308,0)
    b.Size=UDim2.fromOffset(292,362); b.BackgroundColor3=Color3.fromRGB(20,29,44)
    b.Text=""; b.AutoButtonColor=false; round(b,16)
+   local trim=frame(b,UDim2.new(1,-32,0,3),UDim2.fromOffset(16,0),color)
+   local trimGradient=Instance.new("UIGradient",trim)
+   trimGradient.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.5,0),NumberSequenceKeypoint.new(1,1)})
+   if data.tier==3 then
+    trimGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(99,237,255)),ColorSequenceKeypoint.new(0.5,color),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,161,220))})
+   end
+   local cardScale=Instance.new("UIScale",b)
+   local badge=frame(b,UDim2.fromOffset(28,4),UDim2.fromOffset(132,352),color)
+   badge.BackgroundTransparency=0.35
    local border=stroke(b,color,data.tier==3 and 2.5 or 1.5,0.25)
    local gradient=Instance.new("UIGradient",b)
    gradient.Color=ColorSequence.new(Color3.fromRGB(36,48,64):Lerp(color,0.16),Color3.fromRGB(10,15,25)); gradient.Rotation=65
    text(b,string.format("0%d   /   %s",index,names[data.tier]),15,22,10,color)
    local art=frame(b,UDim2.fromOffset(126,126),UDim2.fromOffset(83,55),color)
    art.BackgroundTransparency=1
+   local halo=frame(art,UDim2.fromOffset(104,104),UDim2.fromOffset(11,11),color)
+   round(halo,52); halo.BackgroundTransparency=0.95
+   table.insert(animations,{object=halo,pulse=true})
    -- Rarity adds concentric seals, facets, corner inlays and orbiting gems.
    for layer=1,data.tier do
     local ring=frame(art,UDim2.fromOffset(66+layer*17,66+layer*17),UDim2.fromScale(0.5,0.5),color)
@@ -86,8 +99,7 @@ function AugmentDraft.start(player,network)
     stroke(ring,color,layer==1 and 2 or 1,0.15+layer*0.16)
     table.insert(animations,{object=ring,speed=(layer%2==0 and -1 or 1)*(data.tier==3 and 12 or 4)})
    end
-   local emblem=text(art,card.symbol=="WIND" and ">>" or card.symbol=="PULSE" and "+" or card.symbol=="ORBIT" and "O" or "V",38,48,38,color)
-   emblem.Rotation=card.symbol=="SHIELD" and 180 or 0
+   Art.draw(art,card,color)
    for gem=1,data.tier*4 do
     local angle=gem/(data.tier*4)*math.pi*2
     local dot=frame(art,UDim2.fromOffset(data.tier+2,data.tier+2),UDim2.fromOffset(63+math.cos(angle)*62,63+math.sin(angle)*62),color)
@@ -104,11 +116,13 @@ function AugmentDraft.start(player,network)
      end
     end
    end
-   text(b,card.name:upper(),196,32,21,Color3.fromRGB(246,247,255))
-   local desc=text(b,card.description,236,44,15,Color3.fromRGB(202,215,232)); desc.Font=Enum.Font.GothamMedium
+   text(b,Art.badge(card),169,20,10,color)
+   text(b,card.name:upper(),189,49,18,Color3.fromRGB(246,247,255))
+   local desc=text(b,card.description,240,56,13,Color3.fromRGB(202,215,232)); desc.Font=Enum.Font.GothamMedium
    local pill=frame(b,UDim2.new(1,-36,0,42),UDim2.fromOffset(18,300),color); round(pill,9)
    text(pill,"["..index.."]  SELECT AUGMENT",0,42,12,Color3.fromRGB(15,22,31))
    local function hover(on)
+    TweenService:Create(cardScale,TweenInfo.new(0.15),{Scale=on and 1.025 or 1}):Play()
     TweenService:Create(border,TweenInfo.new(0.15),{Transparency=on and 0 or 0.25,Thickness=on and 3 or (data.tier==3 and 2.5 or 1.5)}):Play()
    end
    b.MouseEnter:Connect(function() hover(true) end); b.MouseLeave:Connect(function() hover(false) end)
@@ -126,9 +140,8 @@ function AugmentDraft.start(player,network)
     b.Active=false
     if active and active.cards[index].name~=data.name then b.BackgroundTransparency=0.6 end
    end
-   local stats=data.stats
-   build.Text=string.format("%d AUGMENTS  /  MOVE +%d%%  /  REGEN +%d%%  /  REACH +%d%%  /  DIVE -%d%%",data.count,
-    math.floor((stats.speed or 0)*100+0.5),math.floor((stats.regen or 0)*100+0.5),math.floor((stats.reach or 0)*100+0.5),math.floor((stats.dive or 0)*100+0.5))
+   build.Text=table.concat(data.names or {data.name}," / ")
+   build.TextSize=10
   elseif data.kind=="close" then close()
   elseif data.kind=="reset" then close(); build.Text="" end
  end)
@@ -146,7 +159,10 @@ function AugmentDraft.start(player,network)
   end
   build.Visible=player:GetAttribute("MatchVariant")=="Augmented" and not overlay.Visible and build.Text~=""
   if not overlay.Visible then return end
-  for _,animation in ipairs(animations) do animation.object.Rotation+=dt*animation.speed end
+  for _,animation in ipairs(animations) do
+   if animation.pulse then animation.object.BackgroundTransparency=0.94+math.sin(os.clock()*2)*0.025
+   else animation.object.Rotation+=dt*animation.speed end
+  end
   if active and not selected then
    footer.Text=string.format("%ds TO CHOOSE  /  First card auto-selects on timeout",math.max(0,math.ceil(active.endsAt-workspace:GetServerTimeNow())))
   end
