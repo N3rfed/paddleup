@@ -17,6 +17,14 @@ local function remote(name)
 end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local session=remote("Session")
+local augmentRemote=remote("Augment")
+local Augments=require(script:WaitForChild("Augments"))
+local courtVariant=nil
+local draft=nil
+local draftSerial=0
+local draftDue=false
+local rallies=0
+local augmentRandom=Random.new()
 local courtMode=nil
 local FLOOR,GRAVITY,BASE_SPEED=181.7,45,56
 local WALK_SPEED,SLOWED_SPEED=18,10
@@ -41,6 +49,62 @@ local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
 ball.shots=0
 local banner="Welcome to Skyline Club"
+local function resetAugments()
+ draft=nil; draftDue=courtVariant=="Augmented"; rallies=0
+ for p,d in pairs(users) do
+  d.augments={}; d.augmentNames={}
+  p:SetAttribute("AugmentDraftOpen",false)
+  augmentRemote:FireClient(p,{kind="reset"})
+ end
+end
+local function chooseAugment(p,id)
+ local offer=draft and draft.offers[p]
+ local d=users[p]
+ if not d or d.side==0 then return end
+ local card=Augments.choose(offer,id,d.augments)
+ if not card then return end
+ draft.offers[p]=nil
+ table.insert(d.augmentNames,card.name)
+ augmentRemote:FireClient(p,{kind="chosen",name=card.name,count=#d.augmentNames,stats=d.augments})
+end
+augmentRemote.OnServerEvent:Connect(function(p,serial,id)
+ if draft and serial==draft.id then chooseAugment(p,id) end
+end)
+local function updateDraft(now)
+ if draftDue and not draft and not ball.live and now>=introUntil and now>=nextServe then
+  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false end
+  local roster={}
+  local home,away=false,false
+  for p,d in pairs(users) do
+   if d.side~=0 then table.insert(roster,p); if d.side==1 then home=true else away=true end end
+  end
+  if not home or (not away and courtMode~="Practice") then return end
+  table.sort(roster,function(a,b) return a.UserId<b.UserId end)
+  local tier,offers=Augments.deal(augmentRandom,#roster)
+  draftSerial+=1
+  draft={id=draftSerial,endsAt=now+Augments.DURATION,offers={}}
+  draftDue=false; serveReady=false; serveDeadline=nil
+  for index,p in ipairs(roster) do
+   draft.offers[p]=offers[index]
+   users[p].chargeAt=nil; users[p].diveUntil=0
+   if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+   p:SetAttribute("AugmentDraftOpen",true)
+   augmentRemote:FireClient(p,{kind="offer",id=draft.id,tier=tier,cards=offers[index],endsAt=workspace:GetServerTimeNow()+Augments.DURATION})
+  end
+ end
+ if draft then
+  if now>=draft.endsAt then
+   for p,offer in pairs(draft.offers) do chooseAugment(p,offer[1].id) end
+  end
+  if not next(draft.offers) then
+   draft=nil; nextServe=now+1
+   for p in pairs(users) do
+    p:SetAttribute("AugmentDraftOpen",false)
+    augmentRemote:FireClient(p,{kind="close"})
+   end
+  end
+ end
+end
 local botSlowUntil=0
 local botX,botZ=0,-28
 local botRandom=Random.new()
@@ -96,6 +160,7 @@ local function syncServing()
 end
 local function rosterChanged()
  powerups:reset()
+ resetAugments()
  local home,away={},{}
  for _,p in ipairs(teamPlayers(1)) do table.insert(home,p.UserId) end
  for _,p in ipairs(teamPlayers(-1)) do table.insert(away,p.UserId) end
@@ -260,6 +325,11 @@ local function point(winner,reason)
   nextServe=os.clock()+6
   ball.resetScore=true
  end
+ if courtVariant=="Augmented" then
+  rallies+=1
+  if ball.resetScore then resetAugments()
+  elseif rallies%3==0 then draftDue=true end
+ end
 end
 local function paddle(character)
  local hand=character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
@@ -330,6 +400,7 @@ local function leaveCourt(p)
  if not d then return end
  local active=d.side~=0
  d.side=0; d.slot=0
+ d.variant=nil; p:SetAttribute("MatchVariant",nil)
  d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil; d.chargeCooldownBlocked=nil
  d.powerUntil=0; d.slowUntil=0
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
@@ -343,24 +414,27 @@ local function leaveCourt(p)
   end
  end
  if not occupant(1) and not occupant(-1) then
-  courtMode=nil; rotation:reset(); score=rotation.score; ball.resetScore=false
+  courtMode=nil; courtVariant=nil; rotation:reset(); score=rotation.score; ball.resetScore=false
  end
  rosterChanged()
 end
-session.OnServerEvent:Connect(function(p,mode)
+session.OnServerEvent:Connect(function(p,mode,variant)
  local d=users[p]
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
+ if mode~="Lobby" and mode~="Spectate" and variant~="PowerUp" and variant~="Augmented" then
+  session:FireClient(p,false,"Choose Power-Up or Augmented first."); return
+ end
  local now=os.clock()
  if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
  d.sessionAt=now
- if mode==d.mode then session:FireClient(p,true,"Already connected."); return end
+ if mode==d.mode and (d.side==0 or variant==d.variant) then session:FireClient(p,true,"Already connected."); return end
  if mode=="Lobby" or mode=="Spectate" then
   leaveCourt(p); d.mode=mode
  else
   -- Validate before leaving, so a rejected choice never disrupts a live match.
-  if courtMode and courtMode~=mode then
-   session:FireClient(p,false,"Court is in "..courtMode..". Spectate or wait for players to return to the lobby.")
+  if courtMode and (courtMode~=mode or courtVariant~=variant) then
+   session:FireClient(p,false,"Court is in "..courtMode.." / "..courtVariant..". Spectate or wait for the court to empty.")
    return
   end
   local homeLimit=mode=="2V2" and 2 or 1
@@ -371,6 +445,7 @@ session.OnServerEvent:Connect(function(p,mode)
    return
   end
   courtMode=mode
+  courtVariant=variant; d.variant=variant; p:SetAttribute("MatchVariant",variant)
   d.side=(home<homeLimit and (home<=away or away>=awayLimit)) and 1 or -1
   d.slot=availableSlot(d.side); d.mode=mode
   p:SetAttribute("CourtSide",d.side)
@@ -474,10 +549,11 @@ end
 local function tryReturn(p,d,r,now,automatic,softRequested,charge)
   charge=charge or 0
   local distance,overhead=overheadStatus(p,r)
-  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE or overhead)
+  local reach=1+((d.augments and d.augments.reach) or 0)
+  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach or overhead)
   local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
   if automatic and not valid then return false end
-  local clean=valid and (distance<=Rules.PERFECT_RANGE or overhead) and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
+  local clean=valid and (distance<=Rules.PERFECT_RANGE*reach or overhead) and (perfect(now) or kitchenLobWindow(p,d,r,overhead))
   if not Rules.hitReady(now,d.lastSwing,clean) then return false end
   d.lastSwing=clean and now or now+Rules.HIT_COOLDOWN
   p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
@@ -532,7 +608,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  local d=users[p]
  if not d or d.side==0 or type(action)~="string" then return end
  local now=os.clock()
- if now<introUntil then return end
+ if now<introUntil or draft or draftDue then return end
  -- Release/cancel must survive the flood gate, even for a very quick tap.
  if action=="ChargeCancel" then d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
  local releasedCharge
@@ -561,7 +637,8 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  elseif action=="Dive" then
   if not Rules.canDive(d.stamina,d.diveAt,now) then return end
   d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
-  d.stamina-=Rules.DIVE_STAMINA_COST; d.diveAt=now+Rules.DIVE_COOLDOWN
+  local cooldown=Rules.DIVE_COOLDOWN*(1-((d.augments and d.augments.dive) or 0))
+  d.stamina-=Rules.DIVE_STAMINA_COST; d.diveAt=now+cooldown
   d.staminaRecoveryAt=now+Rules.STAMINA_RECOVERY_DELAY
   d.diveUntil=now+0.48; d.diveCharacter=p.Character
   local delta=ball.live and ball.p-r.Position or Vector3.zero
@@ -570,13 +647,15 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   end
   moveIntent=Vector3.new(math.clamp(moveIntent.X,-1,1),0,math.clamp(moveIntent.Z,-1,1))
   local direction=Rules.diveDirection(moveIntent,r.CFrame.LookVector,delta)
-  feedback:FireAllClients({userId=p.UserId,direction=direction.Unit,diveReadyAt=workspace:GetServerTimeNow()+Rules.DIVE_COOLDOWN},"diveMotion")
+  feedback:FireAllClients({userId=p.UserId,direction=direction.Unit,diveReadyAt=workspace:GetServerTimeNow()+cooldown},"diveMotion")
   tell(p,"DIVE","dive")
  elseif action=="Power" then
+  if courtVariant=="Augmented" then return end
   if now<d.powerAt then return end
   d.powerAt=now+10; d.powerUntil=now+5
   tell(p,"POWER SHOT ARMED  /  5s","power")
  elseif action=="Slow" then
+  if courtVariant=="Augmented" then return end
   if now<d.slowAt then return end
   d.slowAt=now+12
   local opponents=teamPlayers(-d.side)
@@ -593,16 +672,18 @@ end)
 local accumulator,broadcast=0,0
 RunService.Heartbeat:Connect(function(dt)
  local now=os.clock()
+ updateDraft(now)
  local pickupParticipants={}
  for player,data in pairs(users) do
   if data.side~=0 then table.insert(pickupParticipants,{player=player,side=data.side}) end
  end
- powerups:update(now,now<introUntil and {} or pickupParticipants)
+ powerups:update(now,(now<introUntil or courtVariant=="Augmented") and {} or pickupParticipants)
  for p,d in pairs(users) do
-  d.stamina=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
+  local recovered=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
+  d.stamina=math.min(100,d.stamina+(recovered-d.stamina)*(1+((d.augments and d.augments.regen) or 0)))
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
-   h.WalkSpeed=(d.mode=="Spectate" or (d.side~=0 and now<introUntil)) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)
+   h.WalkSpeed=(d.mode=="Spectate" or (d.side~=0 and (now<introUntil or draft~=nil))) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)*(1+((d.augments and d.augments.speed) or 0))
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local inKitchen=Rules.inKitchen(r.Position,1)
    if grounded then d.kitchenTouched=inKitchen end
@@ -630,7 +711,7 @@ RunService.Heartbeat:Connect(function(dt)
  local hasBot=courtMode=="Practice" and occupant(1)~=nil and occupant(-1)==nil
  for _,p in ipairs(bot:GetChildren()) do if p:IsA("BasePart") then p.Transparency=hasBot and 0 or 1 end end
  tag.Enabled=hasBot
- if not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
+ if not draft and not draftDue and not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
  if serveReady and serveDeadline and workspace:GetServerTimeNow()>=serveDeadline then
   local server=serverId and Players:GetPlayerByUserId(serverId)
   for player,data in pairs(users) do

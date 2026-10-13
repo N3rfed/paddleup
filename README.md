@@ -29,6 +29,16 @@ Visual Studio Code
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
 ## Power-up pickups
+Choose Practice, 1V1, 1V2, or 2V2, then choose **Power-Up** or **Augmented**. The shared court accepts players with the same format and ruleset; Spectate skips this choice.
+
+## Augmented matches
+Augmented replaces pickups and the Power/Slow abilities with match-long upgrades. After the intro and every three rallies, play pauses for a three-card draft. The server rolls one rarity for everybody (green 60%, yellow 30%, red 10%) and deals different cards to each player, with no overlap within a draft. Yellow upgrades are twice the green strength; red upgrades are three times as strong, with increasingly elaborate animated card art.
+
+Click/tap a card, press 1–3, or select with a controller. Each player picks once; after 20 seconds the server selects the first card for anyone still waiting. Play resumes when everybody has selected. Upgrades stack up to +60% movement, +150% stamina recovery, +40% normal/perfect contact range, and 50% shorter dive cooldown. The HUD shows the current build. A new game or roster change resets builds and starts a fresh draft; spectators receive no offers. Practice drafts apply to the human player; the practice partner retains its normal behavior.
+
+`src/server/Augments.luau` owns rarity, offers, effect definitions and limits. `tests/Augments.spec.luau` covers rarity boundaries, four-player offer uniqueness, invalid selections and stacking limits.
+
+## Power-Up pickup behavior
 Pickups descend over 2.4 seconds with a gentle spiral and orbiting gold sparks, then pulse and bob while available. Collection plays a short shrinking burst; the six-second pickup lifetime starts after the descent.
 Join Practice, 1V1, or 2V2 to try the placeholder pickups. A glowing 3D orb drops onto each occupied court half after two seconds. Walk into it to collect it and see floating confirmation text. Orbs idle for six seconds before expiring; a collected or expired orb is replaced after eight seconds. Lobby players and spectators cannot collect them. Roster changes clear the pickups.
 

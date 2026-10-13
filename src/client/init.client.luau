@@ -18,8 +18,9 @@ local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
+require(script:WaitForChild("AugmentDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)
-local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") end
+local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("AugmentDraftOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -330,6 +331,9 @@ player.CharacterRemoving:Connect(cancelCharge)
 player:GetAttributeChangedSignal("LeaveConfirmationOpen"):Connect(function()
  if player:GetAttribute("LeaveConfirmationOpen") then cancelCharge() end
 end)
+player:GetAttributeChangedSignal("AugmentDraftOpen"):Connect(function()
+ if player:GetAttribute("AugmentDraftOpen") then cancelCharge() end
+end)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
  if not playing() or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
@@ -393,6 +397,8 @@ state.OnClientEvent:Connect(function(data)
  diveReadyAt=data.diveReadyAt or (workspace:GetServerTimeNow()+data.dive)
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
+ powerButton.Visible=player:GetAttribute("MatchVariant")~="Augmented"
+ slowButton.Visible=powerButton.Visible
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
@@ -531,6 +537,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local courtSide=player:GetAttribute("CourtSide") or 0
  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
  canvas.Visible=not inLobby; devToggle.Visible=not inLobby
+ abilities.Visible=developerMode and player:GetAttribute("MatchVariant")~="Augmented"
  if not inLobby then lobbyCamera:disable() end
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and math.min(now-receivedAt,0.12) or 0
@@ -586,7 +593,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=aiming==true and not (snapshot and snapshot.canServe)
