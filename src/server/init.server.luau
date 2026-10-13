@@ -33,6 +33,9 @@ local joinSerial=0
 local lastHitter={}
 local ball={p=Vector3.new(0,187,-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,speed=1,bounceAt=-100}
 local nextServe=0
+local matchIntro=nil
+local introSerial=0
+local introUntil=0
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -47,6 +50,11 @@ local botError=Vector3.zero
 local botAttempted=false
 local botStride,botMoving=0,false
 local world=workspace:WaitForChild("PaddleUp")
+local powerups=require(script:WaitForChild("Powerups")).new(world,function(player,kind)
+ player:SetAttribute("LastCollectedPowerup",kind)
+ player:SetAttribute("PowerupsCollected",(player:GetAttribute("PowerupsCollected") or 0)+1)
+ feedback:FireAllClients({userId=player.UserId,text="POWERUP COLLECTED / TEST",tone="good"},"playerText")
+end)
 local bot=Instance.new("Model")
 bot.Name="Practice Partner"; bot.Parent=world
 local function botPart(name,size,color)
@@ -87,6 +95,7 @@ local function syncServing()
  servingSide=rotation.side; serverId=rotation.serverId; receiverId=rotation:receiverId(); serveX=rotation:serveX()
 end
 local function rosterChanged()
+ powerups:reset()
  local home,away={},{}
  for _,p in ipairs(teamPlayers(1)) do table.insert(home,p.UserId) end
  for _,p in ipairs(teamPlayers(-1)) do table.insert(away,p.UserId) end
@@ -96,10 +105,34 @@ local function rosterChanged()
  syncServing()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
  ball.outLanding=nil; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
+ introUntil=0; matchIntro=nil
+ if #home>0 and #away>0 then
+  introSerial+=1
+  introUntil=os.clock()+9.5
+  nextServe=introUntil
+  local function portraits(side)
+   local result={}
+   for _,player in ipairs(teamPlayers(side)) do
+    table.insert(result,{userId=player.UserId,name=player.DisplayName})
+   end
+   if side==-1 and courtMode=="Practice" and #result==0 then
+    table.insert(result,{userId=0,name="Practice Partner",bot=true})
+   end
+   return result
+  end
+  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+9.5,home=portraits(1),away=portraits(-1)}
+ end
  for p,d in pairs(users) do
   d.diveUntil=0; d.volleyPending=false; d.chargeAt=nil
   if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+  if introUntil>0 and d.side~=0 and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+   local primary=p.UserId==(d.side==servingSide and serverId or receiverId)
+   local position=Rules.startPosition(d.side,servingSide,serveX,primary)
+   p.Character:PivotTo(CFrame.lookAt(position,Vector3.new(position.X,185,0)))
+   p.Character.HumanoidRootPart.AssemblyLinearVelocity=Vector3.zero
+  end
  end
+ if introUntil>0 and courtMode=="Practice" then botX=-serveX; botZ=-46 end
  banner="TEAMS UPDATED / PREPARING SERVE"
  feedback:FireAllClients({title="Teams Updated",fault="Preparing the next serve"},"rallyResult")
 end
@@ -259,6 +292,11 @@ local function spawnCharacter(p,c)
  h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
  local z=d.side==0 and 58 or d.side*28
  c:PivotTo(d.mode=="Lobby" and Lobby.Spawn or CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,185,z),Vector3.new(0,185,0)))
+ if d.side~=0 and os.clock()<introUntil then
+  local primary=p.UserId==(d.side==servingSide and serverId or receiverId)
+  local position=Rules.startPosition(d.side,servingSide,serveX,primary)
+  c:PivotTo(CFrame.lookAt(position,Vector3.new(position.X,185,0)))
+ end
  r.AssemblyLinearVelocity=Vector3.zero; r.AssemblyAngularVelocity=Vector3.zero
  for _,name in ipairs({"PaddleFace","PaddleGrip"}) do
   local existing=c:FindFirstChild(name)
@@ -312,7 +350,7 @@ end
 session.OnServerEvent:Connect(function(p,mode)
  local d=users[p]
  if not d or type(mode)~="string" then return end
- if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" then return end
+ if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
  local now=os.clock()
  if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
  d.sessionAt=now
@@ -325,14 +363,15 @@ session.OnServerEvent:Connect(function(p,mode)
    session:FireClient(p,false,"Court is in "..courtMode..". Spectate or wait for players to return to the lobby.")
    return
   end
-  local limit=mode=="2V2" and 2 or 1
+  local homeLimit=mode=="2V2" and 2 or 1
+  local awayLimit=(mode=="2V2" or mode=="1V2") and 2 or 1
   local home,away=#teamPlayers(1),#teamPlayers(-1)
-  if (mode=="Practice" and home+away>0) or (home>=limit and away>=limit) then
+  if (mode=="Practice" and home+away>0) or (home>=homeLimit and away>=awayLimit) then
    session:FireClient(p,false,"Court is full. Choose Spectate to watch.")
    return
   end
   courtMode=mode
-  d.side=(home<limit and (home<=away or away>=limit)) and 1 or -1
+  d.side=(home<homeLimit and (home<=away or away>=awayLimit)) and 1 or -1
   d.slot=availableSlot(d.side); d.mode=mode
   p:SetAttribute("CourtSide",d.side)
   d.stamina=100; d.powerUntil=0; d.slowUntil=0
@@ -493,6 +532,7 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  local d=users[p]
  if not d or d.side==0 or type(action)~="string" then return end
  local now=os.clock()
+ if now<introUntil then return end
  -- Release/cancel must survive the flood gate, even for a very quick tap.
  if action=="ChargeCancel" then d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
  local releasedCharge
@@ -553,11 +593,16 @@ end)
 local accumulator,broadcast=0,0
 RunService.Heartbeat:Connect(function(dt)
  local now=os.clock()
+ local pickupParticipants={}
+ for player,data in pairs(users) do
+  if data.side~=0 then table.insert(pickupParticipants,{player=player,side=data.side}) end
+ end
+ powerups:update(now,now<introUntil and {} or pickupParticipants)
  for p,d in pairs(users) do
   d.stamina=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
-   h.WalkSpeed=d.mode=="Spectate" and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)
+   h.WalkSpeed=(d.mode=="Spectate" or (d.side~=0 and now<introUntil)) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local inKitchen=Rules.inKitchen(r.Position,1)
    if grounded then d.kitchenTouched=inKitchen end
@@ -721,6 +766,7 @@ RunService.Heartbeat:Connect(function(dt)
   end
   for p,d in pairs(users) do
    state:FireClient(p,{
+    matchIntro=d.side~=0 and now<introUntil and matchIntro or nil,
     outLanding=ball.outLanding,p=ball.p,v=ball.v,g=ball.g,lob=ball.lob,live=ball.live,landing=target,eta=t,
     slammable=ball.live and ball.slamLob,shotId=ball.shotId,slamReady=slamReady(p,d,now),
     green=ball.live and perfect(now),last=ball.last,bounces=ball.bounces,

@@ -10,7 +10,7 @@ function MainMenu.start(player,network)
  local gold=Color3.fromRGB(190,153,91)
  local panel=Instance.new("Frame",gui)
  panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
- panel.Size=UDim2.fromOffset(350,500); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
+ panel.Size=UDim2.fromOffset(350,566); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
  local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,16)
  local stroke=Instance.new("UIStroke",panel); stroke.Color=gold; stroke.Transparency=0.4
  local scale=Instance.new("UIScale",panel)
@@ -25,7 +25,7 @@ function MainMenu.start(player,network)
  label("P A D D L E U P",22,24,14,gold)
  label("Skyline Club",55,40,30)
  label("THE PENTHOUSE  /  PLAY & UNWIND",99,22,11,gold)
- local status=label("Choose a court experience. Elevators open in a future update.",410,65,13)
+ local status=label("Choose a court experience. Elevators open in a future update.",476,65,13)
  local request=network:WaitForChild("Session")
  local pending=false
  local buttons={}
@@ -33,6 +33,7 @@ function MainMenu.start(player,network)
   {"PRACTICE","Warm up with the practice partner","Practice"},
   {"1V1","Join this server's singles court","1V1"},
   {"2V2","Join this server's doubles court","2V2"},
+  {"1V2","One player against a team of two","1V2"},
   {"SPECTATE","Watch the rooftop court","Spectate"},
  }) do
   local b=Instance.new("TextButton",panel)
@@ -158,7 +159,7 @@ function MainMenu.start(player,network)
  local function resize()
   local camera=workspace.CurrentCamera
   if camera then
-   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/500,(camera.ViewportSize.X-48)/350)
+   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/566,(camera.ViewportSize.X-48)/350)
    dialogScale.Scale=math.min(1,(camera.ViewportSize.X-32)/420,(camera.ViewportSize.Y-32)/238)
   end
  end

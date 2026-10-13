@@ -18,6 +18,7 @@ local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
+require(script:WaitForChild("MatchIntro")).start(player,network)
 local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
