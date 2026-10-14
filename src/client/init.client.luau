@@ -45,7 +45,7 @@ chargeFill.BackgroundColor3=mint; chargeFill.BorderSizePixel=0; chargeFill.Size=
 local electric=Color3.fromRGB(68,225,255)
 -- CanvasGroup fades the track, target and glow together; its padding contains the needle.
 local serveMeter=Instance.new("CanvasGroup",gui)
-serveMeter.Name="ServeTimingMeter"; serveMeter.AnchorPoint=Vector2.new(0.5,0.5)
+serveMeter.Name="ServeChargeMeter"; serveMeter.AnchorPoint=Vector2.new(0.5,0.5)
 serveMeter.Size=UDim2.fromOffset(40,152); serveMeter.BackgroundTransparency=1
 serveMeter.GroupTransparency=1; serveMeter.Visible=false
 local meterScale=Instance.new("UIScale",serveMeter); meterScale.Scale=0.85
@@ -67,10 +67,15 @@ gradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(112
  ColorSequenceKeypoint.new(0.3,Color3.fromRGB(78,99,108)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(53,146,166)),
  ColorSequenceKeypoint.new(0.7,Color3.fromRGB(78,99,108)),ColorSequenceKeypoint.new(1,Color3.fromRGB(112,73,67))})
 local sweetSpot=Instance.new("Frame",track)
-sweetSpot.Name="SweetSpot"; sweetSpot.Position=UDim2.fromScale(0,0.44); sweetSpot.Size=UDim2.fromScale(1,0.12)
+sweetSpot.Name="SweetSpot"; sweetSpot.Position=UDim2.fromScale(0,0.45); sweetSpot.Size=UDim2.fromScale(1,0.1)
 sweetSpot.BackgroundTransparency=0.1; sweetSpot.BackgroundColor3=electric; sweetSpot.BorderSizePixel=0; pill(sweetSpot,8)
 local sweetStroke=Instance.new("UIStroke",sweetSpot)
 sweetStroke.Color=electric; sweetStroke.Thickness=3; sweetStroke.Transparency=0.7
+local serveFill=Instance.new("Frame",track)
+serveFill.Name="ChargeFill"; serveFill.AnchorPoint=Vector2.new(0,1); serveFill.Position=UDim2.fromScale(0,1)
+serveFill.Size=UDim2.fromScale(1,0); serveFill.BackgroundColor3=mint
+serveFill.BackgroundTransparency=0.25; serveFill.BorderSizePixel=0; serveFill.ZIndex=2; pill(serveFill,8)
+sweetSpot.ZIndex=3
 local needle=Instance.new("Frame",track)
 needle.Name="Needle"; needle.AnchorPoint=Vector2.new(0.5,0.5); needle.Size=UDim2.fromOffset(20,4)
 needle.BackgroundColor3=Color3.new(1,1,1); needle.BorderSizePixel=0; needle.ZIndex=3; pill(needle,8)
@@ -106,7 +111,7 @@ meterFeedback.Font=Enum.Font.GothamBold; meterFeedback.TextSize=20; meterFeedbac
 meterFeedback.TextStrokeColor3=dark; meterFeedback.TextStrokeTransparency=0.25
 local meterFeedbackUntil=0
 local meterFeedbackTween
-local meterInput,meterPending,meterDeadline
+local meterInput,meterPending,meterDeadline,meterStarted
 local function showServeTiming(grade)
  meterFeedback.Text=grade; meterFeedback.TextColor3=grade=="PERFECT!" and mint or grade=="GOOD" and Color3.fromRGB(255,220,75) or coral
  if meterFeedbackTween then meterFeedbackTween:Cancel() end
@@ -136,9 +141,10 @@ local chargeStarted,chargeCanShow,chargeInput
 local function cancelCharge(preserveMeterFade)
  if chargeCanShow then DiveController.charge(player.UserId,false) end
  if chargeStarted then input:FireServer("ChargeCancel") end
+ if meterStarted then input:FireServer("ServeChargeCancel") end
  chargeStarted=nil; chargeInput=nil; chargeCanShow=false; chargeTrack.Visible=false
  if preserveMeterFade==true then setMeterShown(false) else setMeterShown(false,true) end
- meterInput=nil
+ meterInput=nil; meterStarted=nil
 end
 local function round(object,r)
  local c=Instance.new("UICorner",object); c.CornerRadius=UDim.new(0,r or 14)
@@ -179,8 +185,10 @@ for i,layout in ipairs({{8,64,cream},{93,64,cream},{177,36,mint}}) do
  scoreDigits[i]=digit
 end
 for _,x in ipairs({73,158}) do
- local dash=text(scorePanel,"–",Vector2.new(x,12),Vector2.new(20,34),20,Color3.fromRGB(104,139,146))
- dash.TextXAlignment=Enum.TextXAlignment.Center
+ local dash=Instance.new("Frame",scorePanel)
+ dash.Name="ScoreDash"; dash.Position=UDim2.fromOffset(x+4,29)
+ dash.Size=UDim2.fromOffset(12,3); dash.BorderSizePixel=0
+ dash.BackgroundColor3=Color3.fromRGB(104,139,146); round(dash,2)
 end
 local serveAccent=Instance.new("Frame",scorePanel)
 serveAccent.Size=UDim2.fromOffset(36,3); serveAccent.Position=UDim2.fromOffset(22,53)
@@ -200,7 +208,7 @@ timingText.TextXAlignment=Enum.TextXAlignment.Center
 local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
-text(hitPanel,"HOLD LMB / RELEASE HIT  /  RMB SOFT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
+text(hitPanel,"LMB HIT  /  HOLD & RELEASE TO SERVE  /  RMB SOFT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
 local staminaPanel=panel(Vector2.new(490,720),Vector2.new(300,60))
 staminaPanel.Name="Stamina"
 local staminaLabel=text(staminaPanel,"STAMINA",Vector2.new(12,3),Vector2.new(270,18),10)
@@ -271,38 +279,27 @@ local function dive()
  input:FireServer("Dive",humanoid and humanoid.MoveDirection or Vector3.zero)
 end
 local function stopServeMeter()
- if meterPending or not snapshot or not snapshot.canServe or not Rules then return end
- local _,_,accuracy=Rules.serveTiming(snapshot.serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
- meterPending=true; meterInput=nil
- animateSwing(false,accuracy)
- input:FireServer("ServeTimingStop")
+ if meterPending or not meterStarted or not snapshot or not snapshot.canServe or not Rules then return end
+ local charge=Rules.serveCharge(meterStarted,math.min(workspace:GetServerTimeNow(),snapshot.serveDeadline))
+ meterPending=true; meterInput=nil; meterStarted=nil
+ animateSwing(false,charge)
+ input:FireServer("ServeChargeRelease")
 end
 local function beginCharge(key)
  if snapshot and snapshot.canServe then
   if not hitInputReady() then return end
   if meterPending or not playing() then return end
-  if meterInput then stopServeMeter() else meterInput=key end
+  if meterStarted then return end
+  meterDeadline=snapshot.serveDeadline; meterInput=key; meterStarted=workspace:GetServerTimeNow()
+  input:FireServer("ServeChargeStart")
   return
  end
- if chargeStarted or not playing() or not hitInputReady() then return end
- if not snapshot or (not snapshot.live and not snapshot.canServe) then return end
- chargeInput=key; chargeStarted=os.clock()
- local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
- chargeCanShow=snapshot.canServe or not readyAt or workspace:GetServerTimeNow()>=readyAt
- local started=chargeStarted
- task.delay(0.4,function()
-  if chargeStarted==started and chargeCanShow then DiveController.charge(player.UserId,true,started) end
- end)
- input:FireServer("ChargeStart")
+ if not playing() or not hitInputReady() or not snapshot or not snapshot.live then return end
+ animateSwing(false,0)
+ input:FireServer("Swing")
 end
 local function releaseCharge(key)
  if key==meterInput then stopServeMeter(); return end
- if key~=chargeInput or not chargeStarted then return end
- local held=os.clock()-chargeStarted
- if not hitInputReady() then cancelCharge(); return end
- animateSwing(false,chargeCanShow and math.clamp((held-0.4)/0.6,0,1) or 0)
- chargeStarted=nil; chargeInput=nil; chargeTrack.Visible=false
- chargeCanShow=false; input:FireServer("ChargeRelease")
 end
 touchSwing.InputBegan:Connect(function(key)
  if key.UserInputType==Enum.UserInputType.Touch then beginCharge(key) end
@@ -498,20 +495,21 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  end
  local canTime=playing() and snapshot and snapshot.canServe and Rules
  if canTime and meterDeadline~=snapshot.serveDeadline then
-  meterDeadline=snapshot.serveDeadline; meterPending=false; meterInput=nil
+  meterDeadline=snapshot.serveDeadline; meterPending=false; meterInput=nil; meterStarted=nil
   meterExitRequested=false; setMeterShown(false,true); meterFeedbackUntil=0
  end
  local meterActive=canTime and not meterExitRequested and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen or false
  setMeterShown(meterActive)
  serveMeter.Visible=meterShowing or serveMeter.GroupTransparency<0.999
  if meterActive and not meterPending then
-  local position=Rules.serveTiming(snapshot.serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
-  needle.Position=UDim2.fromScale(0.5,position)
+  local position=Rules.serveCharge(meterStarted,math.min(workspace:GetServerTimeNow(),snapshot.serveDeadline))
+  needle.Position=UDim2.fromScale(0.5,1-position)
+  serveFill.Size=UDim2.fromScale(1,position)
   if workspace:GetServerTimeNow()>=snapshot.serveDeadline then
-   meterPending=true; meterInput=nil
+   if meterStarted then stopServeMeter() else meterPending=true; meterInput=nil end
   end
  end
- if not canTime then meterInput=nil; meterDeadline=nil; meterPending=false end
+ if not canTime then meterInput=nil; meterDeadline=nil; meterPending=false; meterStarted=nil end
  meterFeedback.Visible=playing() and now<meterFeedbackUntil
  if chargeStarted and (not playing() or not snapshot or (not snapshot.live and not snapshot.canServe)) then cancelCharge() end
  if chargeStarted then
@@ -664,7 +662,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  countdown.TextColor3=color
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
- timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
+ timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "HOLD / RELEASE FOR BOT SERVE" or "HOLD TO CHARGE / RELEASE AT 45–55%") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")

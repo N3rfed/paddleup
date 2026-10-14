@@ -69,31 +69,50 @@ end
 Rules.SERVE_TIMEOUT=15
 Rules.MAX_SERVE_VELOCITY=90
 
-Rules.SERVE_METER_PERIOD=1.6
-Rules.SERVE_PERFECT_OFFSET=0.12
-Rules.SERVE_GOOD_OFFSET=0.4
+Rules.SERVE_CHARGE_DURATION=0.8
+Rules.SERVE_SWEET_MIN=0.45
+Rules.SERVE_SWEET_MAX=0.55
+Rules.SERVE_SWEET_CENTER=0.5
+Rules.PRACTICE_SERVE_DEPTH=24
 
--- A full left/right/left cycle; offset is signed and normalized to [-1,1].
-function Rules.serveTiming(started,now)
- local phase=math.max(0,now-started)%Rules.SERVE_METER_PERIOD/Rules.SERVE_METER_PERIOD
- local needle=phase<0.5 and phase*2 or (1-phase)*2
- local offset=needle*2-1
- local accuracy=1-math.abs(offset)
- local grade=math.abs(offset)<=Rules.SERVE_PERFECT_OFFSET and "PERFECT!"
-  or math.abs(offset)<=Rules.SERVE_GOOD_OFFSET and "GOOD"
-  or offset<0 and "EARLY" or "LATE"
- return needle,offset,accuracy,grade
+function Rules.serveCharge(started,now)
+ return started and math.clamp((now-started)/Rules.SERVE_CHARGE_DURATION,0,1) or 0
 end
 
-function Rules.servePower(accuracy)
- return 0.6+0.62*math.clamp(accuracy,0,1)
+function Rules.serveGrade(charge)
+ local perfect=charge>=Rules.SERVE_SWEET_MIN and charge<=Rules.SERVE_SWEET_MAX
+ return perfect and "PERFECT!" or charge<Rules.SERVE_SWEET_MIN and "UNDERCHARGED" or "OVERCHARGED",
+  charge-Rules.SERVE_SWEET_CENTER,1-math.abs(charge-Rules.SERVE_SWEET_CENTER)
 end
 
-function Rules.timedServeTarget(side,serveX,offset)
- offset=math.clamp(offset,-1,1)
- local error=math.abs(offset)
- -- Center hits land deep in the diagonal box. Edge hits can miss the lines.
- return Vector3.new(-math.sign(serveX)*(10+12*error*error),181.7,-side*(28+14*offset*error))
+-- Solve a low diagonal arc at the requested speed. Overcharge retains maximum
+-- speed but pushes the landing beyond the baseline; very weak serves hit the net.
+function Rules.chargedServeVelocity(from,side,serveX,charge,gravity,targetDepth)
+ charge=math.clamp(charge,0,1)
+ local over=charge>Rules.SERVE_SWEET_MAX
+ local power=math.min(1,charge/Rules.SERVE_SWEET_MIN)
+ local overshoot=math.max(0,(charge-Rules.SERVE_SWEET_MAX)/(1-Rules.SERVE_SWEET_MAX))
+ local depth=over and (Rules.BASELINE+2+18*overshoot) or (18+16*power)
+ if targetDepth then depth=math.clamp(targetDepth,Rules.KITCHEN+2,Rules.BASELINE-2) end
+ local target=Vector3.new(-math.sign(serveX)*10,181.7,-side*depth)
+ local delta=target-from
+ local speed=Rules.MAX_SERVE_VELOCITY*math.max(0.25,power)
+ local horizontal=Vector3.new(delta.X,0,delta.Z)
+ local b=gravity*delta.Y-speed*speed
+ local discriminant=math.max(0,b*b-gravity*gravity*delta:Dot(delta))
+ local duration=math.sqrt(2*delta:Dot(delta)/(-b+math.sqrt(discriminant)))
+ local crossing=-from.Z/delta.Z
+ if charge>=Rules.SERVE_SWEET_MIN*0.5 then
+  -- Minimum legal clearance; the speed cap may require a higher arc.
+  local minimum=math.sqrt(math.max(0,2*(185.55-from.Y-delta.Y*crossing)/(gravity*crossing*(1-crossing))))
+  duration=math.max(duration,minimum)
+ end
+ local vy=delta.Y/duration+0.5*gravity*duration
+ if charge<Rules.SERVE_SWEET_MIN*0.5 then
+  local fullVelocity=Rules.chargedServeVelocity(from,side,serveX,Rules.SERVE_SWEET_CENTER,gravity,targetDepth)
+  return fullVelocity*math.max(0.05,power),target,power
+ end
+ return horizontal/duration+Vector3.new(0,vy,0),target,power
 end
 
 -- Ignore invalid remote targets and keep aim inside the diagonal service box.
