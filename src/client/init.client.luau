@@ -1,3 +1,4 @@
+local AugmentVisuals=require(script:WaitForChild("AugmentVisuals"))
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
@@ -18,7 +19,9 @@ local Rules
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
-local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") end
+require(script:WaitForChild("AugmentDraft")).start(player,network)
+require(script:WaitForChild("MatchIntro")).start(player,network)
+local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -46,7 +49,7 @@ local electric=Color3.fromRGB(68,225,255)
 -- CanvasGroup fades the track, target and glow together; its padding contains the needle.
 local serveMeter=Instance.new("CanvasGroup",gui)
 serveMeter.Name="ServeTimingMeter"; serveMeter.AnchorPoint=Vector2.new(0.5,0.5)
-serveMeter.Size=UDim2.fromOffset(40,152); serveMeter.BackgroundTransparency=1
+serveMeter.Size=UDim2.fromOffset(160,190); serveMeter.BackgroundTransparency=1
 serveMeter.GroupTransparency=1; serveMeter.Visible=false
 local meterScale=Instance.new("UIScale",serveMeter); meterScale.Scale=0.85
 local function pill(object,radius)
@@ -66,11 +69,15 @@ local gradient=Instance.new("UIGradient",lane); gradient.Rotation=90
 gradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(112,73,67)),
  ColorSequenceKeypoint.new(0.3,Color3.fromRGB(78,99,108)),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(53,146,166)),
  ColorSequenceKeypoint.new(0.7,Color3.fromRGB(78,99,108)),ColorSequenceKeypoint.new(1,Color3.fromRGB(112,73,67))})
+local goodZone=Instance.new("Frame",track)
+goodZone.Name="GoodZone"; goodZone.Position=UDim2.fromScale(0,0.3); goodZone.Size=UDim2.fromScale(1,0.4)
+goodZone.BackgroundColor3=Color3.fromRGB(255,211,93); goodZone.BackgroundTransparency=0.2; goodZone.BorderSizePixel=0
+pill(goodZone,5)
 local sweetSpot=Instance.new("Frame",track)
-sweetSpot.Name="SweetSpot"; sweetSpot.Position=UDim2.fromScale(0,0.44); sweetSpot.Size=UDim2.fromScale(1,0.12)
-sweetSpot.BackgroundTransparency=0.1; sweetSpot.BackgroundColor3=electric; sweetSpot.BorderSizePixel=0; pill(sweetSpot,8)
+sweetSpot.Name="SweetSpot"; sweetSpot.Position=UDim2.fromScale(0,0.47); sweetSpot.Size=UDim2.fromScale(1,0.06)
+sweetSpot.BackgroundTransparency=0.1; sweetSpot.BackgroundColor3=mint; sweetSpot.BorderSizePixel=0; pill(sweetSpot,8)
 local sweetStroke=Instance.new("UIStroke",sweetSpot)
-sweetStroke.Color=electric; sweetStroke.Thickness=3; sweetStroke.Transparency=0.7
+sweetStroke.Color=mint; sweetStroke.Thickness=3; sweetStroke.Transparency=0.7
 local needle=Instance.new("Frame",track)
 needle.Name="Needle"; needle.AnchorPoint=Vector2.new(0.5,0.5); needle.Size=UDim2.fromOffset(20,4)
 needle.BackgroundColor3=Color3.new(1,1,1); needle.BorderSizePixel=0; needle.ZIndex=3; pill(needle,8)
@@ -80,6 +87,11 @@ local glow=Instance.new("Frame",needle)
 glow.Name="Glow"; glow.AnchorPoint=Vector2.new(0.5,0.5); glow.Position=UDim2.fromScale(0.5,0.5)
 glow.Size=UDim2.fromOffset(28,10); glow.BackgroundColor3=electric; glow.BackgroundTransparency=0.85
 glow.BorderSizePixel=0; glow.ZIndex=2; pill(glow,8)
+local serveHint=Instance.new("TextLabel",serveMeter)
+serveHint.Name="ServeChargeHint"; serveHint.BackgroundTransparency=1
+serveHint.Size=UDim2.new(1,0,0,24); serveHint.Position=UDim2.new(0,0,1,-24)
+serveHint.Font=Enum.Font.GothamBold; serveHint.TextSize=12; serveHint.TextColor3=mint
+serveHint.TextStrokeTransparency=0.3; serveHint.Text="HOLD LEFT CLICK"
 local meterShowing=false
 local meterFade,meterResize
 local meterExitRequested=false
@@ -106,7 +118,7 @@ meterFeedback.Font=Enum.Font.GothamBold; meterFeedback.TextSize=20; meterFeedbac
 meterFeedback.TextStrokeColor3=dark; meterFeedback.TextStrokeTransparency=0.25
 local meterFeedbackUntil=0
 local meterFeedbackTween
-local meterInput,meterPending,meterDeadline
+local meterInput,meterPending,meterDeadline,meterStarted
 local function showServeTiming(grade)
  meterFeedback.Text=grade; meterFeedback.TextColor3=grade=="PERFECT!" and mint or grade=="GOOD" and Color3.fromRGB(255,220,75) or coral
  if meterFeedbackTween then meterFeedbackTween:Cancel() end
@@ -134,8 +146,9 @@ countdownTextStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
 countdownTextStroke.Color=Color3.fromRGB(11,17,24); countdownTextStroke.Thickness=2.5; countdownTextStroke.Transparency=0
 local chargeStarted,chargeCanShow,chargeInput
 local function cancelCharge(preserveMeterFade)
- if chargeCanShow then DiveController.charge(player.UserId,false) end
- if chargeStarted then input:FireServer("ChargeCancel") end
+ if chargeCanShow or meterStarted then DiveController.charge(player.UserId,false) end
+ if chargeStarted or meterStarted then input:FireServer("ChargeCancel") end
+ meterStarted=nil
  chargeStarted=nil; chargeInput=nil; chargeCanShow=false; chargeTrack.Visible=false
  if preserveMeterFade==true then setMeterShown(false) else setMeterShown(false,true) end
  meterInput=nil
@@ -200,7 +213,7 @@ timingText.TextXAlignment=Enum.TextXAlignment.Center
 local timingTrack=Instance.new("Frame",hitPanel)
 timingTrack.Position=UDim2.fromOffset(20,44); timingTrack.Size=UDim2.fromOffset(490,7); timingTrack.BackgroundColor3=Color3.fromRGB(52,70,73); timingTrack.BorderSizePixel=0; round(timingTrack,4)
 local timingFill=Instance.new("Frame",timingTrack); timingFill.Size=UDim2.fromScale(0,1); timingFill.BorderSizePixel=0; timingFill.BackgroundColor3=mint; round(timingFill,4)
-text(hitPanel,"HOLD LMB / RELEASE HIT  /  RMB SOFT",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
+text(hitPanel,"LMB HIT / RMB SOFT / R LOB / X SLICE",Vector2.new(20,61),Vector2.new(490,23),16).TextXAlignment=Enum.TextXAlignment.Center
 local staminaPanel=panel(Vector2.new(490,720),Vector2.new(300,60))
 staminaPanel.Name="Stamina"
 local staminaLabel=text(staminaPanel,"STAMINA",Vector2.new(12,3),Vector2.new(270,18),10)
@@ -263,6 +276,9 @@ local function animateSwing(softRequested,charge)
  DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
+local function setDiveHeld(held)
+ input:FireServer("DiveHeld",held)
+end
 local function dive()
  if not playing() or workspace:GetServerTimeNow()<diveReadyAt or (snapshot and snapshot.stamina<(Rules and Rules.DIVE_STAMINA_COST or 35)) then return end
  cancelCharge()
@@ -271,9 +287,9 @@ local function dive()
  input:FireServer("Dive",humanoid and humanoid.MoveDirection or Vector3.zero)
 end
 local function stopServeMeter()
- if meterPending or not snapshot or not snapshot.canServe or not Rules then return end
- local _,_,accuracy=Rules.serveTiming(snapshot.serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
- meterPending=true; meterInput=nil
+ if meterPending or not meterStarted or not snapshot or not snapshot.canServe or not Rules then return end
+ local _,_,accuracy=Rules.serveTiming(meterStarted or workspace:GetServerTimeNow(),workspace:GetServerTimeNow())
+ meterPending=true; meterInput=nil; meterStarted=nil
  animateSwing(false,accuracy)
  input:FireServer("ServeTimingStop")
 end
@@ -281,7 +297,11 @@ local function beginCharge(key)
  if snapshot and snapshot.canServe then
   if not hitInputReady() then return end
   if meterPending or not playing() then return end
-  if meterInput then stopServeMeter() else meterInput=key end
+  if not meterInput then
+   meterDeadline=snapshot.serveDeadline; meterInput=key; meterStarted=workspace:GetServerTimeNow()
+   input:FireServer("ServeChargeStart")
+   DiveController.charge(player.UserId,true)
+  end
   return
  end
  if chargeStarted or not playing() or not hitInputReady() then return end
@@ -304,10 +324,39 @@ local function releaseCharge(key)
  chargeStarted=nil; chargeInput=nil; chargeTrack.Visible=false
  chargeCanShow=false; input:FireServer("ChargeRelease")
 end
+local function specialShot(kind)
+ if not playing() or not hitInputReady() then return end
+ -- Send the shot before clearing the windup so the server can validate a feint.
+ input:FireServer(kind)
+ chargeStarted=nil; chargeInput=nil; chargeCanShow=false; chargeTrack.Visible=false
+ animateSwing(kind=="Lob")
+end
+CAS:BindAction("AugmentLob",function(_,status)
+ if status==Enum.UserInputState.Begin then specialShot("Lob") end
+ return Enum.ContextActionResult.Sink
+end,true,Enum.KeyCode.ButtonY)
+CAS:SetTitle("AugmentLob","LOB")
+CAS:SetPosition("AugmentLob",UDim2.new(1,-180,1,-180))
+CAS:BindAction("AugmentSlice",function(_,status)
+ if status==Enum.UserInputState.Begin then specialShot("Slice") end
+ return Enum.ContextActionResult.Sink
+end,true,Enum.KeyCode.ButtonX)
+CAS:SetTitle("AugmentSlice","SLICE")
+CAS:SetPosition("AugmentSlice",UDim2.new(1,-250,1,-180))
 touchSwing.InputBegan:Connect(function(key)
  if key.UserInputType==Enum.UserInputType.Touch then beginCharge(key) end
 end)
-touchDive.Activated:Connect(dive)
+touchDive.InputBegan:Connect(function(key)
+ if key.UserInputType==Enum.UserInputType.Touch then setDiveHeld(true); dive() end
+end)
+touchDive.InputEnded:Connect(function(key)
+ if key.UserInputType==Enum.UserInputType.Touch then setDiveHeld(false) end
+end)
+CAS:BindAction("DiveHeld",function(_,status)
+ if status==Enum.UserInputState.Begin then setDiveHeld(true); dive()
+ elseif status==Enum.UserInputState.End or status==Enum.UserInputState.Cancel then setDiveHeld(false) end
+ return Enum.ContextActionResult.Sink
+end,false,Enum.KeyCode.ButtonB)
 UIS.InputBegan:Connect(function(key,processed)
  if UIS:GetFocusedTextBox() then return end
  if key.KeyCode==Enum.KeyCode.Home then setDeveloperMode(not developerMode); return end
@@ -317,17 +366,28 @@ UIS.InputBegan:Connect(function(key,processed)
  elseif key.UserInputType==Enum.UserInputType.MouseButton2 then
   cancelCharge()
   if hitInputReady() then animateSwing(true); input:FireServer("SoftShot") end
- elseif key.KeyCode==Enum.KeyCode.LeftShift then dive()
+ elseif key.KeyCode==Enum.KeyCode.R then specialShot("Lob")
+ elseif key.KeyCode==Enum.KeyCode.X then specialShot("Slice")
+ elseif key.KeyCode==Enum.KeyCode.LeftShift then setDiveHeld(true); dive()
  elseif key.KeyCode==Enum.KeyCode.Q then input:FireServer("Power")
  elseif key.KeyCode==Enum.KeyCode.E then input:FireServer("Slow") end
 end)
 UIS.InputEnded:Connect(releaseCharge)
+UIS.InputEnded:Connect(function(key) if key.KeyCode==Enum.KeyCode.LeftShift then setDiveHeld(false) end end)
+UIS.WindowFocusReleased:Connect(function() setDiveHeld(false) end)
+player.CharacterRemoving:Connect(function() setDiveHeld(false); AugmentVisuals.clear() end)
 UIS.WindowFocusReleased:Connect(cancelCharge)
 UIS.TextBoxFocused:Connect(cancelCharge)
 game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
+player:GetAttributeChangedSignal("AugmentDetailsOpen"):Connect(function()
+ if player:GetAttribute("AugmentDetailsOpen") then cancelCharge() end
+end)
 player:GetAttributeChangedSignal("LeaveConfirmationOpen"):Connect(function()
  if player:GetAttribute("LeaveConfirmationOpen") then cancelCharge() end
+end)
+player:GetAttributeChangedSignal("AugmentDraftOpen"):Connect(function()
+ if player:GetAttribute("AugmentDraftOpen") then cancelCharge() end
 end)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
@@ -365,16 +425,21 @@ for i=1,40 do
  p.Name="Landing ring"; p.Transparency=1; p.Size=Vector3.new(0.12,0.06,0.45); p.Material=Enum.Material.Neon; p.Anchored=true; p.CanCollide=false; p.CanTouch=false; p.CanQuery=false; p.Parent=workspace
  ring[i]=p
 end
+local decoyRing={}
+for i,part in ipairs(ring) do
+ local copy=part:Clone(); copy.Name="Afterimage decoy reticle"; copy.Parent=workspace; decoyRing[i]=copy
+end
 local marker=Instance.new("Part",workspace)
 marker.Name="Bounce countdown"; marker.Size=Vector3.new(0.1,0.1,0.1); marker.Anchored=true; marker.Transparency=1; marker.CanCollide=false; marker.CanQuery=false
 local landingGui=Instance.new("BillboardGui",marker); landingGui.Size=UDim2.fromOffset(140,48); landingGui.StudsOffset=Vector3.new(0,1,0); landingGui.AlwaysOnTop=true; landingGui.Enabled=false
 local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); countdown.TextXAlignment=Enum.TextXAlignment.Center; countdown.Font=Enum.Font.GothamBold; countdown.TextStrokeTransparency=0.4
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
- if not snapshot or snapshot.shotId~=data.shotId or not data.live then trail:Clear() end
+ if not snapshot or snapshot.shotId~=data.shotId or snapshot.heavy~=data.heavy or not data.live then trail:Clear() end
+ if not data.live then AugmentVisuals.clear() end
  if snapshot and snapshot.canServe and not data.canServe then cancelCharge(data.live==true) end
  snapshot=data; receivedAt=os.clock()
- outGui.Enabled=data.outLanding~=nil
+ outGui.Enabled=developerMode and data.outLanding~=nil
  if data.outLanding and data.outLanding~=lastOutLanding then
   local params=RaycastParams.new(); params.FilterType=Enum.RaycastFilterType.Exclude
   params.FilterDescendantsInstances={player.Character,outMarker}; params.RespectCanCollide=true
@@ -389,12 +454,16 @@ state.OnClientEvent:Connect(function(data)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
  staminaFill.Size=UDim2.fromScale(data.stamina/100,1)
+ staminaLabel.Text=data.comeback and "COMEBACK / +15% MOVE + HIT" or data.augmentStatus and data.augmentStatus~="" and data.augmentStatus or "STAMINA"
  diveReadyAt=data.diveReadyAt or (workspace:GetServerTimeNow()+data.dive)
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
+ powerButton.Visible=player:GetAttribute("MatchVariant")~="Augmented"
+ slowButton.Visible=powerButton.Visible
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
+ if kind=="augmentFX" then AugmentVisuals.activate(message.userId,message.tier); return end
  if kind=="serveTiming" then showServeTiming(message.grade); meterPending=true; meterExitRequested=true; setMeterShown(false); meterInput=nil; return end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
@@ -417,13 +486,14 @@ feedback.OnClientEvent:Connect(function(message,kind)
   end
   return
  end
- if kind=="fault" then cancelCharge(); meterPending=false; meterFeedbackUntil=0; return end
+ if kind=="fault" then cancelCharge(); meterPending=false; meterExitRequested=false; meterFeedbackUntil=0; return end
  if kind=="point" then
   announcement.Text=tostring(message); announcement.TextColor3=cream
   announcementUntil=os.clock()+2.5; announcement.Visible=true
   return
  end
  if kind=="rallyResult" then
+  AugmentVisuals.clear()
   meterFeedbackUntil=0; meterInput=nil; setMeterShown(false,true)
   cancelCharge()
   announcement.Text=kind=="rallyResult" and (message.title.."\n"..message.fault) or tostring(message)
@@ -447,10 +517,12 @@ feedback.OnClientEvent:Connect(function(message,kind)
  end
  if kind=="diveMotion" then
   if message.userId==player.UserId then diveReadyAt=message.diveReadyAt or (workspace:GetServerTimeNow()+(Rules and Rules.DIVE_COOLDOWN or 1.75)) end
-  DiveController.play(message.userId,message.direction)
+  if message.afterimage then AugmentVisuals.clone(message.userId) end
+  DiveController.play(message.userId,message.direction,message.moveTime,message.poseTime)
   return
  end
  if kind=="swing" then
+  if message.hidePaddle then AugmentVisuals.hidePaddle(message.userId,message.slam and 0.62 or 0.52+0.1*(message.charge or 0)) end
   DiveController.swing(message.userId,message.backhand,message.slam,message.contact,message.direction,message.charge,message.soft)
   return
  end
@@ -498,20 +570,21 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  end
  local canTime=playing() and snapshot and snapshot.canServe and Rules
  if canTime and meterDeadline~=snapshot.serveDeadline then
-  meterDeadline=snapshot.serveDeadline; meterPending=false; meterInput=nil
+  meterDeadline=snapshot.serveDeadline; meterPending=false; meterInput=nil; meterStarted=nil
   meterExitRequested=false; setMeterShown(false,true); meterFeedbackUntil=0
  end
  local meterActive=canTime and not meterExitRequested and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen or false
  setMeterShown(meterActive)
  serveMeter.Visible=meterShowing or serveMeter.GroupTransparency<0.999
  if meterActive and not meterPending then
-  local position=Rules.serveTiming(snapshot.serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
-  needle.Position=UDim2.fromScale(0.5,position)
+  local position=Rules.serveTiming(meterStarted or workspace:GetServerTimeNow(),workspace:GetServerTimeNow())
+  needle.Position=UDim2.fromScale(0.5,1-position)
+  serveHint.Text=meterStarted and (math.abs(position-0.5)<=0.03 and "PERFECT — RELEASE!" or math.abs(position-0.5)<=0.2 and "GOOD — RELEASE" or "WAIT FOR GOLD / GREEN") or "HOLD LEFT CLICK"
   if workspace:GetServerTimeNow()>=snapshot.serveDeadline then
    meterPending=true; meterInput=nil
   end
  end
- if not canTime then meterInput=nil; meterDeadline=nil; meterPending=false end
+ if not canTime then meterInput=nil; meterStarted=nil; meterDeadline=nil; meterPending=false end
  meterFeedback.Visible=playing() and now<meterFeedbackUntil
  if chargeStarted and (not playing() or not snapshot or (not snapshot.live and not snapshot.canServe)) then cancelCharge() end
  if chargeStarted then
@@ -530,12 +603,13 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local courtSide=player:GetAttribute("CourtSide") or 0
  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
  canvas.Visible=not inLobby; devToggle.Visible=not inLobby
+ abilities.Visible=developerMode and player:GetAttribute("MatchVariant")~="Augmented"
  if not inLobby then lobbyCamera:disable() end
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and math.min(now-receivedAt,0.12) or 0
  local predicted
  if snapshot then
-  if Rules then predicted=Rules.advanceBall(snapshot.p,snapshot.v,45,age,snapshot.lob,(snapshot.bounces or 0)>0)
+  if Rules then predicted=Rules.advanceFlight(snapshot.p,snapshot.v,(snapshot.flightGravity or 45)*(snapshot.visualRate or 1)^2,age,snapshot.lob,(snapshot.bounces or 0)>0,snapshot.offensive,snapshot.last)
   else predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0) end
   predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
   if snapshot.serveReady and Rules then
@@ -585,10 +659,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
-  crosshair.Visible=aiming==true and not (snapshot and snapshot.canServe)
+  crosshair.Visible=developerMode and aiming==true and not (snapshot and snapshot.canServe)
   if aiming and UIS.MouseEnabled then
    local delta=UIS:GetMouseDelta()
    yaw-=delta.X*0.004
@@ -624,9 +698,15 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   meterFeedback.Position=UDim2.fromOffset(feedbackAt.X,feedbackAt.Y)
   meterFeedback.Visible=meterFeedback.Visible and feedbackOnScreen
   if h then
+   if player:GetAttribute("AugmentStunned") then h:Move(Vector3.zero,false) end
    local ax=(arrows[Enum.KeyCode.Right] and 1 or 0)-(arrows[Enum.KeyCode.Left] and 1 or 0)
    local az=(arrows[Enum.KeyCode.Down] and 1 or 0)-(arrows[Enum.KeyCode.Up] and 1 or 0)
-   if ax~=0 or az~=0 then h:Move(Vector3.new(ax,0,az).Unit,true) end
+   if not player:GetAttribute("AugmentStunned") and (ax~=0 or az~=0) then h:Move(Vector3.new(ax,0,az).Unit,true) end
+   if player:GetAttribute("BaselineSentinelActive") and not player:GetAttribute("AugmentStunned") and not c:GetAttribute("Diving") then
+    local movement=h.MoveDirection
+    local lateral=Vector3.new(movement.X*1.15,0,movement.Z)
+    if lateral.Magnitude>0.01 then h:Move(lateral.Unit,false) end
+   end
    local look=r.CFrame.LookVector
    local direction=Vector3.new(look.X,0,look.Z)
    if Rules then direction=Rules.shotAim(r.CFrame,r.AssemblyLinearVelocity,predicted) end
@@ -644,19 +724,29 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  end
  HitboxOverlay.update(developerMode)
  FloatingText.update(dt)
+ AugmentVisuals.update()
  effects:update(dt,snapshot,chargeCanShow and chargeStarted or nil)
  ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady))
  if not snapshot then return end
+ outGui.Enabled=developerMode and snapshot.outLanding~=nil
  visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live
  local eta=math.max(0,snapshot.eta-age)
  local color=snapshot.green and mint or (eta<0.6 and Color3.fromRGB(255,214,97) or coral)
- local visible=developerMode and snapshot.live and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46
+ local visible=developerMode and snapshot.live and not snapshot.trackingHidden and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46
  local radius=1.6+math.sin(now*9)*0.2+math.min(eta,1.5)*0.6
  for i,p in ipairs(ring) do
   local angle=i*math.pi*2/#ring
   local pos=Vector3.new(snapshot.landing.X+math.cos(angle)*radius,181.37,snapshot.landing.Z+math.sin(angle)*radius)
   p.CFrame=CFrame.new(pos)*CFrame.Angles(0,-angle,0)
   p.Color=color; p.Transparency=visible and 0.1 or 1
+ end
+ for i,part in ipairs(decoyRing) do
+  local target=snapshot.decoyLanding
+  if target and visible then
+   local angle=i*math.pi*2/#decoyRing
+   part.CFrame=CFrame.new(target.X+math.cos(angle)*radius,181.37,target.Z+math.sin(angle)*radius)*CFrame.Angles(0,-angle,0)
+   part.Color=color; part.Transparency=0.1+0.2*(0.5+0.5*math.sin(now*40))
+  else part.Transparency=1 end
  end
  marker.Position=Vector3.new(snapshot.landing.X,181.5,snapshot.landing.Z)
  landingGui.Enabled=visible

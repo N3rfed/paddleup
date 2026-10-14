@@ -34,7 +34,7 @@ local function finish(character,d)
  end
  active[character]=nil
 end
-function Controller.play(userId,direction)
+function Controller.play(userId,direction,moveTime,poseTime)
  local p=Players:GetPlayerByUserId(userId)
  local c=p and p.Character
  local root=c and c:FindFirstChild("HumanoidRootPart")
@@ -44,7 +44,7 @@ function Controller.play(userId,direction)
  if direction.Magnitude<0.001 then return end
  direction=direction.Unit
  if active[c] then finish(c,active[c]) end
- local d={root=root,humanoid=humanoid,direction=direction,start=os.clock(),joints={},localPlayer=p==Players.LocalPlayer,side=p:GetAttribute("CourtSide") or 1}
+ local d={moveTime=moveTime or MOVE_TIME,poseTime=poseTime or POSE_TIME,root=root,humanoid=humanoid,direction=direction,start=os.clock(),joints={},localPlayer=p==Players.LocalPlayer,side=p:GetAttribute("CourtSide") or 1}
  for _,joint in ipairs(c:GetDescendants()) do
   if joint:IsA("Motor6D") or joint:IsA("AnimationConstraint") then
    local name=joint.Name:lower()
@@ -99,13 +99,14 @@ end)
 RunService.PreSimulation:Connect(function(dt)
  for c,d in pairs(active) do
   local elapsed=os.clock()-d.start
-  if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=POSE_TIME then
+  if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=d.poseTime then
    finish(c,d)
   else
-   if d.airForce and (elapsed>=0.34 or d.humanoid.FloorMaterial~=Enum.Material.Air) then
+   if d.airForce and (elapsed>=d.moveTime*0.708333 or d.humanoid.FloorMaterial~=Enum.Material.Air) then
     d.airForce:Destroy(); d.airAttachment:Destroy(); d.airForce=nil
    end
-   local weight=smooth(elapsed/0.08)*(1-smooth((elapsed-0.44)/0.22))
+   local progress=elapsed/d.poseTime
+   local weight=smooth(progress/0.121212)*(1-smooth((progress-2/3)/(1/3)))
    for _,j in ipairs(d.joints) do
     if j.instance.Parent then
      j.previous=j.instance.Transform
@@ -126,7 +127,7 @@ RunService.PreSimulation:Connect(function(dt)
     h:Move(Vector3.zero,false)
     h.Jump=false
     local direction=d.direction
-    local speed=elapsed<MOVE_TIME and 64*(1-smooth(elapsed/MOVE_TIME)) or 0
+    local speed=elapsed<d.moveTime and 64*(1-smooth(elapsed/d.moveTime)) or 0
     local position=r.Position
     local safeStep=math.max(dt,1/240)
     local hit=workspace:Raycast(position,direction*(speed*safeStep+1.6),d.raycast)

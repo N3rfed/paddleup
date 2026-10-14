@@ -18,7 +18,7 @@ function MainMenu.start(player,network)
  local gold=Color3.fromRGB(190,153,91)
  local panel=Instance.new("Frame",gui)
  panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
- panel.Size=UDim2.fromOffset(350,500); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
+ panel.Size=UDim2.fromOffset(350,566); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
  local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,16)
  local stroke=Instance.new("UIStroke",panel); stroke.Color=gold; stroke.Transparency=0.4
  local scale=Instance.new("UIScale",panel)
@@ -33,13 +33,28 @@ function MainMenu.start(player,network)
  label("P A D D L E U P",22,24,14,gold)
  label("Skyline Club",55,40,30)
  label("THE PENTHOUSE  /  PLAY & UNWIND",99,22,11,gold)
- local status=label("Choose a court experience. Elevators open in a future update.",410,65,13)
+ local status=label("Choose a court experience. Elevators open in a future update.",476,65,13)
  local request=network:WaitForChild("Session")
  local pending=false
  local buttons={}
+ local chosenMode=nil
+ local variantButtons={}
+ local function showModes()
+  chosenMode=nil
+  for _,button in ipairs(buttons) do button.Visible=true end
+  for _,button in ipairs(variantButtons) do button.Visible=false end
+  status.Text="Choose a court experience."
+ end
+ local function connect(mode,variant)
+  if pending then return end
+  pending=true; status.Text="Connecting to the rooftop..."
+  request:FireServer(mode,variant)
+  task.delay(5,function() if pending then pending=false; status.Text="No response yet. Please try again." end end)
+ end
  for index,item in ipairs({
   {"PRACTICE","Warm up with the practice partner","Practice"},
   {"1V1","Join this server's singles court","1V1"},
+  {"1V2","One player against a team of two","1V2"},
   {"2V2","Join this server's doubles court","2V2"},
   {"SPECTATE","Watch the rooftop court","Spectate"},
  }) do
@@ -62,9 +77,34 @@ function MainMenu.start(player,network)
   b.SelectionGained:Connect(function() hover(true) end); b.SelectionLost:Connect(function() hover(false) end)
   b.Activated:Connect(function()
    if pending then return end
-   pending=true; status.Text="Connecting to the rooftop..."
-   request:FireServer(item[3])
-   task.delay(5,function() if pending then pending=false; status.Text="No response yet. Please try again." end end)
+   if item[3]=="Spectate" then connect("Spectate"); return end
+   chosenMode=item[3]
+   for _,button in ipairs(buttons) do button.Visible=false end
+   for _,button in ipairs(variantButtons) do button.Visible=true end
+   status.Text=item[1].." / Choose your ruleset.\nAugmented: shared rarity, personal upgrades."
+  end)
+ end
+ for index,item in ipairs({
+  {"POWER-UP", "Collect court pickups.\nPlay with Power Shot and Slow.", "PowerUp",Color3.fromRGB(75,214,202)},
+  {"AUGMENTED", "Draft 1 of 3 cards. Build your playstyle.\nGREEN 60% / YELLOW 30% / RED 10%", "Augmented",Color3.fromRGB(246,183,77)},
+  {"< BACK", "Choose a different team format", "Back",gold},
+ }) do
+  local b=Instance.new("TextButton",panel)
+  b.Name=item[3]; b.Position=UDim2.fromOffset(24,145+(index-1)*108)
+  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(37,57,62)
+  b.Text=""; b.Visible=false; table.insert(variantButtons,b)
+  local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,12)
+  local s=Instance.new("UIStroke",b); s.Color=item[4]; s.Transparency=0.35
+  for line=1,2 do
+   local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
+   t.Position=UDim2.fromOffset(16,line==1 and 10 or 38); t.Size=UDim2.new(1,-32,0,line==1 and 24 or 45)
+   t.Text=item[line]; t.Font=line==1 and Enum.Font.GothamBold or Enum.Font.GothamMedium
+   t.TextSize=line==1 and 19 or 11; t.TextColor3=line==1 and item[4] or cream
+   t.TextXAlignment=Enum.TextXAlignment.Left; t.TextWrapped=true
+  end
+  b.Activated:Connect(function()
+   if pending then return end
+   if item[3]=="Back" then showModes() else connect(chosenMode,item[3]) end
   end)
  end
  local UIS=game:GetService("UserInputService")
@@ -164,7 +204,7 @@ function MainMenu.start(player,network)
    courtMusic:Pause()
   end
   if inLobby then closeDialog(); leaving=false end
-  if inLobby then pending=false; status.Text="Choose a court experience. Elevators open in a future update." end
+  if inLobby then pending=false; showModes() end
  end
  sessionConnection=player:GetAttributeChangedSignal("SessionMode"):Connect(refresh)
  request.OnClientEvent:Connect(function(ok,message)
@@ -178,7 +218,7 @@ function MainMenu.start(player,network)
  local function resize()
   local camera=workspace.CurrentCamera
   if camera then
-   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/500,(camera.ViewportSize.X-48)/350)
+   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/566,(camera.ViewportSize.X-48)/350)
    dialogScale.Scale=math.min(1,(camera.ViewportSize.X-32)/420,(camera.ViewportSize.Y-32)/238)
   end
  end

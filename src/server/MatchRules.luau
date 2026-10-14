@@ -22,15 +22,30 @@ Rules.LOB_HORIZONTAL_RETENTION=0.75
 -- Split a frame at the apex so heavier descent gravity never changes ascent.
 function Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce)
  if lob and not postBounce and velocity.Y>0 then
-  local ascent=math.min(dt,velocity.Y/gravity)
+  local timeToApex=velocity.Y/gravity
+  local ascent=math.min(dt,timeToApex)
   position+=velocity*ascent-Vector3.new(0,0.5*gravity*ascent*ascent,0)
   velocity-=Vector3.new(0,gravity*ascent,0)
+  -- Floating-point residue at the apex must not defer the heavier descent.
+  if dt>=timeToApex then velocity=Vector3.new(velocity.X,0,velocity.Z) end
   dt-=ascent
  end
  local acceleration=gravity*(lob and (postBounce or velocity.Y<=0) and Rules.LOB_GRAVITY_SCALE or 1)
  position+=velocity*dt-Vector3.new(0,0.5*acceleration*dt*dt,0)
  velocity-=Vector3.new(0,acceleration*dt,0)
  return position,velocity,acceleration
+end
+
+-- Offensive topspin switches gravity at the net plane, splitting crossing frames.
+function Rules.advanceFlight(position,velocity,gravity,dt,lob,postBounce,offensive,side)
+ if not offensive then return Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce) end
+ if position.Z*side<=0 then return Rules.advanceBall(position,velocity,gravity*1.8,dt,lob,postBounce) end
+ local crossing=velocity.Z~=0 and -position.Z/velocity.Z or math.huge
+ if crossing>=0 and crossing<=dt then
+  position,velocity=Rules.advanceBall(position,velocity,gravity,crossing,lob,postBounce)
+  return Rules.advanceBall(position,velocity,gravity*1.8,dt-crossing,lob,postBounce)
+ end
+ return Rules.advanceBall(position,velocity,gravity,dt,lob,postBounce)
 end
 
 function Rules.ballLandingTime(height,vy,gravity,lob,postBounce)
@@ -69,31 +84,36 @@ end
 Rules.SERVE_TIMEOUT=15
 Rules.MAX_SERVE_VELOCITY=90
 
-Rules.SERVE_METER_PERIOD=1.6
-Rules.SERVE_PERFECT_OFFSET=0.12
+Rules.SERVE_CHARGE_TIME=2
+Rules.SERVE_PERFECT_OFFSET=0.06
 Rules.SERVE_GOOD_OFFSET=0.4
+Rules.SERVE_NET_OFFSET=-0.65
 
--- A full left/right/left cycle; offset is signed and normalized to [-1,1].
+-- Hold to sweep up and down; release is judged at the current position.
 function Rules.serveTiming(started,now)
- local phase=math.max(0,now-started)%Rules.SERVE_METER_PERIOD/Rules.SERVE_METER_PERIOD
- local needle=phase<0.5 and phase*2 or (1-phase)*2
+ local phase=math.max(0,now-started)%(Rules.SERVE_CHARGE_TIME*2)/Rules.SERVE_CHARGE_TIME
+ local needle=phase<=1 and phase or 2-phase
  local offset=needle*2-1
  local accuracy=1-math.abs(offset)
- local grade=math.abs(offset)<=Rules.SERVE_PERFECT_OFFSET and "PERFECT!"
-  or math.abs(offset)<=Rules.SERVE_GOOD_OFFSET and "GOOD"
-  or offset<0 and "EARLY" or "LATE"
+ local grade=math.abs(offset)<=Rules.SERVE_PERFECT_OFFSET+1e-9 and "PERFECT!"
+  or math.abs(offset)<=Rules.SERVE_GOOD_OFFSET+1e-9 and "GOOD"
+  or offset<0 and "UNDERCHARGED" or "OVERCHARGED"
  return needle,offset,accuracy,grade
 end
 
-function Rules.servePower(accuracy)
- return 0.6+0.62*math.clamp(accuracy,0,1)
+function Rules.servePower(charge)
+ return 0.3+0.7*math.clamp(charge,0,2)
 end
 
 function Rules.timedServeTarget(side,serveX,offset)
  offset=math.clamp(offset,-1,1)
- local error=math.abs(offset)
- -- Center hits land deep in the diagonal box. Edge hits can miss the lines.
- return Vector3.new(-math.sign(serveX)*(10+12*error*error),181.7,-side*(28+14*offset*error))
+ local depth
+ if offset < -Rules.SERVE_GOOD_OFFSET-1e-9 then
+  depth=math.max(4,13*(offset+1)/(1-Rules.SERVE_GOOD_OFFSET))
+ elseif offset>Rules.SERVE_GOOD_OFFSET+1e-9 then
+  depth=42+20*(offset-Rules.SERVE_GOOD_OFFSET)
+ else depth=28+offset*22 end
+ return Vector3.new(-math.sign(serveX)*10,181.7,-side*depth)
 end
 
 -- Ignore invalid remote targets and keep aim inside the diagonal service box.
