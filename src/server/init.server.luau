@@ -37,6 +37,8 @@ if not shared:FindFirstChild("MatchRules") then rulesModule:Clone().Parent=share
 local users={}
 local rotation=require(script:WaitForChild("ServeRotation")).new()
 local score=rotation.score
+local Comeback=require(script:WaitForChild("Comeback"))
+local comeback=Comeback.new()
 local joinSerial=0
 local lastHitter={}
 local ball={p=Vector3.new(0,187,-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,speed=1,bounceAt=-100}
@@ -52,7 +54,7 @@ local banner="Welcome to Skyline Club"
 local function resetAugments()
  draft=nil; draftDue=courtVariant=="Augmented"; rallies=0
  for p,d in pairs(users) do
-  d.augments={}; d.augmentNames={}; d.augmentMatch={}; d.augmentRally=Augments.newRally()
+  d.augments={}; d.augmentNames={}; d.augmentPulses={}; d.augmentActive={}; d.augmentMatch={}; d.augmentRally=Augments.newRally()
   p:SetAttribute("AugmentDraftOpen",false)
   augmentRemote:FireClient(p,{kind="reset"})
  end
@@ -65,14 +67,14 @@ local function chooseAugment(p,id)
  if not card then return end
  draft.offers[p]=nil
  table.insert(d.augmentNames,card.name)
- augmentRemote:FireClient(p,{kind="chosen",name=card.name,count=#d.augmentNames,stats=d.augments,names=d.augmentNames})
+ augmentRemote:FireClient(p,{kind="chosen",name=card.name,count=#d.augmentNames,stats=d.augments,names=d.augmentNames,card=card})
 end
 augmentRemote.OnServerEvent:Connect(function(p,serial,id)
  if draft and serial==draft.id then chooseAugment(p,id) end
 end)
 local function updateDraft(now)
  if draftDue and not draft and not ball.live and now>=introUntil and now>=nextServe then
-  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false end
+  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
   local roster={}
   local home,away=false,false
   for p,d in pairs(users) do
@@ -162,6 +164,7 @@ local function syncServing()
  servingSide=rotation.side; serverId=rotation.serverId; receiverId=rotation:receiverId(); serveX=rotation:serveX()
 end
 local function rosterChanged()
+ comeback=Comeback.new()
  powerups:reset()
  resetAugments()
  local home,away={},{}
@@ -214,6 +217,18 @@ local function tell(p,text,kind)
   or (kind=="miss" or kind=="fault" or kind=="slow") and "bad" or "neutral"
  feedback:FireAllClients({userId=p.UserId,text=text,tone=tone},"playerText")
  if kind=="fault" then feedback:FireClient(p,text,kind) end
+end
+local function activateAugment(p,id,duration)
+ local d=users[p]
+ if not d or not Augments.has(d.augments,id) then return end
+ d.augmentPulses=d.augmentPulses or {}
+ local now=os.clock()
+ local previous=d.augmentPulses[id] or 0
+ d.augmentPulses[id]=now+(duration or 0.85)
+ if previous>now then return end
+ local tier=1
+ for _,card in ipairs(Augments.catalog) do if card.id==id then tier=card.tier; break end end
+ feedback:FireAllClients({userId=p.UserId,id=id,tier=tier},"augmentFX")
 end
 local function landing()
  if not ball.live then return ball.p,0 end
@@ -357,6 +372,7 @@ local function point(winner,reason)
  local serverData=server and users[server]
  if ball.shots==0 and winner==-servingSide and serverData
   and Augments.retryServe(serverData.augments,serverData.augmentMatch) then
+  activateAugment(server,"secondServe",1.5)
   serverData.stamina=100
   ball.live=false; ball.v=Vector3.zero; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
   tell(server,"SECOND SERVE / MULLIGAN + FULL STAMINA","perfect")
@@ -365,19 +381,25 @@ local function point(winner,reason)
  for player,data in pairs(users) do
   if data.side==winner then
    local root=rootOf(player)
+   local wins=data.augmentMatch.speedWins or 0
+   local reach=data.augmentMatch.reachStacks or 0
    Augments.terminalWin(data.augments,data.augmentMatch,ball.peakSpeed or ball.speed)
    Augments.netWin(data.augments,data.augmentMatch,root and math.abs(root.Position.X)<=20
     and root.Position.Z*data.side<=Rules.KITCHEN+4)
+   if (data.augmentMatch.speedWins or 0)>wins then activateAugment(player,"terminalVelocity",1.5) end
+   if (data.augmentMatch.reachStacks or 0)>reach then activateAugment(player,"vampiricReach",1.5) end
   end
  end
  ball.live=false; ball.v=Vector3.zero; ball.perfects=0; ball.speed=1
  local index=winner==1 and 1 or 2
  local outcome=rotation:award(winner)
  local scored=outcome=="point"
+ local previousComeback=comeback.side
+ Comeback.update(comeback,score,false)
  syncServing()
  banner="TEAM "..(servingSide==1 and "1" or "2")..(scored and " POINT / " or outcome=="secondServer" and " SECOND SERVER / " or " SIDE OUT / ")..reason
  serveReady=false; serveDeadline=nil
- for p,d in pairs(users) do d.augmentRally.stunUntil=0; d.augmentRally.burstUntil=0; d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end end
+ for p,d in pairs(users) do d.augmentRally.stunUntil=0; d.augmentRally.burstUntil=0; d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end end
  nextServe=os.clock()+2.5
  local scorer=lastHitter[winner] or occupant(winner)
  local scorerName=scorer and scorer.DisplayName or "Practice Partner"
@@ -395,6 +417,10 @@ local function point(winner,reason)
   feedback:FireAllClients(banner,"point")
   nextServe=os.clock()+6
   ball.resetScore=true
+  Comeback.update(comeback,score,true)
+ end
+ if previousComeback~=comeback.side then
+  feedback:FireAllClients(comeback.side~=0 and "COMEBACK! Team "..(comeback.side==1 and "1" or "2").." gains +15% movement, reach and hit speed until tied." or "COMEBACK BOOST ENDED","point")
  end
  if courtVariant=="Augmented" then
   rallies+=1
@@ -444,7 +470,7 @@ local function spawnCharacter(p,c)
   if existing and d.side==0 then existing:Destroy() end
  end
  if d.side~=0 and not c:FindFirstChild("PaddleFace") then paddle(c) end
- d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.divePoseUntil=0; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+ d.kitchenTouched=false; d.volleyPending=false; d.diveUntil=0; d.divePoseUntil=0; d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  if d.side~=0 and not ball.live then serveReady=false; serveDeadline=nil end
  if d.mode=="Spectate" then Spectator.enter(p,c) end
 end
@@ -472,7 +498,7 @@ local function leaveCourt(p)
  local active=d.side~=0
  d.side=0; d.slot=0
  d.variant=nil; p:SetAttribute("MatchVariant",nil)
- d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.chargeAt=nil; d.chargeCooldownBlocked=nil
+ d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.serveChargeAt=nil; d.chargeAt=nil; d.chargeCooldownBlocked=nil
  d.powerUntil=0; d.slowUntil=0
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  p:SetAttribute("CourtSide",0)
@@ -485,7 +511,7 @@ local function leaveCourt(p)
   end
  end
  if not occupant(1) and not occupant(-1) then
-  courtMode=nil; courtVariant=nil; rotation:reset(); score=rotation.score; ball.resetScore=false
+  courtMode=nil; courtVariant=nil; rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new()
  end
  rosterChanged()
 end
@@ -533,7 +559,7 @@ Players.PlayerRemoving:Connect(function(p)
  users[p]=nil
 end)
 local function prepareServe()
- if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false end
+ if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
  syncServing()
  if not occupant(1) or (courtMode~="Practice" and not occupant(-1)) then return end
  table.clear(lastHitter)
@@ -546,7 +572,7 @@ local function prepareServe()
    local position=Rules.startPosition(d.side,servingSide,serveX,primary)
    p.Character:PivotTo(CFrame.lookAt(position,Vector3.new(position.X,185,0)))
    r.AssemblyLinearVelocity=Vector3.zero
-   d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.kitchenTouched=false; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+   d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.kitchenTouched=false; d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   end
  end
  if servingSide==-1 and not occupant(-1) then botX=serveX; botZ=-46
@@ -572,7 +598,8 @@ local function serve(p,d,r,h)
  if not serveReady then return end
  if os.clock()<d.lastSwing then return end
  if not serveDeadline or workspace:GetServerTimeNow()>=serveDeadline then return end
- local _,offset,accuracy,grade=Rules.serveTiming(serveDeadline-Rules.SERVE_TIMEOUT,workspace:GetServerTimeNow())
+ if not d.serveChargeAt then return end
+ local _,offset,accuracy,grade=Rules.serveTiming(d.serveChargeAt,workspace:GetServerTimeNow())
  local botServing=servingSide==-1 and not occupant(-1)
  if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
   tell(p,"WAIT FOR THE DESIGNATED SERVER","info"); return
@@ -587,15 +614,15 @@ local function serve(p,d,r,h)
  end
  if not botServing then
   lastHitter[servingSide]=p
-  if Augments.has(d.augments,"serveVolley") then d.augmentRally.burstUntil=os.clock()+3 end
+  if Augments.has(d.augments,"serveVolley") then d.augmentRally.burstUntil=os.clock()+3; activateAugment(p,"serveVolley",3) end
  end
- d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+ d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  serveReady=false; serveDeadline=nil; ball.last=servingSide; ball.shots=0
  local target=Rules.timedServeTarget(servingSide,serveX,offset)
- ball.speed=Rules.servePower(accuracy)
+ ball.speed=Rules.servePower(offset+1)
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,0,nil,false,0,{userId=not botServing and p.UserId or nil,maxVelocity=Rules.MAX_SERVE_VELOCITY})
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,0,nil,offset<Rules.SERVE_NET_OFFSET,0,{userId=not botServing and p.UserId or nil,maxVelocity=offset>=Rules.SERVE_NET_OFFSET and Rules.MAX_SERVE_VELOCITY or nil})
  feedback:FireClient(p,{grade=grade,offset=offset,accuracy=accuracy},"serveTiming")
  if not botServing then
   feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=accuracy},"swing")
@@ -627,7 +654,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local distance,overhead=overheadStatus(p,r)
   local backhand=r.CFrame:PointToObjectSpace(ball.p).X<0
   local bonus,extension=Augments.extraReach(d.augments,d.augmentMatch,backhand)
-  local reach=1+((d.augments and d.augments.reach) or 0)+bonus
+  local reach=(1+((d.augments and d.augments.reach) or 0)+bonus)*(Comeback.active(comeback,d.side) and Comeback.HIT or 1)
   local fire=Augments.onFire(d.augments,d.augmentRally,ball.shots+1)
   local guided=Augments.has(d.augments,"thirdShot") and ball.shots==1 and d.side==servingSide
   local feint=shotKind=="Lob" and d.chargeAt~=nil and overhead and Augments.has(d.augments,"baitSwitch")
@@ -715,6 +742,8 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   if not soft and not slam and not shield and quality~="lob" and shotKind~="Lob" and shotKind~="Slice" and Augments.has(d.augments,"dinkSpecialist") then
    multiplier=Augments.drive(d.augmentRally,r.Position.Z*d.side>=Rules.BASELINE-4)
   end
+  local dinkBoost=multiplier>1
+  if Comeback.active(comeback,d.side) then multiplier*=Comeback.HIT end
   if soft~="dink" then Augments.dink(d.augmentRally,false) end
   local deadly=erne or (fire and slam and not d.augmentRally.overchargeUsed)
   if erne then multiplier*=3 end
@@ -736,6 +765,12 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
    end
    if offensive then quality="perfect" end
   end
+  local triggered={thirdShot=guided,baitSwitch=feint,deflector=shield,erne=erne,overcharge=fire and slam,
+   deceptiveDrop=deceptive,offensiveDive=offensive,apexPredator=heavy,rhythmMaster=rhythm,afterimage=afterimage,
+   calculatedReturn=calculated,sliceDice=shotKind=="Slice",dinkSpecialist=dinkBoost,
+   perfectVision=clean,carbonFiber=clean,phantom=backhand,
+   momentumShift=accelerationMessage=="MOMENTUM SHIFT! +15%",terminalVelocity=accelerationMessage=="TERMINAL VELOCITY! +8%"}
+  for id,active in pairs(triggered) do if active then activateAugment(p,id) end end
   local powered=clean and not soft and now<d.powerUntil
   d.powerUntil=0
   ball.last=d.side; lastHitter[d.side]=p
@@ -765,19 +800,24 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  if now<d.augmentRally.stunUntil and action=="Dive" then return end
  if now<introUntil or draft or draftDue then return end
  -- Release/cancel must survive the flood gate, even for a very quick tap.
- if action=="ChargeCancel" then d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
+ if action=="ChargeCancel" then d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
  local releasedCharge
  if action=="ChargeRelease" then
   if not d.chargeAt then return end
-  releasedCharge=Rules.chargeAmount(d.chargeAt,now); d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+  releasedCharge=Rules.chargeAmount(d.chargeAt,now); d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   if ball.live and releasedCharge>0 and now<(d.chargeShotAt or 0) then releasedCharge=0; d.chargeCooldownBlocked=true end
  end
  -- Remote flood protection does not impose a gameplay cooldown on perfect returns.
- if releasedCharge==nil and now-d.lastInput<0.015 then return end
+ if releasedCharge==nil and action~="ServeTimingStop" and action~="ServeChargeStart" and now-d.lastInput<0.015 then return end
  d.lastInput=now
  local r,h=rootOf(p)
  if not r or not h or h.Health<=0 then return end
- if action=="ChargeStart" then
+ if action=="ServeChargeStart" then
+  if not serveReady or not serveDeadline or workspace:GetServerTimeNow()>=serveDeadline then return end
+  if p.UserId~=serverId and not (servingSide==-1 and not occupant(-1) and p.UserId==receiverId) then return end
+  d.serveChargeAt=d.serveChargeAt or workspace:GetServerTimeNow()
+  p.Character:SetAttribute("ShotChargeAt",d.serveChargeAt)
+ elseif action=="ChargeStart" then
   if not ball.live and not (serveReady and (p.UserId==serverId or (servingSide==-1 and not occupant(-1) and p.UserId==receiverId))) then return end
   d.chargeAt=d.chargeAt or now
   p.Character:SetAttribute("ShotChargeAt",workspace:GetServerTimeNow())
@@ -791,13 +831,14 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   serve(p,d,r,h)
  elseif action=="Dive" then
   if not Rules.canDive(d.stamina/(d.augmentRally.lava and 2 or 1),d.diveAt,now) then return end
-  d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+  d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   local cooldown=Rules.DIVE_COOLDOWN*(1-((d.augments and d.augments.dive) or 0))
   d.stamina=math.max(0,d.stamina-Rules.DIVE_STAMINA_COST*(d.augmentRally.lava and 2 or 1)); d.diveAt=now+cooldown
   d.staminaRecoveryAt=now+Rules.STAMINA_RECOVERY_DELAY
   local moveTime,poseTime=Augments.diveDuration(d.augments)
   d.diveUntil=now+moveTime; d.divePoseUntil=now+poseTime; d.diveCharacter=p.Character
   d.augmentRally.diveStarted=now
+  activateAugment(p,"quickRecovery",poseTime); activateAugment(p,"afterimage",2)
   local delta=ball.live and ball.p-r.Position or Vector3.zero
   if typeof(moveIntent)~="Vector3" or moveIntent.X~=moveIntent.X or moveIntent.Z~=moveIntent.Z then
    moveIntent=h.MoveDirection
@@ -823,9 +864,9 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
   tell(p,"OPPONENT SLOWED","power")
  elseif action=="Lob" or action=="Slice" then
   if ball.live then tryReturn(p,d,r,now,false,false,0,action) end
-  d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+  d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  elseif action=="Swing" or action=="SoftShot" then
-  d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
+  d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
   if ball.live then tryReturn(p,d,r,now,false,action=="SoftShot") end
  end
 end)
@@ -854,7 +895,7 @@ RunService.Heartbeat:Connect(function(dt)
    local move=h.MoveDirection
    local original=Vector3.new(baseline and move.X/1.15 or move.X,0,move.Z)
    local lateral=original.Magnitude>0.01 and original.Unit.X or 0
-   local movement=(1+(d.augments.speed or 0)+(d.augmentMatch.speedWins or 0)*0.05)*Augments.lateralScale(d.augments,r.Position.Z*d.side,r.Position.X,lateral)*(camper and 1.15 or 1)*(now<effect.burstUntil and 1.75 or 1)
+   local movement=(1+(d.augments.speed or 0)+(d.augmentMatch.speedWins or 0)*0.05)*Augments.lateralScale(d.augments,r.Position.Z*d.side,r.Position.X,lateral)*(camper and 1.15 or 1)*(now<effect.burstUntil and 1.75 or 1)*(Comeback.active(comeback,d.side) and Comeback.MOVE or 1)
    local stunned=now<effect.stunUntil
    h.WalkSpeed=(stunned or d.mode=="Spectate" or (d.side~=0 and (now<introUntil or draft~=nil))) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)*movement
    p:SetAttribute("AugmentStunned",stunned)
@@ -866,12 +907,22 @@ RunService.Heartbeat:Connect(function(dt)
     face.Color=fire and Color3.fromRGB(255,115,25) or Color3.fromRGB(31,193,180)
    end
    local grounded=h.FloorMaterial~=Enum.Material.Air
+   local active={kitchenCamper=camper,baselineSentinel=baseline and math.abs(move.X)>0.1,
+    kitchenWarden=Augments.warden(d.augments,r.Position.Z*d.side,r.Position.X,Vector3.new(r.AssemblyLinearVelocity.X,0,r.AssemblyLinearVelocity.Z).Magnitude,grounded),
+    overcharge=fire,dinkSpecialist=effect.driveReady==true,momentumShift=effect.perfectChain>=3}
+   for id,on in pairs(active) do
+    if ball.live and on and not (d.augmentActive and d.augmentActive[id]) then activateAugment(p,id) end
+   end
+   d.augmentActive=active
    local inKitchen=Rules.inKitchen(r.Position,1)
    if grounded then d.kitchenTouched=inKitchen end
    if ball.live and d.side~=0 and grounded and math.abs(r.Position.X)<=Rules.HALF_WIDTH+1
     and math.abs(r.Position.Z*d.side-Rules.KITCHEN)<=1 then
     for _,opponent in ipairs(teamPlayers(-d.side)) do
-     if Augments.has(users[opponent].augments,"lava") then effect.lava=true end
+     if Augments.has(users[opponent].augments,"lava") then
+      if not effect.lava then activateAugment(opponent,"lava",1.5) end
+      effect.lava=true
+     end
     end
    end
    if grounded and inKitchen and d.volleyPending and ball.live then
@@ -905,22 +956,23 @@ RunService.Heartbeat:Connect(function(dt)
  if serveReady and serveDeadline and workspace:GetServerTimeNow()>=serveDeadline then
   local server=serverId and Players:GetPlayerByUserId(serverId)
   for player,data in pairs(users) do
-   data.chargeAt=nil
+   data.serveChargeAt=nil; data.chargeAt=nil
    if player.Character then player.Character:SetAttribute("ShotChargeAt",nil) end
   end
   serveReady=false; serveDeadline=nil
   ball.last=servingSide; ball.shots=0; ball.speed=Rules.servePower(0)
-  local controller=server or (receiverId and Players:GetPlayerByUserId(receiverId))
   if server then
    lastHitter[servingSide]=server
-   if Augments.has(users[server].augments,"serveVolley") then users[server].augmentRally.burstUntil=now+3 end
+   ball.live=true
+   feedback:FireClient(server,{grade="SERVE TIMEOUT",offset=1,accuracy=0},"serveTiming")
+   point(-servingSide,"Serve timeout")
+  else
+   -- The practice partner has no human input; only bot serves are automatic.
+   ball.speed=Rules.servePower(1)
+   local from=Vector3.new(serveX,184,servingSide*46)
+   launch(from,Rules.serveTarget(nil,servingSide,serveX),false,false,false,0,nil,false,0,{maxVelocity=Rules.MAX_SERVE_VELOCITY})
+   banner="BOT SERVE / LET IT BOUNCE"
   end
-  local from=Vector3.new(serveX,184,servingSide*46)
-  launch(from,Rules.serveTarget(nil,servingSide,serveX),false,false,false,0,nil,false,0,
-   {userId=server and server.UserId or nil,maxVelocity=Rules.MAX_SERVE_VELOCITY})
-  if controller then feedback:FireClient(controller,{grade="TIMEOUT / WEAK",offset=-1,accuracy=0},"serveTiming") end
-  if server then feedback:FireAllClients({userId=server.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=0},"swing") end
-  banner="AUTO SERVE  /  LET IT BOUNCE"
  end
  if ball.live then
   accumulator+=math.min(dt,0.1)
@@ -971,8 +1023,10 @@ RunService.Heartbeat:Connect(function(dt)
      if hitterData then
       if Augments.has(hitterData.augments,"dinkSpecialist") and ball.soft=="dink" then
        Augments.dink(hitterData.augmentRally,Rules.inKitchen(impact))
+       if Rules.inKitchen(impact) then activateAugment(hitter,"dinkSpecialist") end
       end
       if ball.atp then
+       activateAugment(hitter,"atpAssassin",1.2)
        for _,opponent in ipairs(teamPlayers(-ball.last)) do
         local enemy=users[opponent]
         enemy.stamina=math.max(0,enemy.stamina-30*(enemy.augmentRally.lava and 2 or 1))
@@ -1021,7 +1075,7 @@ RunService.Heartbeat:Connect(function(dt)
    else botTarget=Vector3.new(0,0,-28) end
   end
   local delta=botTarget-Vector3.new(botX,0,botZ)
-  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or WALK_SPEED))
+  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or WALK_SPEED)*(Comeback.active(comeback,-1) and Comeback.MOVE or 1))
   if now<botStunUntil then move=0 end
   botMoving=move>0.01
   botStride+=move*0.65
@@ -1031,7 +1085,7 @@ RunService.Heartbeat:Connect(function(dt)
   local center=Vector3.new(botX,184.5,botZ+1)
   local distance=(ball.p-center).Magnitude
   if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
-   and ball.p.Z< -2 and distance<6.5 and Rules.contactInFront(ball.p,rootFrame)
+   and ball.p.Z< -2 and distance<6.5*(Comeback.active(comeback,-1) and Comeback.HIT or 1) and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
    -- One attempt per incoming shot: a whiff cannot be retried on the next frame.
@@ -1055,7 +1109,7 @@ RunService.Heartbeat:Connect(function(dt)
     if botRandom:NextNumber()<0.07+pressure*0.3 then
      targetX=(targetX<0 and -1 or 1)*botRandom:NextNumber(21,25)
     end
-    launch(ball.p,Vector3.new(targetX,FLOOR,targetZ),false,quality=="lob",false,0,nil,quality=="net",0,{clean=clean})
+    launch(ball.p,Vector3.new(targetX,FLOOR,targetZ),false,quality=="lob",false,0,nil,quality=="net",0,{clean=clean,speedMultiplier=Comeback.active(comeback,-1) and Comeback.HIT or 1})
     feedback:FireAllClients({userId=0,text=clean and "PERFECT!" or "LOB RETURN",tone=clean and "good" or "neutral"},"playerText")
    end
   end
@@ -1087,7 +1141,28 @@ RunService.Heartbeat:Connect(function(dt)
     viewPosition,viewVelocity=Rules.advanceFlight(ball.launchPosition,ball.launchVelocity,ball.flightGravity or GRAVITY,age,ball.lob,false,ball.offensive,ball.last)
     viewVelocity/=scale
    end
+   local activeEffects={}
+   for id,on in pairs(d.augmentActive or {}) do if ball.live and on and Augments.has(d.augments,id) then activeEffects[id]=true end end
+   for id,untilTime in pairs(d.augmentPulses or {}) do if now<untilTime then activeEffects[id]=true end end
+   if ball.live then
+    if (d.augmentMatch.reachStacks or 0)>0 then activeEffects.vampiricReach=true end
+    if (d.augmentMatch.speedWins or 0)>0 then activeEffects.terminalVelocity=true end
+    if Augments.has(d.augments,"lava") then
+     for _,opponent in ipairs(teamPlayers(-d.side)) do if users[opponent].augmentRally.lava then activeEffects.lava=true end end
+    end
+   end
+   for _,id in ipairs({"carbonFiber","perfectVision","phantom"}) do if ball.live and Augments.has(d.augments,id) then activeEffects[id]=true end end
+   local auraTier=0
+   for _,card in ipairs(Augments.catalog) do if activeEffects[card.id] then auraTier=math.max(auraTier,card.tier) end end
+   if ball.live and d.side~=0 then
+    for _,stat in ipairs({"speed","regen","reach","dive"}) do if (d.augments[stat] or 0)>0 then auraTier=math.max(auraTier,1) end end
+   end
+   p:SetAttribute("ActiveAugmentTier",ball.live and d.side~=0 and auraTier or 0)
+   p:SetAttribute("ComebackBoost",Comeback.active(comeback,d.side))
    state:FireClient(p,{
+    comeback=Comeback.active(comeback,d.side),
+    augmentEffects=activeEffects,augmentProgress={tension=d.augmentRally.tension,perfectChain=d.augmentRally.perfectChain,
+     reachStacks=d.augmentMatch.reachStacks or 0,speedWins=d.augmentMatch.speedWins or 0,secondServeUsed=d.augmentMatch.secondServeUsed==true},
     matchIntro=d.side~=0 and now<introUntil and matchIntro or nil,
     trackingHidden=hidden,trackingGlitch=glitch,heavy=heavy,visualRate=heavy and 1/math.max(1,ball.speed*(ball.shotMultiplier or 1)) or 1,
     offensive=ball.offensive,decoyLanding=glitch and target+Vector3.new(target.X>0 and -6 or 6,0,3) or nil,

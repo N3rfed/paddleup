@@ -1,6 +1,7 @@
 local AugmentDraft={}
 local Art=require(script.Parent:WaitForChild("AugmentArt"))
 function AugmentDraft.start(player,network)
+ require(script.Parent:WaitForChild("AugmentBuild")).start(player,network)
  local TweenService=game:GetService("TweenService")
  local RunService=game:GetService("RunService")
  local UIS=game:GetService("UserInputService")
@@ -40,9 +41,6 @@ function AugmentDraft.start(player,network)
  cards.BackgroundTransparency=1
  local footer=text(panel,"",508,24,14,Color3.fromRGB(226,232,245))
  text(panel,"SHARED RARITY  /  PERSONAL OFFERS  /  MATCH-LONG EFFECTS",540,18,10,Color3.fromRGB(126,145,173))
- local build=text(gui,"",112,38,12,Color3.fromRGB(211,224,240)); build.Visible=false
- build.Size=UDim2.fromOffset(540,38); build.Position=UDim2.new(0.5,-270,0,112)
- build.TextStrokeTransparency=0.35
  local active=nil
  local selected=false
  local animations={}
@@ -140,10 +138,8 @@ function AugmentDraft.start(player,network)
     b.Active=false
     if active and active.cards[index].name~=data.name then b.BackgroundTransparency=0.6 end
    end
-   build.Text=table.concat(data.names or {data.name}," / ")
-   build.TextSize=10
   elseif data.kind=="close" then close()
-  elseif data.kind=="reset" then close(); build.Text="" end
+  elseif data.kind=="reset" then close() end
  end)
  UIS.InputBegan:Connect(function(input,processed)
   if processed or UIS:GetFocusedTextBox() or player:GetAttribute("LeaveConfirmationOpen") then return end
@@ -154,10 +150,7 @@ function AugmentDraft.start(player,network)
   local camera=workspace.CurrentCamera
   if camera then
    scale.Scale=math.max(0.1,math.min(1,(camera.ViewportSize.X-24)/940,(camera.ViewportSize.Y-32)/560))
-   build.Size=UDim2.fromOffset(math.min(540,camera.ViewportSize.X-24),38)
-   build.Position=UDim2.new(0.5,-build.Size.X.Offset/2,0,112)
   end
-  build.Visible=player:GetAttribute("MatchVariant")=="Augmented" and not overlay.Visible and build.Text~=""
   if not overlay.Visible then return end
   for _,animation in ipairs(animations) do
    if animation.pulse then animation.object.BackgroundTransparency=0.94+math.sin(os.clock()*2)*0.025

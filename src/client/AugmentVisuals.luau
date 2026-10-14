@@ -3,6 +3,23 @@ local Players=game:GetService("Players")
 local Visuals={}
 local clones={}
 local hidden={}
+local auras={}
+local bursts={}
+function Visuals.activate(userId,tier)
+ local p=Players:GetPlayerByUserId(userId)
+ local root=p and p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+ if not root or (bursts[userId] and os.clock()-bursts[userId]<0.15) then return end
+ bursts[userId]=os.clock()
+ local sphere=Instance.new("Part")
+ sphere.Name="Augment activation"; sphere.Shape=Enum.PartType.Ball; sphere.Material=Enum.Material.Neon
+ sphere.Color=({Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)})[tier] or Color3.new(1,1,1)
+ sphere.Size=Vector3.new(2.5,2.5,2.5); sphere.CFrame=root.CFrame; sphere.Transparency=0.8
+ sphere.Anchored=false; sphere.Massless=true; sphere.CanCollide=false; sphere.CanTouch=false; sphere.CanQuery=false; sphere.CastShadow=false
+ sphere.Parent=root.Parent
+ local weld=Instance.new("WeldConstraint",sphere); weld.Part0=root; weld.Part1=sphere
+ game:GetService("TweenService"):Create(sphere,TweenInfo.new(0.5),{Size=Vector3.new(6,6,6),Transparency=1}):Play()
+ game:GetService("Debris"):AddItem(sphere,0.55)
+end
 function Visuals.clone(userId)
  local p=Players:GetPlayerByUserId(userId)
  local character=p and p.Character
@@ -49,6 +66,37 @@ function Visuals.clear()
 end
 function Visuals.update()
  local now=os.clock()
+ local present={}
+ for _,player in ipairs(Players:GetPlayers()) do
+  local tier=player:GetAttribute("ActiveAugmentTier") or 0
+  local comeback=player:GetAttribute("ComebackBoost")==true
+  local character=player.Character
+  local root=character and character:FindFirstChild("HumanoidRootPart")
+  local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+  local active=root and humanoid and humanoid.Health>0 and (player:GetAttribute("CourtSide") or 0)~=0 and (tier>0 or comeback)
+  local aura=auras[player]
+  if aura and (not active or aura.root~=root) then aura.attachment:Destroy(); auras[player]=nil; aura=nil end
+  if active then
+   present[player]=true
+   if not aura then
+    local attachment=Instance.new("Attachment",root); attachment.Name="Active augment aura"
+    local particles=Instance.new("ParticleEmitter",attachment)
+    particles.Texture="rbxasset://textures/particles/sparkles_main.dds"
+    particles.Rate=14; particles.Lifetime=NumberRange.new(0.4,0.8); particles.Speed=NumberRange.new(1,2)
+    particles.SpreadAngle=Vector2.new(180,180); particles.LightEmission=0.8; particles.LockedToPart=true
+    particles.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0.22),NumberSequenceKeypoint.new(1,0)})
+    particles.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0.25),NumberSequenceKeypoint.new(1,1)})
+    local light=Instance.new("PointLight",attachment); light.Range=7; light.Brightness=0.5; light.Shadows=false
+    aura={root=root,attachment=attachment,particles=particles,light=light}; auras[player]=aura
+   end
+   local color=comeback and Color3.fromRGB(70,225,255) or ({Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)})[tier]
+   aura.particles.Color=ColorSequence.new(color); aura.light.Color=color
+   aura.light.Brightness=0.45+math.sin(now*3)*0.15
+  end
+ end
+ for player,aura in pairs(auras) do
+  if not present[player] then aura.attachment:Destroy(); auras[player]=nil end
+ end
  for index=#clones,1,-1 do
   local entry=clones[index]
   if now>=entry.endsAt or entry.player.Character~=entry.character or entry.player:GetAttribute("CourtSide")==0 then

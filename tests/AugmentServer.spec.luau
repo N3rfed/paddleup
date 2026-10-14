@@ -1,6 +1,6 @@
 -- Execute the real launch/scoring functions in an isolated server fixture.
 -- Pass init.server.Source, Augments, and MatchRules from Studio's command bar.
-return function(source,A,Rules)
+return function(source,A,Rules,Comeback)
  local first=assert(source:find("local function launch(",1,true))
  local last=assert(source:find("local function paddle(",first,true))
  local server={UserId=42,DisplayName="Server"}
@@ -13,12 +13,12 @@ return function(source,A,Rules)
  local ball={live=false,p=Vector3.new(0,184,40),v=Vector3.zero,speed=1,last=1,shots=0}
  local rotation={award=function() awards+=1; return "point" end}
  local environment=setmetatable({
-  Augments=A,Rules=Rules,Vector3=Vector3,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,
+  Comeback=Comeback,comeback=Comeback.new(),Augments=A,Rules=Rules,Vector3=Vector3,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,
   ball=ball,users=users,serverId=42,servingSide=1,score={0,0},rotation=rotation,
   courtVariant="Augmented",rallies=0,lastHitter={},
   Players={GetPlayerByUserId=function(_,id) return id==42 and server or receiver end},
   feedback={FireAllClients=function(_,data,kind) table.insert(events,{data=data,kind=kind}) end},
-  syncServing=function() end,tell=function() end,resetAugments=function() end,
+  syncServing=function() end,tell=function() end,activateAugment=function() end,resetAugments=function() end,
   occupant=function(side) return side==1 and server or receiver end,
   rootOf=function() return {Position=Vector3.new(0,184,-16)} end,
   lobCrossesSlamZone=function() return false end,
@@ -67,6 +67,27 @@ return function(source,A,Rules)
  assert(ball.atp and ball.deadly and ball.spin=="slice" and ball.hitter==42,"Shot metadata reaches simulation")
  launch(from,target,false,false,false,0,nil,false,0,{})
  assert(not ball.atp and not ball.deadly and not ball.spin and not ball.hitter and not ball.heavy and not ball.offensive and ball.trackingHiddenUntil==0 and ball.trackingGlitchUntil==0,"Shot metadata cannot leak to the next hitter")
+ for _,side in ipairs({1,-1}) do
+  for _,held in ipairs({0,0.3,0.59,0.7,0.879,0.88,1,1.12,1.121,1.6,4}) do
+   local _,offset,_,grade=Rules.serveTiming(100,100+held)
+   local origin=Vector3.new(10,184,46*side)
+   local destination=Rules.timedServeTarget(side,10,offset)
+   ball.speed=Rules.servePower(offset+1); ball.last=side
+   launch(origin,destination,false,false,false,0,nil,offset<Rules.SERVE_NET_OFFSET,0,{maxVelocity=offset>=Rules.SERVE_NET_OFFSET and Rules.MAX_SERVE_VELOCITY or nil})
+   local crossing=-origin.Z/ball.v.Z
+   local atNet=Rules.advanceBall(origin,ball.v,ball.flightGravity,crossing,false,false)
+   if offset<Rules.SERVE_NET_OFFSET then
+    assert(atNet.Y<184.65 and atNet.Y>181.7,"Weak serve physically strikes the net")
+   else
+    assert(atNet.Y>=184.65,"Charged serve clears the net")
+    local duration=Rules.ballLandingTime(origin.Y-181.7,ball.v.Y,ball.flightGravity,false,false)
+    local impact=Rules.advanceBall(origin,ball.v,ball.flightGravity,duration,false,false)
+    assert((impact-destination).Magnitude<1e-5,"Serve velocity cap preserves intended fault or legal landing")
+    assert(Rules.serveLandingValid(impact,side,10)==(grade=="PERFECT!" or grade=="GOOD"),"Good and perfect releases produce legal serves")
+   end
+  end
+ end
+ ball.last=1
  ball.shots=0; ball.live=true; users[server].stamina=4
  point(-1,"Net")
  assert(awards==0 and users[server].stamina==100,"Serve mulligan refills stamina without awarding or rotating")
@@ -83,5 +104,16 @@ return function(source,A,Rules)
  point(-1,"Out")
  assert(users[receiver].augmentMatch.speedWins==1,"Terminal win reads peak rally speed before scoring resets it")
  assert(awards==2 and not users[server].augmentMatch.secondServeUsed,"Rally faults never consume serve retry")
+ environment.score={9,3}; ball.live=true; ball.shots=2
+ point(1,"Double bounce")
+ assert(Comeback.active(environment.comeback,-1),"Score resolution activates the trailing team's comeback")
+ environment.score={9,9}; ball.live=true
+ point(-1,"Double bounce")
+ assert(environment.comeback.side==0,"Score resolution clears comeback when tied")
+ environment.comeback=Comeback.new(); environment.score={9,3}; ball.live=true
+ point(1,"Double bounce")
+ environment.score={11,3}; ball.live=true
+ point(1,"Double bounce")
+ assert(environment.comeback.side==0 and ball.resetScore,"Winning the match clears comeback")
  return "Server launch speed, shield trajectory, shot cleanup, mulligan scoring and net-win integration passed"
 end
