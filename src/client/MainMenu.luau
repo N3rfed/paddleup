@@ -5,6 +5,14 @@ function MainMenu.start(player,network)
  local gui=Instance.new("ScreenGui")
  gui.Name="PaddleUpMenu"; gui.ResetOnSpawn=false; gui.DisplayOrder=20; gui.IgnoreGuiInset=true
  gui.Parent=player:WaitForChild("PlayerGui")
+ local lobbyMusic=require(script.Parent:WaitForChild("LobbyMusic")).new()
+ local courtMusic=Instance.new("Sound")
+ courtMusic.Name="CourtMusic"
+ courtMusic.SoundId="rbxassetid://1837768517"
+ courtMusic.Looped=true; courtMusic.Volume=0.2
+ courtMusic.Parent=game:GetService("SoundService")
+ -- Current court sessions share the Classic/Arcade soundtrack.
+ local musicModes={Practice=true,["1V1"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
  local cream=Color3.fromRGB(240,232,213)
  local dark=Color3.fromRGB(28,47,49)
  local gold=Color3.fromRGB(190,153,91)
@@ -139,14 +147,26 @@ function MainMenu.start(player,network)
  UIS.InputBegan:Connect(function(key,processed)
   if not processed and not UIS:GetFocusedTextBox() and key.KeyCode==Enum.KeyCode.M then openDialog() end
  end)
- gui.Destroying:Connect(function() player:SetAttribute("LeaveConfirmationOpen",false) end)
+ local sessionConnection
+ gui.Destroying:Connect(function()
+  if sessionConnection then sessionConnection:Disconnect() end
+  lobbyMusic:destroy()
+  courtMusic:Destroy()
+  player:SetAttribute("LeaveConfirmationOpen",false)
+ end)
  local function refresh()
   local inLobby=player:GetAttribute("SessionMode")=="Lobby" or player:GetAttribute("SessionMode")==nil
   panel.Visible=inLobby; exit.Visible=not inLobby
+  lobbyMusic:setActive(inLobby)
+  if musicModes[player:GetAttribute("SessionMode")] then
+   if not courtMusic.IsPlaying then courtMusic:Resume() end
+  elseif courtMusic.IsPlaying then
+   courtMusic:Pause()
+  end
   if inLobby then closeDialog(); leaving=false end
   if inLobby then pending=false; status.Text="Choose a court experience. Elevators open in a future update." end
  end
- player:GetAttributeChangedSignal("SessionMode"):Connect(refresh)
+ sessionConnection=player:GetAttributeChangedSignal("SessionMode"):Connect(refresh)
  request.OnClientEvent:Connect(function(ok,message)
   pending=false; status.Text=message
   if leaving then
