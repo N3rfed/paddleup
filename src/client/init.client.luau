@@ -257,6 +257,7 @@ local function setDeveloperMode(enabled)
 end
 devToggle.Activated:Connect(function() setDeveloperMode(not developerMode) end)
 setDeveloperMode(false)
+require(script:WaitForChild("FigmaHUD")).start(player,network,scorePanel,staminaPanel)
 local snapshot,receivedAt=nil,0
 local localHitReadyAt=0
 local function hitInputReady()
