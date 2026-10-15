@@ -13,9 +13,9 @@ function MainMenu.start(player,network)
  courtMusic.Parent=game:GetService("SoundService")
  -- Current court sessions share the Classic/Arcade soundtrack.
  local musicModes={Practice=true,["1V1"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
- local cream=Color3.fromRGB(240,232,213)
- local dark=Color3.fromRGB(28,47,49)
- local gold=Color3.fromRGB(190,153,91)
+ local cream=Color3.fromRGB(241,240,248)
+ local dark=Color3.fromRGB(32,32,65)
+ local gold=Color3.fromRGB(168,187,212)
  local panel=Instance.new("Frame",gui)
  panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
  panel.Size=UDim2.fromOffset(350,566); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
@@ -60,7 +60,7 @@ function MainMenu.start(player,network)
  }) do
   local b=Instance.new("TextButton",panel)
   b.Position=UDim2.fromOffset(24,140+(index-1)*66); b.Size=UDim2.new(1,-48,0,56)
-  b.BackgroundColor3=Color3.fromRGB(43,65,66); b.Text=""; b.AutoButtonColor=false
+  b.BackgroundColor3=Color3.fromRGB(47,49,80); b.Text=""; b.AutoButtonColor=false
   b.Selectable=true; buttons[index]=b
   local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,10)
   for line=1,2 do
@@ -71,7 +71,7 @@ function MainMenu.start(player,network)
    t.TextXAlignment=Enum.TextXAlignment.Left; t.Text=item[line]
   end
   local function hover(on)
-   TweenService:Create(b,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(62,99,95) or Color3.fromRGB(43,65,66)}):Play()
+   TweenService:Create(b,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(64,73,107) or Color3.fromRGB(47,49,80)}):Play()
   end
   b.MouseEnter:Connect(function() hover(true) end); b.MouseLeave:Connect(function() hover(false) end)
   b.SelectionGained:Connect(function() hover(true) end); b.SelectionLost:Connect(function() hover(false) end)
@@ -91,7 +91,7 @@ function MainMenu.start(player,network)
  }) do
   local b=Instance.new("TextButton",panel)
   b.Name=item[3]; b.Position=UDim2.fromOffset(24,145+(index-1)*108)
-  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(37,57,62)
+  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(39,42,71)
   b.Text=""; b.Visible=false; table.insert(variantButtons,b)
   local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,12)
   local s=Instance.new("UIStroke",b); s.Color=item[4]; s.Transparency=0.35
@@ -110,10 +110,10 @@ function MainMenu.start(player,network)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
  exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-24,0,24)
- exit.Size=UDim2.fromOffset(28,28); exit.BackgroundColor3=Color3.fromRGB(15,23,30)
+ exit.Size=UDim2.fromOffset(28,28); exit.BackgroundColor3=Color3.fromRGB(26,28,51)
  exit.BackgroundTransparency=0.2; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
  local exitCorner=Instance.new("UICorner",exit); exitCorner.CornerRadius=UDim.new(1,0)
- local exitStroke=Instance.new("UIStroke",exit); exitStroke.Color=Color3.fromRGB(34,50,66); exitStroke.Thickness=1.5
+ local exitStroke=Instance.new("UIStroke",exit); exitStroke.Color=Color3.fromRGB(91,97,135); exitStroke.Thickness=1.5
  -- Draw the log-out symbol directly so its silhouette does not depend on an asset.
  local icon=Instance.new("Frame",exit)
  icon.Name="ExitIcon"; icon.AnchorPoint=Vector2.new(0.5,0.5); icon.Position=UDim2.fromScale(0.5,0.5)
@@ -144,8 +144,8 @@ function MainMenu.start(player,network)
   exit.BackgroundTransparency=1; exitStroke.Transparency=1
  end
  local function exitHover(on)
-  TweenService:Create(exit,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(50,20,24) or Color3.fromRGB(15,23,30)}):Play()
-  TweenService:Create(exitStroke,TweenInfo.new(0.15),{Color=on and Color3.fromRGB(112,137,155) or Color3.fromRGB(34,50,66)}):Play()
+  TweenService:Create(exit,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(50,20,24) or Color3.fromRGB(26,28,51)}):Play()
+  TweenService:Create(exitStroke,TweenInfo.new(0.15),{Color=on and Color3.fromRGB(112,137,155) or Color3.fromRGB(91,97,135)}):Play()
  end
  exit.MouseEnter:Connect(function() exitHover(true) end); exit.MouseLeave:Connect(function() exitHover(false) end)
  exit.SelectionGained:Connect(function() exitHover(true) end); exit.SelectionLost:Connect(function() exitHover(false) end)
@@ -155,9 +155,9 @@ function MainMenu.start(player,network)
  overlay.Modal=true; overlay.Visible=false; overlay.ZIndex=10
  local card=Instance.new("Frame",overlay)
  card.Name="LeaveMatchDialog"; card.AnchorPoint=Vector2.new(0.5,0.5); card.Position=UDim2.fromScale(0.5,0.5)
- card.Size=UDim2.fromOffset(420,238); card.BackgroundColor3=Color3.fromRGB(15,23,30); card.BorderSizePixel=0; card.ZIndex=11
+ card.Size=UDim2.fromOffset(420,238); card.BackgroundColor3=Color3.fromRGB(26,28,51); card.BorderSizePixel=0; card.ZIndex=11
  local cardCorner=Instance.new("UICorner",card); cardCorner.CornerRadius=UDim.new(0,18)
- local cardStroke=Instance.new("UIStroke",card); cardStroke.Color=Color3.fromRGB(34,50,66); cardStroke.Thickness=1.5
+ local cardStroke=Instance.new("UIStroke",card); cardStroke.Color=Color3.fromRGB(91,97,135); cardStroke.Thickness=1.5
  local dialogScale=Instance.new("UIScale",card)
  local function dialogText(value,y,height,size)
   local t=Instance.new("TextLabel",card); t.Position=UDim2.fromOffset(28,y); t.Size=UDim2.new(1,-56,0,height)
@@ -173,7 +173,7 @@ function MainMenu.start(player,network)
   b.TextSize=16; b.TextColor3=Color3.new(1,1,1); b.ZIndex=12
   local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(1,0); return b
  end
- local stay=dialogButton("STAY",28,Color3.fromRGB(25,35,45))
+ local stay=dialogButton("STAY",28,Color3.fromRGB(39,42,71))
  local leave=dialogButton("LEAVE",222,Color3.fromRGB(220,50,50))
  local leaving=false
  local function closeDialog()

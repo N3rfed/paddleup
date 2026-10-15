@@ -1,77 +1,65 @@
--- Shared server lighting: one full day every twelve real-world minutes.
+-- Permanent arcade sunset. Keep the module name for existing server startup calls.
 local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
 local DayNightCycle = {}
-DayNightCycle.CYCLE_SECONDS = 12 * 60
-DayNightCycle.START_HOUR = 6
+DayNightCycle.START_HOUR = 17.8
 
--- Matching midnight endpoints keep the wrap from night to dawn seamless.
-local function frame(hour, brightness, ambient, outdoor, color, decay, density, haze, glare)
- return {hour=hour, brightness=brightness, ambient=Color3.fromRGB(unpack(ambient)),
-  outdoor=Color3.fromRGB(unpack(outdoor)), color=Color3.fromRGB(unpack(color)),
-  decay=Color3.fromRGB(unpack(decay)), density=density, haze=haze, glare=glare}
+local function effect(className, name)
+ local existing = Lighting:FindFirstChild(name)
+ if existing and existing:IsA(className) then return existing end
+ local item = Instance.new(className)
+ item.Name = name
+ item.Parent = Lighting
+ return item
 end
-local frames = {
- frame(0, 0.6, {55,65,93}, {70,83,115}, {128,151,198}, {47,61,99}, 0.30, 1.2, 0),
- frame(5, 0.6, {55,65,93}, {70,83,115}, {128,151,198}, {47,61,99}, 0.30, 1.2, 0),
- frame(6, 1.3, {112,91,110}, {154,123,126}, {255,188,139}, {147,111,145}, 0.30, 1.8, 0.3),
- frame(8, 2.5, {132,145,166}, {153,158,173}, {220,232,245}, {130,148,174}, 0.26, 1, 0.15),
- frame(12, 3, {140,150,166}, {165,174,187}, {225,238,255}, {140,165,196}, 0.24, 0.8, 0.1),
- frame(16, 2.5, {132,145,166}, {153,158,173}, {239,210,181}, {130,148,174}, 0.26, 1, 0.2),
- frame(18, 1.5, {133,96,112}, {164,123,133}, {255,172,119}, {156,103,143}, 0.30, 1.8, 0.35),
- frame(20, 0.6, {55,65,93}, {70,83,115}, {128,151,198}, {47,61,99}, 0.30, 1.2, 0),
- frame(24, 0.6, {55,65,93}, {70,83,115}, {128,151,198}, {47,61,99}, 0.30, 1.2, 0),
-}
-local connection
+
 function DayNightCycle.start()
- if connection then return end
- local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
- if not atmosphere then
-  atmosphere = Instance.new("Atmosphere")
-  atmosphere.Parent = Lighting
- end
- -- Use the built-in sky without the fixed sun baked into the custom skybox.
- local sky = Lighting:FindFirstChildOfClass("Sky")
- if not sky then
-  sky = Instance.new("Sky")
-  sky.Name = "Sky"
-  sky.Parent = Lighting
- end
+ -- Apply once: no heartbeat advances the clock after startup.
+ Lighting.ClockTime = DayNightCycle.START_HOUR
+ Lighting.GeographicLatitude = 35
+ Lighting.GlobalShadows = true
+ Lighting.Brightness = 2.2
+ Lighting.ExposureCompensation = 0.05
+ Lighting.Ambient = Color3.fromRGB(124, 120, 150)
+ Lighting.OutdoorAmbient = Color3.fromRGB(161, 157, 177)
+ Lighting.ColorShift_Top = Color3.fromRGB(239, 199, 180)
+ Lighting.ColorShift_Bottom = Color3.fromRGB(52, 51, 76)
+ Lighting.EnvironmentDiffuseScale = 0.45
+ Lighting.EnvironmentSpecularScale = 0.75
+
+ local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or effect("Atmosphere", "ArcadeSunsetAtmosphere")
+ atmosphere.Color = Color3.fromRGB(225, 193, 204)
+ atmosphere.Decay = Color3.fromRGB(118, 119, 161)
+ atmosphere.Density = 0.29
+ atmosphere.Offset = 0.1
+ atmosphere.Haze = 1.4
+ atmosphere.Glare = 0.2
+
+ local sky = Lighting:FindFirstChildOfClass("Sky") or effect("Sky", "Sky")
+ -- Built-in faces have no fixed sun baked into the image.
  for property, face in pairs({SkyboxBk="bk", SkyboxDn="dn", SkyboxFt="ft", SkyboxLf="lf", SkyboxRt="rt", SkyboxUp="up"}) do
   sky[property] = "rbxasset://textures/sky/sky512_" .. face .. ".tex"
  end
  sky.CelestialBodiesShown = true
- Lighting.GlobalShadows = true
- Lighting.GeographicLatitude = 35
- local function apply(hour)
-  local a, b = frames[1], frames[2]
-  for i = 1, #frames - 1 do
-   if hour >= frames[i].hour and hour < frames[i + 1].hour then
-    a, b = frames[i], frames[i + 1]
-    break
-   end
-  end
-  local t = (hour - a.hour) / (b.hour - a.hour)
-  t = t * t * (3 - 2 * t)
-  local function blend(key) return a[key] + (b[key] - a[key]) * t end
-  Lighting.ClockTime = hour
-  Lighting.Brightness = blend("brightness")
-  Lighting.Ambient = a.ambient:Lerp(b.ambient, t)
-  Lighting.OutdoorAmbient = a.outdoor:Lerp(b.outdoor, t)
-  atmosphere.Color = a.color:Lerp(b.color, t)
-  atmosphere.Decay = a.decay:Lerp(b.decay, t)
-  atmosphere.Density = blend("density")
-  atmosphere.Haze = blend("haze")
-  atmosphere.Glare = blend("glare")
- end
- local elapsed, pending = 0, 0
- apply(DayNightCycle.START_HOUR)
- connection = RunService.Heartbeat:Connect(function(dt)
-  elapsed = (elapsed + dt) % DayNightCycle.CYCLE_SECONDS
-  pending = pending + dt
-  if pending < 0.1 then return end
-  pending = pending % 0.1
-  apply((DayNightCycle.START_HOUR + elapsed * 24 / DayNightCycle.CYCLE_SECONDS) % 24)
- end)
+ sky.SunAngularSize = 14
+ sky.StarCount = 0
+
+ local grade = effect("ColorCorrectionEffect", "ArcadeSunsetGrade")
+ grade.Enabled = true
+ grade.TintColor = Color3.fromRGB(255, 245, 250)
+ grade.Brightness = 0.01
+ grade.Contrast = 0.05
+ grade.Saturation = 0.04
+
+ -- Reuse the map's bloom so the base lighting does not stack two glow effects.
+ local bloom = Lighting:FindFirstChild("ArcadeSunsetBloom") or Lighting:FindFirstChildOfClass("BloomEffect") or effect("BloomEffect", "ArcadeSunsetBloom")
+ bloom.Enabled = true
+ bloom.Intensity = 0.12
+ bloom.Size = 32
+ bloom.Threshold = 1.5
+
+ local rays = effect("SunRaysEffect", "ArcadeSunsetRays")
+ rays.Enabled = true
+ rays.Intensity = 0.045
+ rays.Spread = 0.8
 end
 return DayNightCycle
