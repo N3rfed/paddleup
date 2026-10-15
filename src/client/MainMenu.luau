@@ -33,22 +33,26 @@ function MainMenu.start(player,network)
  label("P A D D L E U P",22,24,14,gold)
  label("Skyline Club",55,40,30)
  label("THE PENTHOUSE  /  PLAY & UNWIND",99,22,11,gold)
- local status=label("Choose a court experience. Elevators open in a future update.",476,65,13)
+ local status=label("Choose a court experience.",476,65,13)
  local request=network:WaitForChild("Session")
  local pending=false
  local buttons={}
  local chosenMode=nil
+ local chosenVariant=nil
  local variantButtons={}
+ local mapButtons={}
  local function showModes()
   chosenMode=nil
+  chosenVariant=nil
   for _,button in ipairs(buttons) do button.Visible=true end
   for _,button in ipairs(variantButtons) do button.Visible=false end
+  for _,button in ipairs(mapButtons) do button.Visible=false end
   status.Text="Choose a court experience."
  end
- local function connect(mode,variant)
+ local function connect(mode,variant,environment)
   if pending then return end
-  pending=true; status.Text="Connecting to the rooftop..."
-  request:FireServer(mode,variant)
+  pending=true; status.Text="Connecting to "..(environment or "the court").."..."
+  request:FireServer(mode,variant,environment)
   task.delay(5,function() if pending then pending=false; status.Text="No response yet. Please try again." end end)
  end
  for index,item in ipairs({
@@ -56,12 +60,12 @@ function MainMenu.start(player,network)
   {"1V1","Join this server's singles court","1V1"},
   {"1V2","One player against a team of two","1V2"},
   {"2V2","Join this server's doubles court","2V2"},
-  {"SPECTATE","Watch the rooftop court","Spectate"},
+  {"SPECTATE","Watch the current court","Spectate"},
  }) do
   local b=Instance.new("TextButton",panel)
   b.Position=UDim2.fromOffset(24,140+(index-1)*66); b.Size=UDim2.new(1,-48,0,56)
   b.BackgroundColor3=Color3.fromRGB(43,65,66); b.Text=""; b.AutoButtonColor=false
-  b.Selectable=true; buttons[index]=b
+  b.Name=item[3]; b.Selectable=true; buttons[index]=b
   local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,10)
   for line=1,2 do
    local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
@@ -104,7 +108,40 @@ function MainMenu.start(player,network)
   end
   b.Activated:Connect(function()
    if pending then return end
-   if item[3]=="Back" then showModes() else connect(chosenMode,item[3]) end
+   if item[3]=="Back" then showModes(); return end
+   chosenVariant=item[3]
+   for _,button in ipairs(variantButtons) do button.Visible=false end
+   for _,button in ipairs(mapButtons) do button.Visible=true end
+   status.Text="Choose your court environment.\nJoin the same environment as an ongoing game."
+  end)
+ end
+ for index,item in ipairs({
+  {"ROOFTOP", "Skyline Club\nCity views above the penthouse", "Rooftop",gold},
+  {"MOON", "Selene Lunar Court\nPlay among craters beneath the stars", "Moon",Color3.fromRGB(108,217,245)},
+  {"< BACK", "Choose a different ruleset", "Back",gold},
+ }) do
+  local b=Instance.new("TextButton",panel)
+  b.Name="Environment"..item[3]; b.Position=UDim2.fromOffset(24,145+(index-1)*108)
+  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(37,57,62)
+  b.Text=""; b.Visible=false; table.insert(mapButtons,b)
+  local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,12)
+  local s=Instance.new("UIStroke",b); s.Color=item[4]; s.Transparency=0.35
+  for line=1,2 do
+   local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
+   t.Position=UDim2.fromOffset(16,line==1 and 10 or 38); t.Size=UDim2.new(1,-32,0,line==1 and 24 or 45)
+   t.Text=item[line]; t.Font=line==1 and Enum.Font.GothamBold or Enum.Font.GothamMedium
+   t.TextSize=line==1 and 19 or 11; t.TextColor3=line==1 and item[4] or cream
+   t.TextXAlignment=Enum.TextXAlignment.Left; t.TextWrapped=true
+  end
+  b.Activated:Connect(function()
+   if pending then return end
+   if item[3]=="Back" then
+    for _,button in ipairs(mapButtons) do button.Visible=false end
+    for _,button in ipairs(variantButtons) do button.Visible=true end
+    status.Text=chosenMode.." / Choose your ruleset."
+   else
+    connect(chosenMode,chosenVariant,item[3])
+   end
   end)
  end
  local UIS=game:GetService("UserInputService")

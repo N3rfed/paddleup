@@ -3,7 +3,9 @@ local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
-require(script:WaitForChild("World")).build()
+local courtRoot=require(script:WaitForChild("World")).build()
+local CourtEnvironments=require(script:WaitForChild("CourtEnvironments"))
+local environments=CourtEnvironments.new(courtRoot)
 local Spectator=require(script:WaitForChild("Spectator"))
 local Lobby=require(script:WaitForChild("Lobby"))
 Lobby.build()
@@ -515,23 +517,27 @@ local function leaveCourt(p)
  end
  rosterChanged()
 end
-session.OnServerEvent:Connect(function(p,mode,variant)
+session.OnServerEvent:Connect(function(p,mode,variant,environment)
  local d=users[p]
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
  if mode~="Lobby" and mode~="Spectate" and variant~="PowerUp" and variant~="Augmented" then
   session:FireClient(p,false,"Choose Power-Up or Augmented first."); return
  end
+ environment=environment or (courtMode and environments.active or "Rooftop")
+ if mode~="Lobby" and mode~="Spectate" and not CourtEnvironments.valid(environment) then
+  session:FireClient(p,false,"Choose Rooftop or Moon first."); return
+ end
  local now=os.clock()
  if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
  d.sessionAt=now
- if mode==d.mode and (d.side==0 or variant==d.variant) then session:FireClient(p,true,"Already connected."); return end
+ if mode==d.mode and (d.side==0 or (variant==d.variant and environment==environments.active)) then session:FireClient(p,true,"Already connected."); return end
  if mode=="Lobby" or mode=="Spectate" then
   leaveCourt(p); d.mode=mode
  else
   -- Validate before leaving, so a rejected choice never disrupts a live match.
-  if courtMode and (courtMode~=mode or courtVariant~=variant) then
-   session:FireClient(p,false,"Court is in "..courtMode.." / "..courtVariant..". Spectate or wait for the court to empty.")
+  if courtMode and (courtMode~=mode or courtVariant~=variant or environments.active~=environment) then
+   session:FireClient(p,false,"Court is in "..environments.active.." / "..courtMode.." / "..courtVariant..". Join those settings, spectate, or wait for it to empty.")
    return
   end
   local homeLimit=mode=="2V2" and 2 or 1
@@ -540,6 +546,13 @@ session.OnServerEvent:Connect(function(p,mode,variant)
   if (mode=="Practice" and home+away>0) or (home>=homeLimit and away>=awayLimit) then
    session:FireClient(p,false,"Court is full. Choose Spectate to watch.")
    return
+  end
+  local environmentChanged=environments.active~=environment
+  environments:set(environment)
+  if environmentChanged then
+   for spectator,data in pairs(users) do
+    if data.mode=="Spectate" and spectator.Character then Spectator.enter(spectator,spectator.Character) end
+   end
   end
   courtMode=mode
   courtVariant=variant; d.variant=variant; p:SetAttribute("MatchVariant",variant)

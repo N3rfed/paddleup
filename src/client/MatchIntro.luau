@@ -96,7 +96,9 @@ function MatchIntro.start(player,network)
   courtPan=Instance.new("Frame",gui)
   courtPan.Name="CourtPan"; courtPan.Size=UDim2.fromScale(1,1)
   courtPan.BackgroundTransparency=1; courtPan.Visible=false
-  label(root,"SKYLINE CLUB  /  COURT INTRO",UDim2.fromScale(0.15,0.06),UDim2.fromScale(0.7,0.05),18)
+  local court=workspace:FindFirstChild("PaddleUp")
+  local environmentTitle=court and court:GetAttribute("EnvironmentTitle") or "SKYLINE CLUB"
+  label(root,environmentTitle.."  /  COURT INTRO",UDim2.fromScale(0.15,0.06),UDim2.fromScale(0.7,0.05),18)
   label(root,tostring(#data.home).." V "..tostring(#data.away),UDim2.fromScale(0.35,0.13),UDim2.fromScale(0.3,0.08),36)
   label(root,"VS",UDim2.fromScale(0.44,0.45),UDim2.fromScale(0.12,0.1),48)
   label(root,"GET READY",UDim2.fromScale(0.3,0.88),UDim2.fromScale(0.4,0.05),22)
@@ -106,7 +108,7 @@ function MatchIntro.start(player,network)
    local viewport=Instance.new("ViewportFrame",root)
    viewport.Name="TeamShot"..teamIndex
    viewport.Position=UDim2.fromScale(0,0); viewport.Size=UDim2.fromScale(1,1)
-   viewport.BackgroundColor3=Color3.fromRGB(111,160,186); viewport.ZIndex=2
+   viewport.BackgroundColor3=court and court:GetAttribute("Environment")=="Moon" and Color3.new(0,0,0) or Color3.fromRGB(111,160,186); viewport.ZIndex=2
    -- A sharp transparency gradient clips the full-screen camera image itself.
    local mask=Instance.new("UIGradient",viewport)
    mask.Name="DiagonalMask"; mask.Rotation=15

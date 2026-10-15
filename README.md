@@ -70,6 +70,10 @@ Join Practice, 1V1, or 2V2 to try the placeholder pickups. A glowing 3D orb drop
 These are test objects only: they grant no buffs and do not change the existing abilities. `PowerupsCollected` and `LastCollectedPowerup` player attributes record collection for the current server session. `src/server/Powerups.luau` owns spawn timing, positions, distance validation, and cleanup; its `onCollected(player, kind)` callback is the extension point for future inventory/effects. No inventory slot is reserved yet, so test pickups remain repeatable.
 
 ## Environment
+After choosing a game format and ruleset, choose **Rooftop** or **Moon**. The shared court accepts players using the same format, ruleset, and environment; Spectate watches the active court. Return to the lobby and empty the court before changing environments.
+
+Moon is the Selene lunar outpost: a rocket and landing pad, crater fields, moon rocks and ridges, a rover with tracks, habitat, solar arrays, communications dish, mission flag, stars, Earth, and distant planets. It uses normal gravity, jump behavior, ball physics, court dimensions, and collision surfaces. Space lighting and scenery are cosmetic. `src/server/CourtEnvironments.luau` swaps scenery while preserving the live court, and `src/server/MoonEnvironment.luau` builds the lunar scene.
+
 The rooftop cycles through sunrise, daylight, sunset, and night every 12 real-world minutes. Each server starts at 06:00 and shares the same lighting with all players. Court lights remain on for nighttime play. Adjust CYCLE_SECONDS and START_HOUR in src/server/DayNightCycle.luau to change the duration or starting time.
 
 ## Serve charge
