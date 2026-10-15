@@ -12,7 +12,11 @@ return function(Augments)
   assert(not all[card.id],"Unique effect IDs")
   counts[card.tier]+=1; all[card.id]=true
  end
- assert(counts[1]==9 and counts[2]==9 and counts[3]==9,"Nine named augments per rarity")
+ assert(counts[1]==9 and counts[2]==10 and counts[3]==9,"Air Time joins the Gold catalog")
+ assert(not Augments.slowFall({},1,"Augmented"),"Normal jumps are the default")
+ assert(Augments.slowFall({airTime=true},1,"Augmented"),"Air Time grants slow fall")
+ assert(not Augments.slowFall({airTime=true},0,"Augmented"),"No augment effect in the lobby")
+ assert(not Augments.slowFall({airTime=true},1,"PowerUp"),"Effect is exclusive to its augmented build")
  for pass=1,300 do
   local builds=pass%2==0 and {all,all,all,all} or nil
   local tier,offers=Augments.deal(random,4,builds)

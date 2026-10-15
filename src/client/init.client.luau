@@ -9,6 +9,7 @@ local SoundService=game:GetService("SoundService")
 local Debris=game:GetService("Debris")
 local player=Players.LocalPlayer
 local DiveController=require(script:WaitForChild("DiveController"))
+require(script:WaitForChild("JumpController")).start(player)
 local HitboxOverlay=require(script:WaitForChild("HitboxOverlay"))
 local RallyEffects=require(script:WaitForChild("RallyEffects"))
 local BallShadow=require(script:WaitForChild("BallShadow"))
@@ -16,6 +17,9 @@ local FloatingText=require(script:WaitForChild("FloatingText"))
 local developerMode=false
 local lobbyCamera=require(script:WaitForChild("LobbyCamera")).new(player,UIS)
 local Rules
+local function canServe(data)
+ return Rules~=nil and data~=nil and data.canServe==true and Rules.canServe(player.UserId,data.serverId,data.serveReady)
+end
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
@@ -287,14 +291,14 @@ local function dive()
  input:FireServer("Dive",humanoid and humanoid.MoveDirection or Vector3.zero)
 end
 local function stopServeMeter()
- if meterPending or not meterStarted or not snapshot or not snapshot.canServe or not Rules then return end
+ if meterPending or not meterStarted or not snapshot or not canServe(snapshot) or not Rules then return end
  local _,_,accuracy=Rules.serveTiming(meterStarted or workspace:GetServerTimeNow(),workspace:GetServerTimeNow())
  meterPending=true; meterInput=nil; meterStarted=nil
  animateSwing(false,accuracy)
  input:FireServer("ServeTimingStop")
 end
 local function beginCharge(key)
- if snapshot and snapshot.canServe then
+ if snapshot and canServe(snapshot) then
   if not hitInputReady() then return end
   if meterPending or not playing() then return end
   if not meterInput then
@@ -305,10 +309,10 @@ local function beginCharge(key)
   return
  end
  if chargeStarted or not playing() or not hitInputReady() then return end
- if not snapshot or (not snapshot.live and not snapshot.canServe) then return end
+ if not snapshot or (not snapshot.live and not canServe(snapshot)) then return end
  chargeInput=key; chargeStarted=os.clock()
  local readyAt=player.Character and player.Character:GetAttribute("ChargedShotReadyAt")
- chargeCanShow=snapshot.canServe or not readyAt or workspace:GetServerTimeNow()>=readyAt
+ chargeCanShow=canServe(snapshot) or not readyAt or workspace:GetServerTimeNow()>=readyAt
  local started=chargeStarted
  task.delay(0.4,function()
   if chargeStarted==started and chargeCanShow then DiveController.charge(player.UserId,true,started) end
@@ -437,7 +441,7 @@ local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=fa
 state.OnClientEvent:Connect(function(data)
  if not snapshot or snapshot.shotId~=data.shotId or snapshot.heavy~=data.heavy or not data.live then trail:Clear() end
  if not data.live then AugmentVisuals.clear() end
- if snapshot and snapshot.canServe and not data.canServe then cancelCharge(data.live==true) end
+ if snapshot and canServe(snapshot) and not canServe(data) then cancelCharge(data.live==true) end
  snapshot=data; receivedAt=os.clock()
  outGui.Enabled=developerMode and data.outLanding~=nil
  if data.outLanding and data.outLanding~=lastOutLanding then
@@ -448,7 +452,7 @@ state.OnClientEvent:Connect(function(data)
   outMarker.Position=Vector3.new(data.outLanding.X,groundY+0.015,data.outLanding.Z)
  end
  lastOutLanding=data.outLanding
- touchSwing.Text=data.live and "SWING" or (data.canServe and "SERVE" or "WAIT")
+ touchSwing.Text=data.live and "SWING" or (canServe(data) and "SERVE" or "WAIT")
  scoreDigits[1].Text=tostring(data.score[1]); scoreDigits[2].Text=tostring(data.score[2]); scoreDigits[3].Text=tostring(data.serverNumber or 1)
  serveAccent.Position=UDim2.fromOffset(data.servingSide==1 and 22 or 107,53)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
@@ -464,7 +468,12 @@ state.OnClientEvent:Connect(function(data)
 end)
 feedback.OnClientEvent:Connect(function(message,kind)
  if kind=="augmentFX" then AugmentVisuals.activate(message.userId,message.tier); return end
- if kind=="serveTiming" then showServeTiming(message.grade); meterPending=true; meterExitRequested=true; setMeterShown(false); meterInput=nil; return end
+ if kind=="serveTiming" then
+  if snapshot and snapshot.serverId==player.UserId then
+   showServeTiming(message.grade); meterPending=true; meterExitRequested=true; setMeterShown(false); meterInput=nil
+  end
+  return
+ end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
   local world=workspace:FindFirstChild("PaddleUp")
@@ -563,19 +572,20 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  diveLabel.TextColor3=diveCooling and Color3.fromRGB(147,155,165) or electric
  touchDive.BackgroundColor3=diveCooling and diveGray or electric
  touchDive.AutoButtonColor=not diveCooling
- serveCountdownCapsule.Visible=playing() and snapshot~=nil and snapshot.canServe==true
+ serveCountdownCapsule.Visible=playing() and snapshot~=nil and canServe(snapshot)==true
  if serveCountdownCapsule.Visible then
   local remaining=math.max(0,(snapshot.serveDeadline or workspace:GetServerTimeNow())-workspace:GetServerTimeNow())
   serveCountdown.Text="SERVE IN "..math.ceil(remaining).."s"
  end
- local canTime=playing() and snapshot and snapshot.canServe and Rules
+ local canTime=playing() and snapshot and canServe(snapshot) and Rules
  if canTime and meterDeadline~=snapshot.serveDeadline then
   meterDeadline=snapshot.serveDeadline; meterPending=false; meterInput=nil; meterStarted=nil
   meterExitRequested=false; setMeterShown(false,true); meterFeedbackUntil=0
  end
  local meterActive=canTime and not meterExitRequested and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen or false
- setMeterShown(meterActive)
- serveMeter.Visible=meterShowing or serveMeter.GroupTransparency<0.999
+ local ownsServe=snapshot and snapshot.serverId==player.UserId
+ setMeterShown(meterActive,not ownsServe)
+ serveMeter.Visible=ownsServe and (meterShowing or serveMeter.GroupTransparency<0.999) or false
  if meterActive and not meterPending then
   local position=Rules.serveTiming(meterStarted or workspace:GetServerTimeNow(),workspace:GetServerTimeNow())
   needle.Position=UDim2.fromScale(0.5,1-position)
@@ -585,8 +595,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   end
  end
  if not canTime then meterInput=nil; meterStarted=nil; meterDeadline=nil; meterPending=false end
- meterFeedback.Visible=playing() and now<meterFeedbackUntil
- if chargeStarted and (not playing() or not snapshot or (not snapshot.live and not snapshot.canServe)) then cancelCharge() end
+ meterFeedback.Visible=playing() and ownsServe and now<meterFeedbackUntil or false
+ if chargeStarted and (not playing() or not snapshot or (not snapshot.live and not canServe(snapshot))) then cancelCharge() end
  if chargeStarted then
   local character=player.Character
   local humanoid=character and character:FindFirstChildOfClass("Humanoid")
@@ -662,7 +672,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   local aiming=locked and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
-  crosshair.Visible=developerMode and aiming==true and not (snapshot and snapshot.canServe)
+  crosshair.Visible=developerMode and aiming==true and not (snapshot and canServe(snapshot))
   if aiming and UIS.MouseEnabled then
    local delta=UIS:GetMouseDelta()
    yaw-=delta.X*0.004
@@ -754,8 +764,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  countdown.TextColor3=color
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
- timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
- if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
+ timingText.Text=not snapshot.live and (canServe(snapshot) and "CLICK / TAP TO SERVE DIAGONALLY" or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
+ if snapshot.slamReady then timingText.Text="SLAM WINDOW  /  SWING NOW!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)

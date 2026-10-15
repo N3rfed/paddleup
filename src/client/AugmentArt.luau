@@ -4,6 +4,7 @@ local motifs={
  kitchenCamper="COURT",dinkSpecialist="TARGET",carbonFiber="PADDLE",secondServe="RESET",sliceDice="DIVE",
  thirdShot="TARGET",serveVolley="BOLT",vampiricReach="PADDLE",atpAssassin="APEX",baitSwitch="MASK",
  erne="APEX",phantom="CLONE",lava="BOLT",overcharge="BOLT",deflector="SHIELD",
+ airTime="APEX",
 }
 local badges={
  kitchenCamper="+15% MOVE",dinkSpecialist="3 DINKS / +20%",carbonFiber="+15% SWEET SPOT",secondServe="1 FREE RETRY",sliceDice="10% LOWER BOUNCE",
@@ -12,6 +13,7 @@ local badges={
  perfectVision="+20% TIMING WINDOW",quickRecovery="50% FASTER RECOVERY",baselineSentinel="+15% LATERAL SPEED",calculatedReturn="80% RETURN VELOCITY",
  momentumShift="3 PERFECT / +15%",offensiveDive="MAXIMUM TOPSPIN",kitchenWarden="+25% FORWARD REACH",deceptiveDrop="0.5s RETICLE DELAY",
  apexPredator="HEAVY / HIDDEN SPEED",rhythmMaster="11+ HITS / VANISH",afterimage="2s CLONE / DECOY",terminalVelocity="+8% / NO SPEED CAP",
+ airTime="1 SECOND SLOW FALL",
 }
 function Art.badge(card)
  return badges[card.id] or string.format("+%d%% %s",math.floor((card.amount or 0)*100+0.5),(card.stat or "UPGRADE"):upper())

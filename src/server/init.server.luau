@@ -56,6 +56,7 @@ local function resetAugments()
  for p,d in pairs(users) do
   d.augments={}; d.augmentNames={}; d.augmentPulses={}; d.augmentActive={}; d.augmentMatch={}; d.augmentRally=Augments.newRally()
   p:SetAttribute("AugmentDraftOpen",false)
+  p:SetAttribute("SlowFallEnabled",false)
   augmentRemote:FireClient(p,{kind="reset"})
  end
 end
@@ -67,6 +68,7 @@ local function chooseAugment(p,id)
  if not card then return end
  draft.offers[p]=nil
  table.insert(d.augmentNames,card.name)
+ p:SetAttribute("SlowFallEnabled",Augments.slowFall(d.augments,d.side,d.variant))
  augmentRemote:FireClient(p,{kind="chosen",name=card.name,count=#d.augmentNames,stats=d.augments,names=d.augmentNames,card=card})
 end
 augmentRemote.OnServerEvent:Connect(function(p,serial,id)
@@ -481,6 +483,7 @@ local function addPlayer(p)
  users[p]={augments={},augmentNames={},augmentMatch={},augmentRally=Augments.newRally(),mode="Lobby",sessionAt=0,side=side,slot=side~=0 and availableSlot(side) or 0,joined=joinSerial,stamina=100,staminaRecoveryAt=0,lastSwing=0,diveAt=0,powerAt=0,slowAt=0,powerUntil=0,slowUntil=0,lastInput=0}
  p:SetAttribute("CourtSide",side)
  p:SetAttribute("SessionMode","Lobby")
+ p:SetAttribute("SlowFallEnabled",false)
  if side~=0 then rosterChanged() end
  p.CharacterRemoving:Connect(function() Spectator.leave(p) end)
  p.CharacterAppearanceLoaded:Connect(function(c)
@@ -498,6 +501,7 @@ local function leaveCourt(p)
  local active=d.side~=0
  d.side=0; d.slot=0
  d.variant=nil; p:SetAttribute("MatchVariant",nil)
+ p:SetAttribute("SlowFallEnabled",false)
  d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.serveChargeAt=nil; d.chargeAt=nil; d.chargeCooldownBlocked=nil
  d.powerUntil=0; d.slowUntil=0
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
@@ -584,7 +588,8 @@ local function prepareServe()
  ball.v=Vector3.zero; ball.speed=1; ball.perfects=0; ball.shots=0
  ball.bounces=0; ball.bounceAt=-100; ball.last=servingSide
  serveReady=true
- serveDeadline=workspace:GetServerTimeNow()+Rules.SERVE_TIMEOUT
+ local botServing=servingSide==-1 and not occupant(-1)
+ serveDeadline=workspace:GetServerTimeNow()+(botServing and Rules.BOT_SERVE_DELAY or Rules.SERVE_TIMEOUT)
  banner="TEAM "..(servingSide==1 and "1" or "2").." / SERVER "..rotation.number.." TO SERVE"
 end
 local function facingTarget(from,r,side,depth)
@@ -600,33 +605,24 @@ local function serve(p,d,r,h)
  if not serveDeadline or workspace:GetServerTimeNow()>=serveDeadline then return end
  if not d.serveChargeAt then return end
  local _,offset,accuracy,grade=Rules.serveTiming(d.serveChargeAt,workspace:GetServerTimeNow())
- local botServing=servingSide==-1 and not occupant(-1)
- if p.UserId~=serverId and not (botServing and p.UserId==receiverId) then
+ if not Rules.canServe(p.UserId,serverId,serveReady) then
   tell(p,"WAIT FOR THE DESIGNATED SERVER","info"); return
  end
- local from=Vector3.new(serveX,184,servingSide*46)
- if botServing then from=Rules.heldBallPosition(bot) or from end
- if not botServing then
-  if not Rules.servePositionValid(r.Position,d.side,serveX,h.FloorMaterial~=Enum.Material.Air) then
-   tell(p,"Foot Fault! Serve from behind the baseline on the marked side.","fault"); return
-  end
-  from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z)
+ if not Rules.servePositionValid(r.Position,d.side,serveX,h.FloorMaterial~=Enum.Material.Air) then
+  tell(p,"Foot Fault! Serve from behind the baseline on the marked side.","fault"); return
  end
- if not botServing then
-  lastHitter[servingSide]=p
-  if Augments.has(d.augments,"serveVolley") then d.augmentRally.burstUntil=os.clock()+3; activateAugment(p,"serveVolley",3) end
- end
+ local from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,184,r.Position.Z)
+ lastHitter[servingSide]=p
+ if Augments.has(d.augments,"serveVolley") then d.augmentRally.burstUntil=os.clock()+3; activateAugment(p,"serveVolley",3) end
  d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  serveReady=false; serveDeadline=nil; ball.last=servingSide; ball.shots=0
  local target=Rules.timedServeTarget(servingSide,serveX,offset)
  ball.speed=Rules.servePower(offset+1)
  d.lastSwing=os.clock()+Rules.HIT_COOLDOWN
  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+Rules.HIT_COOLDOWN)
- launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,0,nil,offset<Rules.SERVE_NET_OFFSET,0,{userId=not botServing and p.UserId or nil,maxVelocity=offset>=Rules.SERVE_NET_OFFSET and Rules.MAX_SERVE_VELOCITY or nil})
+ launch(from,Vector3.new(target.X,FLOOR,target.Z),false,false,false,0,nil,offset<Rules.SERVE_NET_OFFSET,0,{userId=p.UserId,maxVelocity=offset>=Rules.SERVE_NET_OFFSET and Rules.MAX_SERVE_VELOCITY or nil})
  feedback:FireClient(p,{grade=grade,offset=offset,accuracy=accuracy},"serveTiming")
- if not botServing then
-  feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=accuracy},"swing")
- end
+ feedback:FireAllClients({userId=p.UserId,backhand=false,contact=from,direction=ball.v.Unit,charge=accuracy},"swing")
  banner="SERVE  /  LET IT BOUNCE"
 end
 local function overheadStatus(p,r)
@@ -637,17 +633,25 @@ local function overheadStatus(p,r)
   local overhead=Rules.contactInFront(ball.p,r.CFrame) and distance<=Rules.SLAM_RANGE and Rules.overheadReach(ball.p,r.Position,minY,maxY)
  return distance,overhead
 end
-local function kitchenLobWindow(p,d,r,overhead)
- return Rules.kitchenLobWindow(ball.lob,overhead,r.Position,d.side)
+local function slamQuality(p,d,r,now,overhead)
+ local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
+ local diving=now<(d.divePoseUntil or d.diveUntil or 0)
+ local jumping=Rules.jumpSlam(r.Position,d.side,grounded,diving)
+ if not overhead and not jumping then return nil end
+ local minY=Rules.slamBounds(p.Character,r)
+ local contact=r.Position+r.CFrame.LookVector*5
+ contact=Vector3.new(contact.X,jumping and r.Position.Y+1.5 or minY+1,contact.Z)
+ return Rules.slamTiming(ball.p,ball.v,contact,Augments.has(d.augments,"perfectVision"))
 end
 local function slamReady(p,d,now)
  local r,h=rootOf(p)
  if not r or not h or h.Health<=0 or d.side==0 then return false end
  if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
- if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,ball.p,d.side,now<d.diveUntil)) then return false end
- local _,overhead=overheadStatus(p,r)
- return overhead and (perfect(now,d) or kitchenLobWindow(p,d,r,overhead))
+ if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,h.FloorMaterial~=Enum.Material.Air,d.kitchenTouched)) then return false end
+ local distance,overhead=overheadStatus(p,r)
+ return Rules.contactInFront(ball.p,r.CFrame) and (overhead or distance<=Rules.HIT_RANGE)
+  and slamQuality(p,d,r,now,overhead)=="perfect"
 end
 local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   charge=charge or 0
@@ -674,11 +678,14 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach+extension or overhead)
   local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
   if automatic and not valid then return false end
-  local clean=valid and (distance<=Rules.PERFECT_RANGE*reach*(Augments.has(d.augments,"carbonFiber") and 1.15 or 1)+extension or overhead) and (perfect(now,d) or kitchenLobWindow(p,d,r,overhead))
+  local slamTiming=not softRequested and shotKind~="Lob" and shotKind~="Slice" and not shield
+   and not guided and not feint and not deceptive and slamQuality(p,d,r,now,overhead) or nil
+  local clean=valid and (distance<=Rules.PERFECT_RANGE*reach*(Augments.has(d.augments,"carbonFiber") and 1.15 or 1)+extension or overhead) and perfect(now,d)
   if guided or feint or deceptive or shield then clean=valid end
   if ball.spin and not fire and not guided and not feint and not deceptive and not shield then
    clean=clean and (perfect(now,d) and distance<=Rules.PERFECT_RANGE*reach*(Augments.has(d.augments,"carbonFiber") and 1.15 or 1)+extension or overhead)
   end
+  if slamTiming then clean=valid and slamTiming=="perfect" end
   if not Rules.hitReady(now,d.lastSwing,clean) then return false end
   d.lastSwing=clean and now or now+Rules.HIT_COOLDOWN
   p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
@@ -690,8 +697,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   if ball.shots==0 and receiverId and p.UserId~=receiverId then
    point(-d.side,"Wrong receiver: the diagonal player must return the serve"); return false
   end
-  local kitchenFault=Rules.kitchenHitFault(r.Position,ball.p,d.side,now<d.diveUntil)
-   or (d.kitchenTouched and p.Character.Humanoid.FloorMaterial==Enum.Material.Air)
+  local kitchenFault=Rules.kitchenHitFault(r.Position,grounded,d.kitchenTouched)
   local fault=Rules.returnFault(ball.bounces,ball.shots,kitchenFault)
   if fault then point(-d.side,fault); return false end
   if ball.deadly then point(ball.last,"Unreturnable paddle strike"); return true end
@@ -703,7 +709,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local erne=Augments.has(d.augments,"erne") and ball.bounces==0 and ball.shots>=2
    and math.abs(r.Position.X)>Rules.HALF_WIDTH+1 and math.abs(r.Position.Z)<=Rules.KITCHEN+4
    and humanoid and humanoid.FloorMaterial==Enum.Material.Air and not d.kitchenTouched
-  if erne then clean=true end
+  if erne and not slamTiming then clean=true end
   if ball.bounces==0 then d.volleyPending=true; d.volleySettled=0 end
   local _,timeToBounce=landing()
   local quality=Rules.shotQuality(clean,timeToBounce,now-ball.bounceAt)
@@ -712,7 +718,8 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   if shotKind=="Lob" and not feint and not guided and not deceptive then quality="lob"; soft=nil end
   local serveReturn=ball.shots==0
   ball.shots+=1
-  local slam=clean and overhead and not soft and shotKind~="Lob" and shotKind~="Slice" and not shield
+  local slam=slamTiming~=nil
+  if slam then quality=slamTiming end
   local restored=clean and ball.speed<1
   if clean then ball.perfects+=1 end
   local charged=charge>0 and not soft and not softRequested and not slam
@@ -745,9 +752,9 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local dinkBoost=multiplier>1
   if Comeback.active(comeback,d.side) then multiplier*=Comeback.HIT end
   if soft~="dink" then Augments.dink(d.augmentRally,false) end
-  local deadly=erne or (fire and slam and not d.augmentRally.overchargeUsed)
+  local deadly=(erne and clean) or (fire and slam and clean and not d.augmentRally.overchargeUsed)
   if erne then multiplier*=3 end
-  if fire and slam then d.augmentRally.overchargeUsed=true end
+  if fire and slam and clean then d.augmentRally.overchargeUsed=true end
   if feint then
    for _,opponent in ipairs(teamPlayers(-d.side)) do
     local enemy=users[opponent]; local enemyRoot=rootOf(opponent)
@@ -763,9 +770,10 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
     local data=users[opponent]
     if Augments.onFire(data.augments,data.augmentRally,ball.shots+1) then offensive=false; break end
    end
-   if offensive then quality="perfect" end
+   if offensive and not slam then quality="perfect" end
   end
-  local triggered={thirdShot=guided,baitSwitch=feint,deflector=shield,erne=erne,overcharge=fire and slam,
+  if slam then target=Rules.slamTarget(target,d.side,quality) end
+  local triggered={thirdShot=guided,baitSwitch=feint,deflector=shield,erne=erne and clean,overcharge=fire and slam and clean,
    deceptiveDrop=deceptive,offensiveDive=offensive,apexPredator=heavy,rhythmMaster=rhythm,afterimage=afterimage,
    calculatedReturn=calculated,sliceDice=shotKind=="Slice",dinkSpecialist=dinkBoost,
    perfectVision=clean,carbonFiber=clean,phantom=backhand,
@@ -788,7 +796,9 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
   elseif quality=="net" then message="BAD TIMING  /  LOW CONTACT" end
   if accelerationMessage then message=accelerationMessage end
-  feedback:FireAllClients({userId=p.UserId,text=message,tone=clean and "good" or (quality=="net" or charged) and "bad" or "neutral"},"playerText")
+  if slam and quality=="net" then message="EARLY SLAM / NET"
+  elseif slam and quality=="out" then message="LATE SLAM / OUT" end
+  feedback:FireAllClients({userId=p.UserId,text=message,tone=clean and "good" or (quality=="net" or quality=="out" or charged) and "bad" or "neutral"},"playerText")
   d.diveUntil=0
   return true
 end
@@ -814,11 +824,11 @@ input.OnServerEvent:Connect(function(p,action,moveIntent)
  if not r or not h or h.Health<=0 then return end
  if action=="ServeChargeStart" then
   if not serveReady or not serveDeadline or workspace:GetServerTimeNow()>=serveDeadline then return end
-  if p.UserId~=serverId and not (servingSide==-1 and not occupant(-1) and p.UserId==receiverId) then return end
+  if not Rules.canServe(p.UserId,serverId,serveReady) then return end
   d.serveChargeAt=d.serveChargeAt or workspace:GetServerTimeNow()
   p.Character:SetAttribute("ShotChargeAt",d.serveChargeAt)
  elseif action=="ChargeStart" then
-  if not ball.live and not (serveReady and (p.UserId==serverId or (servingSide==-1 and not occupant(-1) and p.UserId==receiverId))) then return end
+  if not ball.live and not Rules.canServe(p.UserId,serverId,serveReady) then return end
   d.chargeAt=d.chargeAt or now
   p.Character:SetAttribute("ShotChargeAt",workspace:GetServerTimeNow())
  elseif action=="ChargeRelease" then
@@ -881,6 +891,7 @@ RunService.Heartbeat:Connect(function(dt)
  powerups:update(now,(now<introUntil or courtVariant=="Augmented") and {} or pickupParticipants)
  for p,d in pairs(users) do
   local recovered=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
+  p:SetAttribute("SlowFallEnabled",Augments.slowFall(d.augments,d.side,d.variant))
   d.stamina=math.min(100,d.stamina+(recovered-d.stamina)*(1+((d.augments and d.augments.regen) or 0)))
   local r,h=rootOf(p)
   if r and h and h.Health>0 then
@@ -908,14 +919,14 @@ RunService.Heartbeat:Connect(function(dt)
    end
    local grounded=h.FloorMaterial~=Enum.Material.Air
    local active={kitchenCamper=camper,baselineSentinel=baseline and math.abs(move.X)>0.1,
+    airTime=Augments.slowFall(d.augments,d.side,d.variant) and not grounded and now>=(d.divePoseUntil or 0),
     kitchenWarden=Augments.warden(d.augments,r.Position.Z*d.side,r.Position.X,Vector3.new(r.AssemblyLinearVelocity.X,0,r.AssemblyLinearVelocity.Z).Magnitude,grounded),
     overcharge=fire,dinkSpecialist=effect.driveReady==true,momentumShift=effect.perfectChain>=3}
    for id,on in pairs(active) do
     if ball.live and on and not (d.augmentActive and d.augmentActive[id]) then activateAugment(p,id) end
    end
    d.augmentActive=active
-   local inKitchen=Rules.inKitchen(r.Position,1)
-   if grounded then d.kitchenTouched=inKitchen end
+   local kitchenFault=Rules.updateKitchen(d,r.Position,grounded,r.AssemblyLinearVelocity,dt)
    if ball.live and d.side~=0 and grounded and math.abs(r.Position.X)<=Rules.HALF_WIDTH+1
     and math.abs(r.Position.Z*d.side-Rules.KITCHEN)<=1 then
     for _,opponent in ipairs(teamPlayers(-d.side)) do
@@ -925,14 +936,8 @@ RunService.Heartbeat:Connect(function(dt)
      end
     end
    end
-   if grounded and inKitchen and d.volleyPending and ball.live then
+   if kitchenFault and ball.live then
     point(-d.side,"Kitchen volley fault")
-   end
-   if d.volleyPending and ball.live then
-    if grounded and Vector3.new(r.AssemblyLinearVelocity.X,0,r.AssemblyLinearVelocity.Z).Magnitude<2 then
-     d.volleySettled=(d.volleySettled or 0)+dt
-     if d.volleySettled>0.15 then d.volleyPending=false end
-    else d.volleySettled=0 end
    end
    if d.side~=0 then
     local x,z
@@ -1087,7 +1092,7 @@ RunService.Heartbeat:Connect(function(dt)
   if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
    and ball.p.Z< -2 and distance<6.5*(Comeback.active(comeback,-1) and Comeback.HIT or 1) and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
-   and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,ball.p,-1,false)) then
+   and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,true,false)) then
    -- One attempt per incoming shot: a whiff cannot be retried on the next frame.
    botAttempted=true; botSwingAt=now+0.28
    local pressure=math.clamp((ball.speed-1)*0.15+(distance/6.5)*0.08,0,0.18)
@@ -1173,7 +1178,7 @@ RunService.Heartbeat:Connect(function(dt)
     serveReady=serveReady,servingSide=servingSide,serveX=serveX,serverId=serverId,receiverId=receiverId,serverNumber=rotation.number,
     serverName=(serverId and Players:GetPlayerByUserId(serverId) and Players:GetPlayerByUserId(serverId).DisplayName) or "Practice Partner",
     serveDeadline=serveDeadline,serveRemaining=serveDeadline and math.max(0,serveDeadline-workspace:GetServerTimeNow()) or 0,
-    canServe=serveReady and (p.UserId==serverId or (hasBot and servingSide==-1 and p.UserId==receiverId)),
+    canServe=Rules.canServe(p.UserId,serverId,serveReady),
     mustBounce=ball.live and ball.shots<2 and ball.bounces==0,
     augmentStatus=ball.live and (Augments.onFire(d.augments,d.augmentRally,ball.shots+1) and "ON FIRE"
      or now<d.augmentRally.stunUntil and "STUNNED" or d.augmentRally.lava and "KITCHEN IS LAVA / 2x DRAIN"
