@@ -1,5 +1,6 @@
 -- Small vector illustrations drawn with native UI primitives: no external assets.
 local Art={}
+local FigmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
 local motifs={
  kitchenCamper="COURT",dinkSpecialist="TARGET",carbonFiber="PADDLE",secondServe="RESET",sliceDice="DIVE",
  thirdShot="TARGET",serveVolley="BOLT",vampiricReach="PADDLE",atpAssassin="APEX",baitSwitch="MASK",
@@ -17,6 +18,11 @@ function Art.badge(card)
  return badges[card.id] or string.format("+%d%% %s",math.floor((card.amount or 0)*100+0.5),(card.stat or "UPGRADE"):upper())
 end
 function Art.draw(parent,card,color)
+ local asset=card.stat=="speed" and "cleats" or (card.stat=="reach" or card.id=="carbonFiber" or card.id=="vampiricReach") and "paddle" or nil
+ if asset then
+  local image=FigmaAssets.image(parent,asset,0,0,126,126)
+  if image then image.ScaleType=Enum.ScaleType.Fit; return end
+ end
  local function shape(x,y,w,h,rotation,alpha)
   local f=Instance.new("Frame"); f.BorderSizePixel=0; f.BackgroundColor3=color
   f.Size=UDim2.fromOffset(w,h); f.Position=UDim2.fromOffset(x,y); f.AnchorPoint=Vector2.new(0.5,0.5)

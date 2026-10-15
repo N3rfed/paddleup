@@ -2,13 +2,34 @@
 local Lobby={}
 local Furniture=require(script.Parent:WaitForChild("LobbyFurniture"))
 local P=Furniture.Palette
-local VERSION=5
+local VERSION=6
 local O=Vector3.new(0,181,600)
 -- Keep the established arrival point and its view of reception.
 Lobby.Spawn=CFrame.lookAt(Vector3.new(0,185,650),Vector3.new(0,185,608))
+-- Refresh lighting on saved lobbies without rebuilding their furniture.
+function Lobby.lightInterior(root)
+ for _,item in ipairs(root:GetDescendants()) do
+  if item:IsA("Light") then item.Enabled=true end
+  if item:IsA("BasePart") and item.Name=="Recessed warm diffuser" then
+   local light=item:FindFirstChildOfClass("SurfaceLight")
+   if light then
+    light.Enabled=true; light.Brightness=1.8; light.Range=55
+    light.Color=Color3.fromRGB(255,244,230); light.Shadows=false
+   end
+  elseif item:IsA("BasePart") and (item.Name=="Cafe canopy" or item.Name=="Boutique canopy") then
+   local light=item:FindFirstChild("Interior task light")
+   if not light then
+    light=Instance.new("SurfaceLight"); light.Name="Interior task light"; light.Parent=item
+   end
+   light.Enabled=true; light.Face=Enum.NormalId.Bottom; light.Angle=120
+   light.Range=28; light.Brightness=0.9; light.Color=Color3.fromRGB(255,244,230); light.Shadows=false
+  end
+ end
+ return root
+end
 function Lobby.build()
  local old=workspace:FindFirstChild("PaddleUpLobby")
- if old and old:GetAttribute("Version")==VERSION then return old end
+ if old and old:GetAttribute("Version")==VERSION then return Lobby.lightInterior(old) end
  local root=Instance.new("Model"); root.Name="PaddleUpLobby"
  root:SetAttribute("Version",VERSION)
  root:SetAttribute("FloorAreaIncrease",180*156/(156*136)-1)
@@ -55,7 +76,7 @@ function Lobby.build()
  local function wash(p,range,brightness,face)
   local light=Instance.new("SurfaceLight",p)
   light.Face=face or Enum.NormalId.Bottom; light.Color=P.warm
-  light.Range=range; light.Brightness=brightness; light.Angle=120; light.Shadows=false
+  light.Enabled=true; light.Range=range; light.Brightness=brightness; light.Angle=120; light.Shadows=false
  end
  local function rug(parent,x,z,width,depth)
   decor(parent,"Woven rug border",Vector3.new(width,0.05,depth),Vector3.new(x,0.04,z),P.linen,Enum.Material.Fabric)
@@ -78,7 +99,7 @@ function Lobby.build()
  part(shell,"Ivory ceiling",Vector3.new(180,1,156),Vector3.new(0,27,12),P.ivory)
  part(shell,"Reception feature wall",Vector3.new(180,26,2),Vector3.new(0,13,-65),P.ivory)
  for _,x in ipairs({-89,89}) do
-  local glass=part(shell,"Panoramic window",Vector3.new(0.4,26,154),Vector3.new(x,13,12),Color3.fromRGB(185,198,186),Enum.Material.Glass)
+  local glass=part(shell,"Panoramic window",Vector3.new(0.4,26,154),Vector3.new(x,13,12),Color3.fromRGB(189,199,216),Enum.Material.Glass)
   glass.Transparency=0.78; glass.Reflectance=0.05
   part(shell,"Window walnut sill",Vector3.new(1.4,0.5,154),Vector3.new(x,1.4,12),P.walnut,Enum.Material.Wood)
   for z=-62,86,18 do decor(shell,"Brushed window mullion",Vector3.new(0.6,26,0.35),Vector3.new(x,13,z),P.brass,Enum.Material.Metal) end
@@ -102,7 +123,7 @@ function Lobby.build()
  for _,x in ipairs({-57,0,57}) do
   for _,z in ipairs({-29,29,74}) do
    local lamp=decor(shell,"Recessed warm diffuser",Vector3.new(5,0.1,1.4),Vector3.new(x,26.42,z),P.warm,Enum.Material.Neon)
-   wash(lamp,43,0.7)
+   wash(lamp,55,1.8)
   end
  end
  -- Check-in desk retains its original central position and arrival view.
@@ -135,7 +156,7 @@ function Lobby.build()
    local frame=part(bankRoot,bank.name.." "..mode.." elevator",Vector3.new(12,13.5,2),Vector3.new(x,6.75,wallZ+1.5),P.ivory,Enum.Material.Concrete)
    frame:SetAttribute("TeamFormat",bank.name); frame:SetAttribute("Mode",mode); frame:SetAttribute("Placeholder",true)
    for _,dx in ipairs({-2.5,2.5}) do
-    part(bankRoot,"Brushed elevator door",Vector3.new(4.85,10.5,0.25),Vector3.new(x+dx,5.65,wallZ+2.65),Color3.fromRGB(155,154,138),Enum.Material.Metal)
+    part(bankRoot,"Brushed elevator door",Vector3.new(4.85,10.5,0.25),Vector3.new(x+dx,5.65,wallZ+2.65),Color3.fromRGB(164,164,183),Enum.Material.Metal)
    end
    decor(bankRoot,"Door brass seam",Vector3.new(0.1,10.5,0.3),Vector3.new(x,5.65,wallZ+2.83),P.brass,Enum.Material.Metal)
    sign(bankRoot,mode.." label",mode,Vector3.new(x,12.5,wallZ+2.75),7,1.05,P.walnut,false)
@@ -338,7 +359,7 @@ function Lobby.build()
   paddle["Forest paddle face"].Color=x<0 and P.blue or P.pink
  end
  art(shop,-60,11,5.4,7,5,true)
- -- Neutral upholstery dominates; one emerald sofa anchors the club palette.
+ -- Soft lavender upholstery and pale stone balance the navy club palette.
  local index=0
  for _,model in ipairs(lounges:GetDescendants()) do
   if model:IsA("Model") and model.Name=="Sofa" then
@@ -357,6 +378,6 @@ function Lobby.build()
  spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0)
  spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
  spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
- return root
+ return Lobby.lightInterior(root)
 end
 return Lobby

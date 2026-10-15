@@ -1,11 +1,11 @@
 -- Static courtside presentation. No roster, ranking, media, or gameplay controllers.
 local Club={}
-local VERSION=1
-local P={ivory=Color3.fromRGB(248,240,220),beige=Color3.fromRGB(216,200,175),
- emerald=Color3.fromRGB(16,110,88),teal=Color3.fromRGB(32,143,139),
- walnut=Color3.fromRGB(55,34,31),gold=Color3.fromRGB(231,181,67),
- ink=Color3.fromRGB(28,37,61),blue=Color3.fromRGB(40,105,255),
- coral=Color3.fromRGB(243,130,99),warm=Color3.fromRGB(255,225,171)}
+local VERSION=2
+local P={ivory=Color3.fromRGB(235,232,241),beige=Color3.fromRGB(202,199,216),
+ emerald=Color3.fromRGB(39,42,78),teal=Color3.fromRGB(77,144,157),
+ walnut=Color3.fromRGB(62,49,65),gold=Color3.fromRGB(196,180,155),
+ ink=Color3.fromRGB(29,31,57),blue=Color3.fromRGB(80,232,255),
+ coral=Color3.fromRGB(193,145,170),warm=Color3.fromRGB(255,241,229)}
 local function part(parent,name,size,frame,color,material,collide)
  local p=Instance.new("Part")
  p.Name=name; p.Size=size; p.CFrame=frame; p.Anchored=true

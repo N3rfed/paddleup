@@ -1,5 +1,6 @@
 local AugmentDraft={}
 local Art=require(script.Parent:WaitForChild("AugmentArt"))
+local FigmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
 function AugmentDraft.start(player,network)
  require(script.Parent:WaitForChild("AugmentBuild")).start(player,network)
  local TweenService=game:GetService("TweenService")
@@ -83,6 +84,11 @@ function AugmentDraft.start(player,network)
    local border=stroke(b,color,data.tier==3 and 2.5 or 1.5,0.25)
    local gradient=Instance.new("UIGradient",b)
    gradient.Color=ColorSequence.new(Color3.fromRGB(36,48,64):Lerp(color,0.16),Color3.fromRGB(10,15,25)); gradient.Rotation=65
+   if FigmaAssets.get("card") then
+    b.BackgroundTransparency=1; gradient.Enabled=false; border.Transparency=1; trim.Visible=false; badge.Visible=false
+    local cardArt=FigmaAssets.image(b,"card",0,0,292,362)
+    cardArt.ScaleType=Enum.ScaleType.Fit
+   end
    text(b,string.format("0%d   /   %s",index,names[data.tier]),15,22,10,color)
    local art=frame(b,UDim2.fromOffset(126,126),UDim2.fromOffset(83,55),color)
    art.BackgroundTransparency=1
@@ -118,7 +124,11 @@ function AugmentDraft.start(player,network)
    text(b,card.name:upper(),189,49,18,Color3.fromRGB(246,247,255))
    local desc=text(b,card.description,240,56,13,Color3.fromRGB(202,215,232)); desc.Font=Enum.Font.GothamMedium
    local pill=frame(b,UDim2.new(1,-36,0,42),UDim2.fromOffset(18,300),color); round(pill,9)
-   text(pill,"["..index.."]  SELECT AUGMENT",0,42,12,Color3.fromRGB(15,22,31))
+   local selectArt=FigmaAssets.image(pill,"select",0,0,256,42)
+   if selectArt then selectArt.ScaleType=Enum.ScaleType.Fit end
+   if selectArt then pill.BackgroundTransparency=1 end
+   local selectLabel=text(pill,"["..index.."]  SELECT AUGMENT",0,42,12,selectArt and Color3.fromRGB(246,246,255) or Color3.fromRGB(15,22,31))
+   selectLabel.ZIndex=2
    local function hover(on)
     TweenService:Create(cardScale,TweenInfo.new(0.15),{Scale=on and 1.025 or 1}):Play()
     TweenService:Create(border,TweenInfo.new(0.15),{Transparency=on and 0 or 0.25,Thickness=on and 3 or (data.tier==3 and 2.5 or 1.5)}):Play()
