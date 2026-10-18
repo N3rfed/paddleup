@@ -93,7 +93,7 @@ function World.build()
  local label=Instance.new("TextLabel")
  label.Size=UDim2.fromScale(1,1)
  label.BackgroundTransparency=1
- label.Text="PADDLE UP!  /  SKYLINE CLUB"
+ label.Text="PADDLE UP!"
  label.TextColor3=white
  label.Font=Enum.Font.GothamBold
  label.TextScaled=true

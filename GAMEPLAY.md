@@ -1,4 +1,4 @@
-# Paddle Up! — Skyline Club
+# Paddle Up!
 
 Arcade pickleball on an apartment rooftop. Players arrive in a separate
 penthouse lobby facing reception. The menu directly admits players to the

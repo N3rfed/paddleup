@@ -50,7 +50,7 @@ local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
 ball.shots=0
-local banner="Welcome to Skyline Club"
+local banner="Welcome!"
 local function resetAugments()
  draft=nil; draftDue=courtVariant=="Augmented"; rallies=0
  for p,d in pairs(users) do
