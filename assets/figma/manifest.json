@@ -1,0 +1,82 @@
+[
+  {
+    "name": "score",
+    "nodeId": "8:24",
+    "file": "score.png"
+  },
+  {
+    "name": "homeOuter",
+    "nodeId": "8:30",
+    "file": "homeOuter.png"
+  },
+  {
+    "name": "homeInner",
+    "nodeId": "8:31",
+    "file": "homeInner.png"
+  },
+  {
+    "name": "awayOuter",
+    "nodeId": "8:35",
+    "file": "awayOuter.png"
+  },
+  {
+    "name": "awayInner",
+    "nodeId": "8:36",
+    "file": "awayInner.png"
+  },
+  {
+    "name": "round",
+    "nodeId": "8:27",
+    "file": "round.png"
+  },
+  {
+    "name": "stamina",
+    "nodeId": "8:5",
+    "file": "stamina.png"
+  },
+  {
+    "name": "servePink",
+    "nodeId": "6:14",
+    "file": "servePink.png"
+  },
+  {
+    "name": "serveCyan",
+    "nodeId": "6:4",
+    "file": "serveCyan.png"
+  },
+  {
+    "name": "help",
+    "nodeId": "23:14",
+    "file": "help.png"
+  },
+  {
+    "name": "exit",
+    "nodeId": "23:19",
+    "file": "exit.png"
+  },
+  {
+    "name": "card",
+    "nodeId": "24:107",
+    "file": "card.png"
+  },
+  {
+    "name": "select",
+    "nodeId": "24:116",
+    "file": "select.png"
+  },
+  {
+    "name": "cleats",
+    "nodeId": "27:759",
+    "file": "cleats.png"
+  },
+  {
+    "name": "paddle",
+    "nodeId": "27:790",
+    "file": "paddle.png"
+  },
+  {
+    "name": "pickles",
+    "nodeId": "27:912",
+    "file": "pickles.png"
+  }
+]

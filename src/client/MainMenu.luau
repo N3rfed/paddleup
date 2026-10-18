@@ -110,7 +110,7 @@ function MainMenu.start(player,network)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
  exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-24,0,24)
- exit.Size=UDim2.fromOffset(42,42); exit.BackgroundColor3=Color3.fromRGB(15,23,30)
+ exit.Size=UDim2.fromOffset(28,28); exit.BackgroundColor3=Color3.fromRGB(15,23,30)
  exit.BackgroundTransparency=0.2; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
  local exitCorner=Instance.new("UICorner",exit); exitCorner.CornerRadius=UDim.new(1,0)
  local exitStroke=Instance.new("UIStroke",exit); exitStroke.Color=Color3.fromRGB(34,50,66); exitStroke.Thickness=1.5
@@ -135,6 +135,14 @@ function MainMenu.start(player,network)
  iconLine("ArrowShaft",Vector2.new(10,12),Vector2.new(21,12))
  iconLine("ArrowTop",Vector2.new(17,8),Vector2.new(21,12))
  iconLine("ArrowBottom",Vector2.new(17,16),Vector2.new(21,12))
+ local figmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
+ if figmaAssets.get("exit") then
+  icon.Visible=false; exit.Image=figmaAssets.get("exit"); exit.ScaleType=Enum.ScaleType.Fit
+  -- Custom artwork uses the full square image area, without the fallback circle.
+  exitCorner:Destroy(); exit.ClipsDescendants=false
+  exit.Size=UDim2.fromOffset(28,28)
+  exit.BackgroundTransparency=1; exitStroke.Transparency=1
+ end
  local function exitHover(on)
   TweenService:Create(exit,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(50,20,24) or Color3.fromRGB(15,23,30)}):Play()
   TweenService:Create(exitStroke,TweenInfo.new(0.15),{Color=on and Color3.fromRGB(112,137,155) or Color3.fromRGB(34,50,66)}):Play()
