@@ -48,7 +48,7 @@ function AugmentDraft.start(player,network)
  local buttons={}
  local previousSelection=nil
  local function choose(index)
-  if not active or selected or player:GetAttribute("LeaveConfirmationOpen") or not active.cards[index] then return end
+  if player:GetAttribute("PracticePaused") or not active or selected or player:GetAttribute("LeaveConfirmationOpen") or not active.cards[index] then return end
   selected=true
   footer.Text="Confirming selection..."
   remote:FireServer(active.id,active.cards[index].id)
@@ -139,6 +139,11 @@ function AugmentDraft.start(player,network)
   end
   if UIS.GamepadEnabled then GuiService.SelectedObject=buttons[1] end
  end
+ network:WaitForChild("State").OnClientEvent:Connect(function(data)
+  if active and data.practice and data.practice.draftRemaining then
+   active.endsAt=workspace:GetServerTimeNow()+data.practice.draftRemaining
+  end
+ end)
  remote.OnClientEvent:Connect(function(data)
   if data.kind=="offer" then show(data)
   elseif data.kind=="chosen" then
@@ -167,7 +172,7 @@ function AugmentDraft.start(player,network)
    else animation.object.Rotation+=dt*animation.speed end
   end
   if active and not selected then
-   footer.Text=string.format("%ds TO CHOOSE  /  First card auto-selects on timeout",math.max(0,math.ceil(active.endsAt-workspace:GetServerTimeNow())))
+   footer.Text=player:GetAttribute("PracticePaused") and "PAUSED / Continue to choose" or string.format("%ds TO CHOOSE  /  First card auto-selects on timeout",math.max(0,math.ceil(active.endsAt-workspace:GetServerTimeNow())))
   end
  end)
 end

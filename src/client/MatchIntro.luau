@@ -134,6 +134,7 @@ function MatchIntro.start(player,network)
  local stateConnection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
   local data=state.matchIntro
   if not data then clear(); return end
+  if data.id==lastId then endsAt=data.endsAt end
   if data.endsAt>workspace:GetServerTimeNow() and data.id~=lastId then show(data) end
  end)
  local function updateShots(remaining)
