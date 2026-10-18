@@ -2,12 +2,12 @@
 -- No animation loops, scripts, external assets, or gameplay dependencies.
 local Furniture={}
 Furniture.Palette={
- ivory=Color3.fromRGB(248,240,220), linen=Color3.fromRGB(216,200,175), beige=Color3.fromRGB(194,174,146), upholstery=Color3.fromRGB(57,103,92),
- forest=Color3.fromRGB(16,110,88), teal=Color3.fromRGB(32,143,139),
- walnut=Color3.fromRGB(55,34,31), brass=Color3.fromRGB(231,181,67),
- sage=Color3.fromRGB(113,152,99), ink=Color3.fromRGB(28,37,61),
- warm=Color3.fromRGB(255,241,215), blue=Color3.fromRGB(40,105,255),
- pink=Color3.fromRGB(241,70,160), purple=Color3.fromRGB(132,66,214), orange=Color3.fromRGB(255,145,55),
+ ivory=Color3.fromRGB(235,232,241), linen=Color3.fromRGB(202,199,216), beige=Color3.fromRGB(177,170,191), upholstery=Color3.fromRGB(136,128,163),
+ forest=Color3.fromRGB(39,42,78), teal=Color3.fromRGB(77,144,157),
+ walnut=Color3.fromRGB(62,49,65), brass=Color3.fromRGB(196,180,155),
+ sage=Color3.fromRGB(130,157,131), ink=Color3.fromRGB(29,31,57),
+ warm=Color3.fromRGB(255,241,229), blue=Color3.fromRGB(80,232,255),
+ pink=Color3.fromRGB(255,85,200), purple=Color3.fromRGB(151,130,194), orange=Color3.fromRGB(255,145,55), rose=Color3.fromRGB(207,154,184),
 }
 function Furniture.new()
  local P=Furniture.Palette
@@ -63,7 +63,7 @@ function Furniture.new()
   end
   for _,x in ipairs({-5.9,5.9}) do
    part("Soft armrest",Vector3.new(1,2.5,5),Vector3.new(x,2.3,0),P.forest,Enum.Material.Fabric,true)
-   local pillow=ball("Linen throw pillow",Vector3.new(2,2,0.9),Vector3.new(x*0.74,3,-0.1),x>0 and P.teal or P.orange,Enum.Material.Fabric)
+   local pillow=ball("Linen throw pillow",Vector3.new(2,2,0.9),Vector3.new(x*0.74,3,-0.1),x>0 and P.teal or P.rose,Enum.Material.Fabric)
    pillow.CFrame*=CFrame.Angles(0,0,x>0 and 0.15 or -0.15)
   end
   part("Sage blanket on cushion",Vector3.new(2.2,0.12,3.5),Vector3.new(-2.6,2.3,-0.3),P.sage,Enum.Material.Fabric)
@@ -167,7 +167,7 @@ function Furniture.new()
   part("Plant trunk",Vector3.new(0.35,6,0.35),Vector3.new(0,5.3,0),P.walnut,Enum.Material.Wood)
   for i=1,7 do
    local angle=i*math.pi*2/7
-   local leaf=ball("Broad sage leaf",Vector3.new(2.6,0.6,5.8),Vector3.new(math.sin(angle)*1.7,7.8+(i%3)*0.6,math.cos(angle)*1.7),i%2==0 and P.sage or P.teal)
+   local leaf=ball("Broad sage leaf",Vector3.new(2.6,0.6,5.8),Vector3.new(math.sin(angle)*1.7,7.8+(i%3)*0.6,math.cos(angle)*1.7),i%2==0 and P.sage or Color3.fromRGB(104,143,122))
    leaf.CFrame*=CFrame.Angles(0,angle,0)*CFrame.Angles(math.rad(-20),0,0)
   end
  end)

@@ -229,8 +229,9 @@ function Effects:update(dt,snapshot,localChargeAt)
  local beat=(0.5+0.5*math.sin(self.clock*(0.45+tempo*0.8)*math.pi*2))*(0.04+self.energy*0.08)
  for _,entry in ipairs(self.lamps) do
   entry.part.Color=self.color
-  entry.light.Color=Color3.fromRGB(220,239,230):Lerp(self.color,0.2+self.energy*0.3)
-  entry.light.Brightness=0.85+self.energy*0.85+self.pulse*0.35+beat
+  entry.light.Color=entry.lightColor:Lerp(self.color,0.12+self.energy*0.13)
+  entry.light.Enabled=true
+  entry.light.Brightness=math.max(2.2,entry.brightness)+self.energy*0.85+self.pulse*0.35+beat
  end
  for _,entry in ipairs(self.strips) do
   local age=hitAge-math.abs(entry.part.Position.Z-(self.hitZ or 0))/120

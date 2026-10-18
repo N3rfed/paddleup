@@ -3,10 +3,10 @@ local World = {}
 -- A versioned rig also installs on saved courts without rebuilding the scenery.
 function World.addCourtLights(root)
  local existing=root:FindFirstChild("RallyLights")
- if existing and existing:GetAttribute("Version")==1 then return existing end
+ if existing and existing:GetAttribute("Version")==4 then return existing end
  if existing then existing:Destroy() end
  local rig=Instance.new("Model")
- rig.Name="RallyLights"; rig:SetAttribute("Version",1)
+ rig.Name="RallyLights"; rig:SetAttribute("Version",4)
  local idle=Color3.fromRGB(92,211,201)
  local function fixture(name,size,position,color,neon)
   local p=Instance.new("Part")
@@ -23,16 +23,21 @@ function World.addCourtLights(root)
    local lamp=fixture("Court wash",Vector3.new(3.7,0.15,1.7),Vector3.new(x,203.75,z),idle,true)
    local light=Instance.new("SurfaceLight")
    light.Face=Enum.NormalId.Bottom; light.Angle=125; light.Range=48
-   light.Brightness=0.85; light.Color=Color3.fromRGB(220,239,230); light.Shadows=false; light.Parent=lamp
-  end
-  -- Segments run outside the playing lines; pulses travel along the sidelines.
-  for i=1,14 do
-   local strip=fixture("Tempo strip",Vector3.new(0.24,0.12,10),Vector3.new(x,181.36,-78+(i-1)*12),idle,true)
-   strip.Transparency=0.25
+   -- Permanent neutral court lighting; rally colors are an accent above this baseline.
+   light.Enabled=true; light.Brightness=2.2; light.Color=Color3.fromRGB(235,242,255); light.Shadows=false; light.Parent=lamp
   end
  end
- for _,z in ipairs({-82,82}) do
-  fixture("End accent",Vector3.new(59,0.12,0.24),Vector3.new(0,181.36,z),idle,true)
+ -- Broad neutral fills cover both baselines and the kitchen, even between rallies.
+ -- Invisible emitters avoid adding bright ceiling geometry above the open court.
+ for _,x in ipairs({-10,10}) do
+  for _,z in ipairs({-28,0,28}) do
+   local panel=fixture("Court fill panel",Vector3.new(18,0.1,24),Vector3.new(x,198,z),Color3.new(1,1,1))
+   panel.Transparency=1
+   local light=Instance.new("SurfaceLight")
+   light.Name="Permanent court fill"; light.Face=Enum.NormalId.Bottom
+   light.Enabled=true; light.Angle=130; light.Range=32; light.Brightness=0.5
+   light.Color=Color3.fromRGB(228,244,255); light.Shadows=false; light.Parent=panel
+  end
  end
  rig.Parent=root
  return rig
@@ -44,10 +49,18 @@ function World.updateLayout(root)
    or p.Name=="Fence upright" or p.Name=="Fence top rail" then p:Destroy()
   elseif p:IsA("BasePart") then
    local pos=p.Position
-   if p.Name=="Court surround" then p.Size=Vector3.new(64,0.12,168)
-   elseif p.Name=="Roof deck" then p.Size=Vector3.new(132,3,180)
+   if p.Name=="Court surround" then
+    p.Size=Vector3.new(64,0.12,168)
+    p.Color=Color3.fromRGB(136,128,163); p.Material=Enum.Material.SmoothPlastic
+   elseif p.Name=="Playing surface" then p.Color=Color3.fromRGB(43,123,134); p.Material=Enum.Material.SmoothPlastic
+   elseif p.Name=="Kitchen" then p.Color=Color3.fromRGB(55,143,147); p.Material=Enum.Material.SmoothPlastic
+   elseif p.Name=="Roof deck" then p.Size=Vector3.new(132,3,180); p.Color=Color3.fromRGB(217,216,227)
+   elseif p.Name=="Lounge back" then p.Color=Color3.fromRGB(193,145,170)
+   elseif p.Name=="Pergola slat" then p.Color=Color3.fromRGB(82,67,83)
+   elseif p.Name=="City tower" then p.Color=Color3.fromRGB(95,103,127)
    elseif p.Name=="Safety glass" then p.Size=Vector3.new(0.2,4,180)
    elseif p.Name=="Rooftop parapet" then
+    p.Color=Color3.fromRGB(217,216,227)
     if p.Size.Z>p.Size.X then p.Size=Vector3.new(1,3,180)
     else p.Position=Vector3.new(pos.X,pos.Y,math.sign(pos.Z)*89) end
    end
@@ -83,10 +96,10 @@ function World.build()
   p.Parent = parent or root
   return p
  end
- local cream = Color3.fromRGB(231,223,202)
+ local cream = Color3.fromRGB(217,216,227)
  local dark = Color3.fromRGB(27,46,52)
- local teal = Color3.fromRGB(30,111,113)
- local coral = Color3.fromRGB(243,130,99)
+ local teal = Color3.fromRGB(43,123,134)
+ local coral = Color3.fromRGB(193,145,170)
  local white = Color3.fromRGB(246,244,220)
  local apartment = part("Apartment tower", Vector3.new(126,176,138),Vector3.new(0,90,0),Color3.fromRGB(92,102,110),Enum.Material.Concrete)
  for y=12,168,12 do
@@ -99,10 +112,10 @@ function World.build()
   end
  end
  part("Roof deck",Vector3.new(132,3,144),Vector3.new(0,179.5,0),cream,Enum.Material.Concrete)
- part("Court surround",Vector3.new(52,0.12,96),Vector3.new(0,181.06,0),Color3.fromRGB(206,116,91))
- part("Playing surface",Vector3.new(40,0.16,80),Vector3.new(0,181.16,0),teal)
+ part("Court surround",Vector3.new(52,0.12,96),Vector3.new(0,181.06,0),Color3.fromRGB(136,128,163))
+ part("Playing surface",Vector3.new(40,0.16,80),Vector3.new(0,181.16,0),teal,Enum.Material.SmoothPlastic)
  for _,z in ipairs({-7,7}) do
-  part("Kitchen",Vector3.new(40,0.02,14),Vector3.new(0,181.255,z),Color3.fromRGB(48,137,129))
+  part("Kitchen",Vector3.new(40,0.02,14),Vector3.new(0,181.255,z),Color3.fromRGB(55,143,147),Enum.Material.SmoothPlastic)
  end
  for _,x in ipairs({-20,20}) do part("Sideline",Vector3.new(0.18,0.025,80.2),Vector3.new(x,181.28,0),white) end
  for _,z in ipairs({-40,-14,14,40}) do part("Court line",Vector3.new(40,0.025,0.18),Vector3.new(0,181.28,z),white) end
@@ -140,7 +153,7 @@ function World.build()
   part("Side table",Vector3.new(3,2,3),Vector3.new(54,182,z),dark)
  end
  for _,x in ipairs({35,57}) do for _,z in ipairs({-38,38}) do part("Pergola pillar",Vector3.new(0.5,12,0.5),Vector3.new(x,187,z),dark,Enum.Material.Metal) end end
- for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(46,193,z),Color3.fromRGB(143,100,65),Enum.Material.Wood) end
+ for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(46,193,z),Color3.fromRGB(82,67,83),Enum.Material.Wood) end
  local rng=Random.new(82)
  for i=1,30 do
   local angle=i*math.pi*2/30
