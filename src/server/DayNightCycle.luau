@@ -43,6 +43,8 @@ function DayNightCycle.start()
  sky.CelestialBodiesShown = true
  Lighting.GlobalShadows = true
  Lighting.GeographicLatitude = 35
+ local profile=Instance.new("Folder")
+ profile.Name="RooftopProfile"; profile.Parent=Lighting
  local function apply(hour)
   local a, b = frames[1], frames[2]
   for i = 1, #frames - 1 do
@@ -63,26 +65,16 @@ function DayNightCycle.start()
   atmosphere.Density = blend("density")
   atmosphere.Haze = blend("haze")
   atmosphere.Glare = blend("glare")
+  for _,property in ipairs({"ClockTime","Brightness","Ambient","OutdoorAmbient"}) do profile:SetAttribute(property,Lighting[property]) end
+  for _,property in ipairs({"Color","Decay","Density","Haze","Glare"}) do profile:SetAttribute("Atmosphere"..property,atmosphere[property]) end
  end
  local elapsed, pending = 0, 0
- local moonApplied=false
- local function moonLighting()
-  Lighting.ClockTime=14; Lighting.Brightness=2.2
-  Lighting.Ambient=Color3.fromRGB(90,99,126); Lighting.OutdoorAmbient=Color3.fromRGB(112,119,143)
-  atmosphere.Density=0; atmosphere.Haze=0; atmosphere.Glare=0
-  sky.CelestialBodiesShown=false
- end
  apply(DayNightCycle.START_HOUR)
  connection = RunService.Heartbeat:Connect(function(dt)
   elapsed = (elapsed + dt) % DayNightCycle.CYCLE_SECONDS
   pending = pending + dt
   if pending < 0.1 then return end
   pending = pending % 0.1
-  if workspace:GetAttribute("CourtEnvironment")=="Moon" then
-   if not moonApplied then moonLighting(); moonApplied=true end
-   return
-  end
-  if moonApplied then sky.CelestialBodiesShown=true; moonApplied=false end
   apply((DayNightCycle.START_HOUR + elapsed * 24 / DayNightCycle.CYCLE_SECONDS) % 24)
  end)
 end

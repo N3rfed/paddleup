@@ -19,6 +19,7 @@ local function remote(name)
 end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local session=remote("Session")
+local introReadyRemote=remote("IntroReady")
 local augmentRemote=remote("Augment")
 local Augments=require(script:WaitForChild("Augments"))
 local courtVariant=nil
@@ -48,6 +49,8 @@ local nextServe=0
 local matchIntro=nil
 local introSerial=0
 local introUntil=0
+local introReady={}
+local introLoadDeadline=0
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -178,7 +181,7 @@ local function rosterChanged()
  syncServing()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
  ball.outLanding=nil; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
- introUntil=0; matchIntro=nil
+ introUntil=0; matchIntro=nil; introReady={}; introLoadDeadline=0
  if #home>0 and #away>0 then
   introSerial+=1
   introUntil=os.clock()+9.5
@@ -194,6 +197,10 @@ local function rosterChanged()
    return result
   end
   matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+9.5,home=portraits(1),away=portraits(-1)}
+  if environments.active=="Moon" then
+   matchIntro.loading=true
+   introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
+  end
  end
  for p,d in pairs(users) do
   d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.chargeAt=nil
@@ -209,6 +216,16 @@ local function rosterChanged()
  banner="TEAMS UPDATED / PREPARING SERVE"
  feedback:FireAllClients({title="Teams Updated",fault="Preparing the next serve"},"rallyResult")
 end
+introReadyRemote.OnServerEvent:Connect(function(player,id)
+ if not matchIntro or not matchIntro.loading or matchIntro.id~=id then return end
+ if not users[player] or users[player].side==0 then return end
+ introReady[player]=true
+ for participant,data in pairs(users) do
+  if data.side~=0 and not introReady[participant] then return end
+ end
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+9.5
+ introUntil=os.clock()+9.5; nextServe=introUntil; introLoadDeadline=0
+end)
 local function rootOf(p)
  local c=p.Character
  return c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
@@ -886,6 +903,18 @@ end)
 local accumulator,broadcast=0,0
 RunService.Heartbeat:Connect(function(dt)
  local now=os.clock()
+ if matchIntro and matchIntro.loading and now>=introLoadDeadline then
+  local waiting={}
+  for player,data in pairs(users) do
+   if data.side~=0 and not introReady[player] then table.insert(waiting,player) end
+  end
+  for _,player in ipairs(waiting) do
+   leaveCourt(player)
+   users[player].mode="Lobby"; player:SetAttribute("SessionMode","Lobby")
+   if player.Character then task.spawn(spawnCharacter,player,player.Character) end
+   session:FireClient(player,false,"The moon took too long to load. Please try joining again.")
+  end
+ end
  updateDraft(now)
  local pickupParticipants={}
  for player,data in pairs(users) do

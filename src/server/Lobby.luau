@@ -6,9 +6,29 @@ local VERSION=5
 local O=Vector3.new(0,181,600)
 -- Keep the established arrival point and its view of reception.
 Lobby.Spawn=CFrame.lookAt(Vector3.new(0,185,650),Vector3.new(0,185,608))
+local function configureSpawn(root)
+ root.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
+ root:SetAttribute("ExpectedDescendants",#root:GetDescendants())
+ local city=workspace:FindFirstChild("LobbyCity")
+ if city then
+  city.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
+  city:SetAttribute("ExpectedDescendants",#city:GetDescendants())
+ end
+ root:SetAttribute("CityExpected",city~=nil)
+ -- Saved lobbies can be moved in Studio; keep arrivals relative to their floor.
+ local floor=assert(root:FindFirstChild("Cream marble floor",true),"Lobby floor is missing")
+ Lobby.Spawn=floor.CFrame*CFrame.new(0,floor.Size.Y/2+4,38)
+ local spawn=workspace:FindFirstChildWhichIsA("SpawnLocation") or Instance.new("SpawnLocation")
+ spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn*CFrame.new(0,-3.5,0)
+ spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
+ spawn.Anchored=true; spawn.Enabled=true; spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
+end
 function Lobby.build()
  local old=workspace:FindFirstChild("PaddleUpLobby")
- if old and old:GetAttribute("Version")==VERSION then return old end
+ if old and old:GetAttribute("Version")==VERSION then
+  configureSpawn(old)
+  return old
+ end
  local root=Instance.new("Model"); root.Name="PaddleUpLobby"
  root:SetAttribute("Version",VERSION)
  root:SetAttribute("FloorAreaIncrease",180*156/(156*136)-1)
@@ -353,10 +373,7 @@ function Lobby.build()
  -- Swap only this generated lobby; saved older geometry is refreshed automatically.
  if old then old:Destroy() end
  root.Parent=workspace
- local spawn=workspace:FindFirstChildWhichIsA("SpawnLocation") or Instance.new("SpawnLocation")
- spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0)
- spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
- spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
+ configureSpawn(root)
  return root
 end
 return Lobby

@@ -21,6 +21,13 @@ function Environments.new(root)
  self.rooftopHall=workspace:FindFirstChild("SkylineLobby")
  root:SetAttribute("Environment","Rooftop"); root:SetAttribute("EnvironmentTitle","SKYLINE CLUB")
  workspace:SetAttribute("CourtEnvironment","Rooftop")
+ -- Build once while players browse the lobby, before the first moon admission.
+ task.defer(function()
+  if not self.moon then
+   self.moon=require(script.Parent:WaitForChild("MoonEnvironment")).build()
+   self.moon.Parent=self.cache
+  end
+ end)
  return self
 end
 function Environments:set(name)
