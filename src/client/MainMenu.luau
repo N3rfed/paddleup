@@ -31,8 +31,8 @@ function MainMenu.start(player,network)
   return t
  end
  label("P A D D L E U P",22,24,14,gold)
- label("Skyline Club",55,40,30)
- label("THE PENTHOUSE  /  PLAY & UNWIND",99,22,11,gold)
+ label("",55,40,30)
+ label("PLAY & UNWIND",99,22,11,gold)
  local status=label("Choose a court experience. Elevators open in a future update.",476,65,13)
  local request=network:WaitForChild("Session")
  local pending=false

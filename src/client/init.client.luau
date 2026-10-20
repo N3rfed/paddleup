@@ -191,7 +191,7 @@ developerLabel.Text="DEV HITBOXES [HOME]  /  Gold: hit  |  Green: perfect range 
 developerLabel.Visible=false
 local brand=panel(Vector2.new(28,32),Vector2.new(295,82))
 text(brand,"PADDLE UP!",Vector2.new(18,9),Vector2.new(260,34),29).Font=Enum.Font.GothamBlack
-text(brand,"SKYLINE CLUB  /  ROOFTOP 18",Vector2.new(19,47),Vector2.new(270,20),11,mint)
+text(brand,"ROOFTOP 18",Vector2.new(19,47),Vector2.new(270,20),11,mint)
 local scorePanel=panel(Vector2.new(528,24),Vector2.new(224,62))
 scorePanel.Name="Score"
 serveCountdownCapsule.Parent=scorePanel

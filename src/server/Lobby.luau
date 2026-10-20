@@ -27,9 +27,242 @@ function Lobby.lightInterior(root)
  end
  return root
 end
+-- Relocate saved lobbies in place; keep the upper building mass above the ceiling.
+function Lobby.moveToFirstFloor(root)
+ local shell=root:WaitForChild("Architecture")
+ local floor=shell:WaitForChild("Cream marble floor")
+ local foundation=shell:WaitForChild("Penthouse foundation")
+ if not root:GetAttribute("FirstFloorLobby") then
+  local bottom=foundation.Position.Y-foundation.Size.Y/2
+  local targetY=bottom+floor.Size.Y
+  local delta=Vector3.new(0,targetY-(floor.Position.Y+floor.Size.Y/2),0)
+  local foundationTop=foundation.Position.Y+foundation.Size.Y/2
+  -- Every lobby component receives exactly the same translation.
+  root:PivotTo(root:GetPivot()+delta)
+  local ceiling=shell:WaitForChild("Ivory ceiling")
+  local ceilingTop=ceiling.Position.Y+ceiling.Size.Y/2
+  foundation.Size=Vector3.new(foundation.Size.X,foundationTop-ceilingTop,foundation.Size.Z)
+  foundation.Position=Vector3.new(floor.Position.X,(foundationTop+ceilingTop)/2,floor.Position.Z)
+  local function piece(template,name,size,position)
+   local p=template:Clone()
+   p:ClearAllChildren(); p.Name=name; p.Size=size; p.Position=position; p.Parent=shell
+   return p
+  end
+  local center=floor.Position
+  local height=ceilingTop-bottom
+  for _,side in ipairs({-1,1}) do
+   piece(foundation,"Ground floor side wall",Vector3.new(1,height,foundation.Size.Z),
+    Vector3.new(center.X+side*(foundation.Size.X/2-0.5),bottom+height/2,center.Z))
+  end
+  piece(foundation,"Ground floor rear wall",Vector3.new(foundation.Size.X-2,height,1),
+   Vector3.new(center.X,bottom+height/2,center.Z-foundation.Size.Z/2+0.5))
+  local glass=shell:WaitForChild("Arrival glazing")
+  local originalSize,originalPosition=glass.Size,glass.Position
+  local width,doorHeight=12,12
+  local wing=(originalSize.X-width)/2
+  glass.Size=Vector3.new(wing,originalSize.Y,originalSize.Z)
+  glass.Position=originalPosition-Vector3.new((width+wing)/2,0,0)
+  piece(glass,"Arrival glazing right",glass.Size,originalPosition+Vector3.new((width+wing)/2,0,0))
+  piece(glass,"Arrival glazing transom",Vector3.new(width,originalSize.Y-doorHeight,originalSize.Z),
+   originalPosition+Vector3.new(0,doorHeight/2,0))
+  -- The structural front wall shares the glazing's opening.
+  local frontZ=center.Z+foundation.Size.Z/2-0.5
+  local frontWing=(foundation.Size.X-2-width)/2
+  for _,side in ipairs({-1,1}) do
+   piece(foundation,"Ground floor front wall",Vector3.new(frontWing,height,1),
+    Vector3.new(center.X+side*(width+frontWing)/2,bottom+height/2,frontZ))
+  end
+  piece(foundation,"Ground floor entrance lintel",Vector3.new(width,ceilingTop-targetY-doorHeight,1),
+   Vector3.new(center.X,(ceilingTop+targetY+doorHeight)/2,frontZ))
+  for _,p in ipairs(shell:GetChildren()) do
+   if p:IsA("BasePart") and p.Name=="Arrival mullion" and math.abs(p.Position.X-center.X)<width/2 then
+    p.Size=Vector3.new(p.Size.X,originalSize.Y-doorHeight,p.Size.Z)
+    p.Position+=Vector3.new(0,doorHeight/2,0)
+   end
+  end
+  -- A supported landing reaches outside the building; each step is one stud.
+  local edge=center.Z+floor.Size.Z/2
+  piece(floor,"Entrance landing",Vector3.new(width, floor.Size.Y,12),
+   Vector3.new(center.X,floor.Position.Y,edge+6))
+  piece(floor,"Entrance step",Vector3.new(width,1,2),
+   Vector3.new(center.X,bottom+0.5,edge+13))
+  root:SetAttribute("FirstFloorLobby",true)
+ end
+ local offset=Vector3.new(0,floor.Position.Y+floor.Size.Y/2-O.Y,0)
+ Lobby.Spawn=CFrame.lookAt(O+Vector3.new(0,4,50)+offset,O+Vector3.new(0,4,8)+offset)
+ local spawn=workspace:FindFirstChildWhichIsA("SpawnLocation")
+ if spawn then spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0) end
+ return root
+end
+-- Complete only this building; reuse the existing lobby glass and upper mass.
+function Lobby.encloseBuilding(root)
+ local shell=root:WaitForChild("Architecture")
+ if root:GetAttribute("ExteriorVersion")==1 then return root end
+ local floor=shell:WaitForChild("Cream marble floor")
+ local ceiling=shell:WaitForChild("Ivory ceiling")
+ local mass=shell:WaitForChild("Penthouse foundation")
+ local floorY=floor.Position.Y+floor.Size.Y/2
+ local bottom=floor.Position.Y-floor.Size.Y/2
+ local top=mass.Position.Y+mass.Size.Y/2
+ local center=floor.Position
+ local neighbors=workspace:FindFirstChild("PaddleUp")
+ local function sample(name,fallback)
+  return neighbors and neighbors:FindFirstChild(name) or fallback
+ end
+ local concrete=sample("Apartment tower",mass)
+ local slab=sample("Balcony slab",floor)
+ local glazing=sample("Apartment glazing",shell:WaitForChild("Arrival glazing"))
+ local facade=Instance.new("Model")
+ facade.Name="Building Exterior"; facade.Parent=root
+ local function part(name,size,position,color,material,collide)
+  local p=Instance.new("Part")
+  p.Name=name; p.Size=size; p.Position=position; p.Color=color; p.Material=material
+  p.Anchored=true; p.CanCollide=collide~=false; p.CanTouch=false; p.CanQuery=true
+  p.TopSurface=Enum.SurfaceType.Smooth; p.BottomSurface=Enum.SurfaceType.Smooth
+  p.Parent=facade
+  return p
+ end
+ mass.Color=concrete.Color; mass.Material=concrete.Material
+ -- Replace opaque backing with a sill and header around the retained glazing.
+ for _,p in ipairs(shell:GetChildren()) do
+  if p:IsA("BasePart") and (p.Name=="Ground floor side wall" or p.Name=="Ground floor front wall") then
+   local size,pos=p.Size,p.Position
+   p.Size=Vector3.new(size.X,floorY-bottom,size.Z)
+   p.Position=Vector3.new(pos.X,(bottom+floorY)/2,pos.Z)
+   p.Color=slab.Color
+   local header=part("Lobby window header",Vector3.new(size.X,1.5,size.Z),
+    Vector3.new(pos.X,ceiling.Position.Y-0.25,pos.Z),slab.Color,Enum.Material.Concrete)
+   -- Cover the small return between the original glazing and exterior wall line.
+   if size.X<size.Z then header.Size=Vector3.new(3,1.5,size.Z)
+   else header.Size=Vector3.new(size.X,1.5,3) end
+  elseif p:IsA("BasePart") and p.Name=="Ground floor entrance lintel" then
+   p.Size=Vector3.new(p.Size.X,1.5,3)
+   p.Position=Vector3.new(p.Position.X,ceiling.Position.Y-0.25,p.Position.Z)
+   p.Color=slab.Color
+  end
+ end
+ local glass=shell:WaitForChild("Arrival glazing")
+ local frontZ=glass.Position.Z
+ local windowHeight=26
+ local halfX=89
+ local rearZ=center.Z-77
+ -- The retained panes form a continuous collision boundary at their original locations.
+ for _,p in ipairs(shell:GetChildren()) do
+  if p:IsA("BasePart") and (p.Name=="Panoramic window" or p.Name:find("Arrival glazing",1,true)) then
+   p.CanCollide=true; p.CollisionGroup="Default"; p.Anchored=true
+  end
+ end
+ for _,x in ipairs({center.X-halfX,center.X+halfX}) do
+  for _,z in ipairs({rearZ,frontZ}) do
+   part("Lobby corner pier",Vector3.new(2,windowHeight,2),
+    Vector3.new(x,floorY+windowHeight/2,z),slab.Color,Enum.Material.Concrete)
+  end
+ end
+ local door=part("Fixed entrance doors",Vector3.new(12,12,0.6),
+  Vector3.new(center.X,floorY+6,frontZ),P.forest,Enum.Material.Metal)
+ door.CollisionGroup="Default"
+ for _,dx in ipairs({-6,0,6}) do
+  part("Entrance brass stile",Vector3.new(0.14,12,0.12),
+   door.Position+Vector3.new(dx,0,0.36),P.brass,Enum.Material.Metal,false)
+ end
+ for _,dx in ipairs({-0.7,0.7}) do
+  part("Fixed door handle",Vector3.new(0.16,2,0.3),
+   door.Position+Vector3.new(dx,0,-0.45),P.brass,Enum.Material.Metal,false)
+ end
+ -- Match the adjacent tower's floor rhythm, glazing tint and pale concrete bands.
+ local spacing=12
+ if neighbors then
+  local levels={}
+  for _,p in ipairs(neighbors:GetChildren()) do
+   if p:IsA("BasePart") and p.Name=="Balcony slab" then table.insert(levels,p.Position.Y) end
+  end
+  table.sort(levels)
+  if #levels>1 then spacing=levels[2]-levels[1] end
+ end
+ local halfWidth,halfDepth=mass.Size.X/2,mass.Size.Z/2
+ for y=math.ceil((ceiling.Position.Y+1)/spacing)*spacing,top-spacing,spacing do
+  part("Exterior floor band",Vector3.new(mass.Size.X+0.8,0.8,mass.Size.Z+0.8),
+   Vector3.new(center.X,y,center.Z),slab.Color,slab.Material)
+  for _,side in ipairs({-1,1}) do
+   local front=part("Upper floor glazing",Vector3.new(mass.Size.X-2,7,0.2),
+    Vector3.new(center.X,y+5,center.Z+side*(halfDepth+0.11)),glazing.Color,Enum.Material.Glass,false)
+   front.Reflectance=0.25
+   local flank=part("Upper floor glazing",Vector3.new(0.2,7,mass.Size.Z-2),
+    Vector3.new(center.X+side*(halfWidth+0.11),y+5,center.Z),glazing.Color,Enum.Material.Glass,false)
+   flank.Reflectance=0.25
+  end
+ end
+ local base=ceiling.Position.Y+ceiling.Size.Y/2
+ for x=-halfWidth+10,halfWidth-5,20 do
+  for _,side in ipairs({-1,1}) do
+   part("Facade mullion",Vector3.new(0.35,top-base,0.35),
+    Vector3.new(center.X+x,(base+top)/2,center.Z+side*(halfDepth+0.24)),slab.Color,Enum.Material.Metal,false)
+  end
+ end
+ for z=-halfDepth+10,halfDepth-5,20 do
+  for _,side in ipairs({-1,1}) do
+   part("Facade mullion",Vector3.new(0.35,top-base,0.35),
+    Vector3.new(center.X+side*(halfWidth+0.24),(base+top)/2,center.Z+z),slab.Color,Enum.Material.Metal,false)
+  end
+ end
+ part("Building roof cap",Vector3.new(mass.Size.X+0.8,0.8,mass.Size.Z+0.8),
+  Vector3.new(center.X,top+0.4,center.Z),slab.Color,slab.Material)
+ root:SetAttribute("ExteriorVersion",1)
+ return root
+end
+-- Surveyed clear site west of the court, inside the existing city baseplate.
+function Lobby.integrateCity(root)
+ local floor=root:WaitForChild("Architecture"):WaitForChild("Cream marble floor")
+ local exterior=root:WaitForChild("Building Exterior")
+ if root:GetAttribute("CityIntegrationVersion")~=1 then
+  local target=Vector3.new(-345,floor.Position.Y,-70)
+  local params=RaycastParams.new()
+  params.FilterType=Enum.RaycastFilterType.Exclude
+  params.FilterDescendantsInstances={root,workspace:FindFirstChildWhichIsA("SpawnLocation")}
+  params.RespectCanCollide=true
+  local ground=workspace:Raycast(target+Vector3.new(0,50,0),Vector3.new(0,-1000,0),params)
+  assert(ground,"City lobby site needs supporting ground")
+  root:PivotTo(root:GetPivot()+(target-floor.Position))
+  local shell=root.Architecture
+  local mass=shell:WaitForChild("Penthouse foundation")
+  local bottom=floor.Position.Y-floor.Size.Y/2
+  local function support(name,size,position)
+   local p=Instance.new("Part")
+   p.Name=name; p.Size=size; p.Position=position
+   p.Color=mass.Color; p.Material=Enum.Material.Concrete
+   p.Anchored=true; p.CanCollide=true; p.CanTouch=false
+   p.TopSurface=Enum.SurfaceType.Smooth; p.BottomSurface=Enum.SurfaceType.Smooth
+   p.Parent=exterior
+  end
+  local height=bottom-ground.Position.Y
+  if height>0 then
+   support("Grounded building foundation",Vector3.new(mass.Size.X,height,mass.Size.Z),
+    Vector3.new(floor.Position.X,ground.Position.Y+height/2,floor.Position.Z))
+   for _,name in ipairs({"Entrance landing","Entrance step"}) do
+    local p=shell:WaitForChild(name)
+    local underside=p.Position.Y-p.Size.Y/2
+    support(name.." foundation",Vector3.new(p.Size.X,underside-ground.Position.Y,p.Size.Z),
+     Vector3.new(p.Position.X,(underside+ground.Position.Y)/2,p.Position.Z))
+   end
+  end
+  local door=exterior:WaitForChild("Fixed entrance doors")
+  local glass=shell:WaitForChild("Arrival glazing")
+  door.Material=Enum.Material.Glass; door.Color=glass.Color
+  door.Transparency=0.65; door.Reflectance=0.08
+  door.Anchored=true; door.CanCollide=true; door.CollisionGroup="Default"
+  root:SetAttribute("CityIntegrationVersion",1)
+ end
+ -- Both saved and newly generated lobbies derive arrival from the moved floor.
+ Lobby.Spawn=CFrame.lookAt(
+  floor.Position+Vector3.new(0,floor.Size.Y/2+4,38),
+  floor.Position+Vector3.new(0,floor.Size.Y/2+4,-4))
+ local spawn=workspace:FindFirstChildWhichIsA("SpawnLocation")
+ if spawn then spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0) end
+ return root
+end
 function Lobby.build()
  local old=workspace:FindFirstChild("PaddleUpLobby")
- if old and old:GetAttribute("Version")==VERSION then return Lobby.lightInterior(old) end
+ if old then return require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(old)))) end
  local root=Instance.new("Model"); root.Name="PaddleUpLobby"
  root:SetAttribute("Version",VERSION)
  root:SetAttribute("FloorAreaIncrease",180*156/(156*136)-1)
@@ -378,6 +611,6 @@ function Lobby.build()
  spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0)
  spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
  spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
- return Lobby.lightInterior(root)
+ return require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(Lobby.lightInterior(root)))))
 end
 return Lobby

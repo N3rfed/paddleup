@@ -17,7 +17,7 @@ local users={}
 local score={0,0}
 local ball={p=Vector3.new(0,187,-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,bounceAt=-100}
 local nextServe=os.clock()+3
-local banner="Welcome to Skyline Club"
+local banner="Welcome!"
 local botSlowUntil=0
 local botX,botZ=0,-28
 local world=workspace:WaitForChild("PaddleUp")
