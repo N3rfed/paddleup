@@ -65,12 +65,14 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local fill=frame(track,"Fill",468,18); fill.BackgroundColor3=Color3.fromRGB(80,232,255); fill.BackgroundTransparency=0
  local fc=Instance.new("UICorner",fill); fc.CornerRadius=UDim.new(1,0)
  local dive=label(stamina,"Dive","DIVE READY",27,91,468,22,16)
+ local introducing=false
  local function visibility()
   local mode=player:GetAttribute("SessionMode")
-  gui.Enabled=mode~=nil and mode~="Lobby"
+  gui.Enabled=mode~=nil and mode~="Lobby" and not introducing and not player:GetAttribute("AugmentDraftOpen")
   legacyScore.Visible=false; legacyStamina.Visible=false
  end
  player:GetAttributeChangedSignal("SessionMode"):Connect(visibility)
+ player:GetAttributeChangedSignal("AugmentDraftOpen"):Connect(visibility)
  -- The developer toggle may request the original panels again.
  legacyScore:GetPropertyChangedSignal("Visible"):Connect(function()
   if legacyScore.Visible then legacyScore.Visible=false end
@@ -123,6 +125,8 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  end)
  local readyAt=0
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+  local introVisible=data.matchIntro~=nil
+  if introducing~=introVisible then introducing=introVisible; visibility() end
   local currentHome,currentAway=data.score[1],data.score[2]
   -- First snapshots and score resets establish a baseline without a celebration.
   if previousScore then

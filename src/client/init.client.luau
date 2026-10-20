@@ -21,7 +21,8 @@ local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("S
 require(script:WaitForChild("MainMenu")).start(player,network)
 require(script:WaitForChild("AugmentDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)
-local function playing() return (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") end
+require(script:WaitForChild("PracticeUI")).start(player,network)
+local function playing() return not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -172,6 +173,18 @@ announcement.Position=UDim2.fromScale(0.5,0.43); announcement.Size=UDim2.fromSca
 announcement.TextXAlignment=Enum.TextXAlignment.Center; announcement.TextWrapped=true
 announcement.Font=Enum.Font.GothamBold; announcement.TextStrokeTransparency=0.3; announcement.Visible=false
 local announcementUntil=0
+local announcementSession
+local function inMatch()
+ local mode=player:GetAttribute("SessionMode")
+ return mode~=nil and mode~="Lobby"
+end
+local function clearMatchAnnouncement()
+ announcementUntil=0; announcementSession=nil
+ announcement.Text=""; announcement.Visible=false
+end
+for _,attribute in ipairs({"SessionMode","CourtSide","MatchSessionId"}) do
+ player:GetAttributeChangedSignal(attribute):Connect(clearMatchAnnouncement)
+end
 local developerLabel=text(canvas,"",Vector2.new(28,590),Vector2.new(820,58),12,mint)
 developerLabel.TextWrapped=true
 developerLabel.Text="DEV HITBOXES [HOME]  /  Gold: hit  |  Green: perfect range  |  Blue: overhead zone  |  Purple: slam distance cap\nSlams need blue/purple overlap. Contact behind the red rear-limit plane is rejected."
@@ -438,7 +451,8 @@ local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=fa
 state.OnClientEvent:Connect(function(data)
  if not snapshot or snapshot.shotId~=data.shotId or snapshot.heavy~=data.heavy or not data.live then trail:Clear() end
  if not data.live then AugmentVisuals.clear() end
- if snapshot and snapshot.canServe and not data.canServe then cancelCharge(data.live==true) end
+ if data.practicePaused then cancelCharge()
+ elseif snapshot and snapshot.canServe and not data.canServe then cancelCharge(data.live==true) end
  snapshot=data; receivedAt=os.clock()
  outGui.Enabled=developerMode and data.outLanding~=nil
  if data.outLanding and data.outLanding~=lastOutLanding then
@@ -463,7 +477,10 @@ state.OnClientEvent:Connect(function(data)
  slowButton.Visible=powerButton.Visible
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
-feedback.OnClientEvent:Connect(function(message,kind)
+feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
+ if kind=="rallyResult" or kind=="point" then
+  if not inMatch() or (matchSessionId~=nil and matchSessionId~=player:GetAttribute("MatchSessionId")) then return end
+ end
  if kind=="augmentFX" then AugmentVisuals.activate(message.userId,message.tier); return end
  if kind=="serveTiming" then showServeTiming(message.grade); meterPending=true; meterExitRequested=true; setMeterShown(false); meterInput=nil; return end
  if kind=="playerText" then
@@ -490,6 +507,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
  if kind=="fault" then cancelCharge(); meterPending=false; meterExitRequested=false; meterFeedbackUntil=0; return end
  if kind=="point" then
   announcement.Text=tostring(message); announcement.TextColor3=cream
+  announcementSession=player:GetAttribute("MatchSessionId")
   announcementUntil=os.clock()+2.5; announcement.Visible=true
   return
  end
@@ -499,6 +517,7 @@ feedback.OnClientEvent:Connect(function(message,kind)
   cancelCharge()
   announcement.Text=kind=="rallyResult" and (message.title.."\n"..message.fault) or tostring(message)
   announcement.TextColor3=kind=="fault" and coral or cream
+  announcementSession=player:GetAttribute("MatchSessionId")
   announcementUntil=os.clock()+2.5; announcement.Visible=true
   return
  end
@@ -597,23 +616,23 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    chargeFill.Size=UDim2.fromScale(math.clamp((now-chargeStarted-0.4)/0.6,0,1),1)
   end
  end
- announcement.Visible=now<announcementUntil
+ announcement.Visible=inMatch() and announcementSession==player:GetAttribute("MatchSessionId") and now<announcementUntil
  local c=player.Character
  local r=c and c:FindFirstChild("HumanoidRootPart")
  local h=c and c:FindFirstChildOfClass("Humanoid")
  local courtSide=player:GetAttribute("CourtSide") or 0
  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
- canvas.Visible=not inLobby; devToggle.Visible=not inLobby
+ canvas.Visible=not inLobby and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("AugmentDraftOpen"); devToggle.Visible=not inLobby
  abilities.Visible=developerMode and player:GetAttribute("MatchVariant")~="Augmented"
  if not inLobby then lobbyCamera:disable() end
  local side=courtSide~=0 and courtSide or 1
- local age=snapshot and math.min(now-receivedAt,0.12) or 0
+ local age=snapshot and not snapshot.practicePaused and math.min(now-receivedAt,0.12) or 0
  local predicted
  if snapshot then
   if Rules then predicted=Rules.advanceFlight(snapshot.p,snapshot.v,(snapshot.flightGravity or 45)*(snapshot.visualRate or 1)^2,age,snapshot.lob,(snapshot.bounces or 0)>0,snapshot.offensive,snapshot.last)
   else predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0) end
   predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
-  if snapshot.serveReady and Rules then
+  if snapshot.serveReady and not snapshot.practicePaused and Rules then
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
    local world=workspace:FindFirstChild("PaddleUp")
    local holder=server and server.Character or (snapshot.bot and world and world:FindFirstChild("Practice Partner"))
@@ -659,8 +678,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    yaw=side==1 and 0 or math.pi
    pitch=math.rad(-18)
   end
-  local locked=courtSide~=0 and h and h.Health>0
-  local aiming=locked and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local locked=courtSide~=0 and h and h.Health>0 and not player:GetAttribute("PracticePaused")
+  local aiming=locked and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=developerMode and aiming==true and not (snapshot and snapshot.canServe)
@@ -730,7 +749,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady))
  if not snapshot then return end
  outGui.Enabled=developerMode and snapshot.outLanding~=nil
- visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live
+ visual.Position=predicted; visual.Transparency=(snapshot.live or snapshot.serveReady) and 0 or 1; trail.Enabled=snapshot.live and not snapshot.practicePaused
  local eta=math.max(0,snapshot.eta-age)
  local color=snapshot.green and mint or (eta<0.6 and Color3.fromRGB(255,214,97) or coral)
  local visible=developerMode and snapshot.live and not snapshot.trackingHidden and math.abs(snapshot.landing.X)<=24 and math.abs(snapshot.landing.Z)<=46
@@ -755,7 +774,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  countdown.TextColor3=color
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
- timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "CLICK / TAP WHEN READY FOR BOT SERVE" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
+ timingText.Text=not snapshot.live and (snapshot.canServe and (snapshot.bot and snapshot.servingSide==-1 and "BOT SERVE STARTS AUTOMATICALLY" or "CLICK / TAP TO SERVE DIAGONALLY") or (snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
  if snapshot.slamReady then timingText.Text="LOB OVERHEAD  /  SWING TO SLAM!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
