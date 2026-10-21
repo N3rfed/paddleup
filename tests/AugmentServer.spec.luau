@@ -1,5 +1,6 @@
 -- Execute the real launch/scoring functions in an isolated server fixture.
--- Pass init.server.Source, Augments, and MatchRules from Studio's command bar.
+-- Pass init.server.Source, Augments, MatchRules, and Comeback from Studio's command bar.
+-- Vector3 components use float precision; trajectory tolerances stay below 0.0001 studs.
 return function(source,A,Rules,Comeback)
  local first=assert(source:find("local function launch(",1,true))
  local last=assert(source:find("local function paddle(",first,true))
@@ -22,6 +23,8 @@ return function(source,A,Rules,Comeback)
   occupant=function(side) return side==1 and server or receiver end,
   rootOf=function() return {Position=Vector3.new(0,184,-16)} end,
   lobCrossesSlamZone=function() return false end,
+  practicePaused=function() return false end,
+  matchStatus=function(data,kind) table.insert(events,{data=data,kind=kind}) end,
  },{__index=getfenv()})
  local chunk=assert(loadstring(source:sub(first,last-1).."\nreturn launch,point"))
  setfenv(chunk,environment)
@@ -36,14 +39,14 @@ return function(source,A,Rules,Comeback)
  local base,g=shot(1)
  for _,factor in ipairs({1.2,3}) do
   local boosted,gravity=shot(factor)
-  assert(math.abs(boosted.Magnitude/base.Magnitude-factor)<1e-8,"Net clearance cannot erase augment speed")
-  assert(math.abs(gravity/g-factor*factor)<1e-8,"Speed boosts preserve the legal trajectory")
+  assert(math.abs(boosted.Magnitude/base.Magnitude-factor)<1e-5,"Net clearance cannot erase augment speed")
+  assert(math.abs(gravity/g-factor*factor)<1e-5,"Speed boosts preserve the legal trajectory")
  end
  shot(1,{reflectedSpeed=160})
- assert(math.abs(ball.v.Magnitude-160)<1e-6,"Shield returns at exactly double an 80-speed drive")
+ assert(math.abs(ball.v.Magnitude-160)<1e-4,"Shield returns at exactly double an 80-speed drive")
  local t=(target.Z-from.Z)/ball.v.Z
  local y=from.Y+ball.v.Y*t-0.5*ball.flightGravity*t*t
- assert(math.abs(y-target.Y)<1e-6,"Shield lands in the opposing court")
+ assert(math.abs(y-target.Y)<1e-4,"Shield lands in the opposing court")
  local tc=-from.Z/ball.v.Z
  assert(from.Y+ball.v.Y*tc-0.5*ball.flightGravity*tc*tc>=185.2,"Shield clears the net")
  ball.speed=1
@@ -51,12 +54,12 @@ return function(source,A,Rules,Comeback)
  local terminalBase=ball.v.Magnitude
  ball.speed=100
  launch(from,target,false,false,false,0,nil,false,0,{uncapped=true})
- assert(math.abs(ball.v.Magnitude/terminalBase-100)<1e-6,"Terminal actual velocity is not capped by net-clearance assist")
+ assert(math.abs(ball.v.Magnitude/terminalBase-100)<1e-4,"Terminal actual velocity is not capped by net-clearance assist")
  assert(ball.shotMultiplier==1,"Terminal rally speed is not counted twice in HUD or win thresholds")
  ball.speed=1
  for _,incoming in ipairs({20,40,100}) do
   shot(1,{reflectedSpeed=incoming*0.8})
-  assert(math.abs(ball.v.Magnitude-incoming*0.8)<1e-6,"Calculated return preserves exactly 80% incoming speed, even for slow serves")
+  assert(math.abs(ball.v.Magnitude-incoming*0.8)<1e-4,"Calculated return preserves exactly 80% incoming speed, even for slow serves")
  end
  launch(from,target,false,false,false,0,nil,false,0,{offensive=true,spin="topspin",heavy=true,deceptive=true,afterimage=true})
  local duration=(target.Z-from.Z)/ball.v.Z

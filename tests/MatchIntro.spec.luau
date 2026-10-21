@@ -49,9 +49,11 @@ return function(MatchIntro)
    local data={id=index,endsAt=workspace:GetServerTimeNow()+30,home=home,away=away}
    signal:Fire({matchIntro=data}); task.wait()
    local reveal=gui:FindFirstChild("TeamReveal")
+   assert(reveal and reveal:IsA("Frame"),"Intro must render directly without CanvasGroup downsampling")
    assert(reveal and reveal.DiagonalSplit.Rotation~=0,"Team backgrounds have a diagonal split")
    local portraits,names=0,0
    for _,item in ipairs(reveal:GetDescendants()) do
+    assert(not item:IsA("CanvasGroup"),"No flattened low-resolution layer in the reveal")
     if item:IsA("ViewportFrame") then
      portraits+=1; assert(item.CurrentCamera,"Team shots need cameras")
      assert(item.Size==UDim2.fromScale(1,1),"Team shots fill the screen")

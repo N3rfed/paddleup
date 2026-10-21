@@ -5,6 +5,9 @@ Rules.DIVE_COOLDOWN=1.75
 Rules.DIVE_STAMINA_COST=35
 Rules.STAMINA_RECOVERY_DELAY=1.0
 Rules.STAMINA_REGEN_RATE=22*0.55
+Rules.JUMP_HANG_TIME=1
+Rules.JUMP_DESCENT_GRAVITY=4
+Rules.SLAM_TIMING_WINDOW=0.06
 
 function Rules.canDive(stamina,readyAt,now)
  return now>=readyAt and stamina>=Rules.DIVE_STAMINA_COST
@@ -82,7 +85,12 @@ function Rules.bounceVelocity(velocity,lob)
 end
 
 Rules.SERVE_TIMEOUT=15
+Rules.BOT_SERVE_DELAY=2
 Rules.MAX_SERVE_VELOCITY=90
+
+function Rules.canServe(userId,serverId,ready)
+ return ready==true and userId~=nil and userId~=0 and userId==serverId
+end
 
 Rules.SERVE_CHARGE_TIME=2
 Rules.SERVE_PERFECT_OFFSET=0.06
@@ -191,6 +199,27 @@ function Rules.kitchenLobWindow(lob,overhead,position,side)
   and math.abs(position.X)<=Rules.HALF_WIDTH
 end
 
+function Rules.jumpSlam(position,side,grounded,diving)
+ local depth=position.Z*side
+ return side~=0 and not grounded and not diving and depth>=0
+  and depth<=Rules.KITCHEN+Rules.SLAM_HORIZONTAL and math.abs(position.X)<=Rules.HALF_WIDTH
+end
+
+function Rules.slamTiming(ballPosition,ballVelocity,contactPosition,perfectVision)
+ -- Signed time to the strike plane: approaching is early, passing it is late.
+ local speedSquared=ballVelocity:Dot(ballVelocity)
+ local timing=speedSquared>1 and -(ballPosition-contactPosition):Dot(ballVelocity)/speedSquared or 0
+ local window=Rules.SLAM_TIMING_WINDOW*(perfectVision and 1.2 or 1)
+ if timing>window then return "net" end
+ if timing< -window then return "out" end
+ return "perfect"
+end
+
+function Rules.slamTarget(target,side,quality)
+ if quality=="out" then return Vector3.new(target.X,target.Y,-side*(Rules.BASELINE+8)) end
+ return target
+end
+
 -- Deterministic movement influence, shared by the crosshair and server shots.
 function Rules.shotAim(rootFrame,velocity,ballPosition)
  local look=rootFrame.LookVector
@@ -224,10 +253,23 @@ function Rules.softShot(position,side)
  return position.Z*side<=Rules.KITCHEN+8 and "dink" or "drop"
 end
 
-function Rules.kitchenHitFault(rootPosition,ballPosition,side,isDiving)
- -- Reaching over the kitchen is legal, including during a dive.
- -- The ball position must not be treated as the player touching the kitchen.
- return Rules.inKitchen(rootPosition,0)
+function Rules.kitchenHitFault(rootPosition,grounded,kitchenTouched)
+ -- Airspace is legal when taking off outside; landing is checked separately.
+ if grounded then return Rules.inKitchen(rootPosition) end
+ return kitchenTouched==true
+end
+
+function Rules.updateKitchen(state,position,grounded,velocity,dt)
+ local touching=grounded and Rules.inKitchen(position)
+ if grounded then state.kitchenTouched=touching end
+ local fault=touching and state.volleyPending==true
+ if state.volleyPending then
+  if grounded and Vector3.new(velocity.X,0,velocity.Z).Magnitude<2 then
+   state.volleySettled=(state.volleySettled or 0)+dt
+   if state.volleySettled>0.15 then state.volleyPending=false end
+  else state.volleySettled=0 end
+ end
+ return fault
 end
 
 function Rules.diveDirection(moveDirection,lookDirection,ballDirection)

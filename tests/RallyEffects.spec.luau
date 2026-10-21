@@ -13,7 +13,7 @@ return function(Effects,World)
   assert(fixture:FindFirstChild("RallyLights")==rig,"Layout updates must preserve the existing rig")
   local washes=0
   for _,item in ipairs(rig:GetDescendants()) do
-   if item:IsA("SurfaceLight") then washes+=1 end
+   if item:IsA("SurfaceLight") and item.Parent.Name=="Court wash" then washes+=1 end
    if item:IsA("BasePart") then assert(not item.CanCollide and not item.CanTouch and not item.CanQuery,"Lights must not affect gameplay") end
   end
   assert(washes==6,"Expected six court washes")
@@ -35,7 +35,7 @@ return function(Effects,World)
   effects:update(1,snapshot)
   assert(effects.energy>calmEnergy,"Faster rallies must increase lighting energy")
   assert(ball.Color==Color3.fromRGB(55,155,255),"Slammable lobs must retain their blue cue")
-  assert(trail.Lifetime==0.7)
+  assert(math.abs(trail.Lifetime-0.7)<1e-6,"Lob trail keeps its 0.7-second lifetime")
   local chargeLight=actor.light.Brightness
   character:SetAttribute("ChargedShotReadyAt",workspace:GetServerTimeNow()+2)
   effects:update(0.1,snapshot)

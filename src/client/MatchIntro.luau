@@ -83,9 +83,10 @@ function MatchIntro.start(player,network)
  end
  local function show(data)
   clear(true); lastId=data.id; endsAt=data.endsAt
-  local root=Instance.new("CanvasGroup")
+  -- Keep text and both camera views out of CanvasGroup's downsampled texture.
+  local root=Instance.new("Frame")
   root.Name="TeamReveal"; root.Size=UDim2.fromScale(1,1); root.BackgroundColor3=Color3.fromRGB(18,91,94)
-  root.BorderSizePixel=0; root.GroupTransparency=1; root.Parent=gui; current=root
+  root.BorderSizePixel=0; root.ClipsDescendants=true; root.Parent=gui; current=root
   countdown=Instance.new("Frame",gui)
   countdown.Name="Countdown"; countdown.Size=UDim2.fromScale(1,1)
   countdown.BackgroundColor3=Color3.fromRGB(15,23,30); countdown.BackgroundTransparency=0.65
@@ -136,7 +137,12 @@ function MatchIntro.start(player,network)
     name.Name="PlayerName"
    end
   end
-  TweenService:Create(root,TweenInfo.new(0.25),{GroupTransparency=0}):Play()
+  -- Fade a native overlay instead of flattening the full intro into another image.
+  local fade=Instance.new("Frame",root)
+  fade.Name="RevealFade"; fade.Size=UDim2.fromScale(1,1); fade.BorderSizePixel=0
+  fade.BackgroundColor3=Color3.fromRGB(15,23,30); fade.ZIndex=10
+  TweenService:Create(fade,TweenInfo.new(0.25),{BackgroundTransparency=1}):Play()
+  game:GetService("Debris"):AddItem(fade,0.3)
  end
  local stateConnection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
   local data=state.matchIntro
