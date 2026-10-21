@@ -3,7 +3,9 @@ local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
-require(script:WaitForChild("World")).build()
+local courtRoot=require(script:WaitForChild("World")).build()
+local CourtEnvironments=require(script:WaitForChild("CourtEnvironments"))
+local environments=CourtEnvironments.new(courtRoot)
 local Spectator=require(script:WaitForChild("Spectator"))
 local Lobby=require(script:WaitForChild("Lobby"))
 Lobby.build()
@@ -17,6 +19,7 @@ local function remote(name)
 end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local session=remote("Session")
+local introReadyRemote=remote("IntroReady")
 local augmentRemote=remote("Augment")
 local Augments=require(script:WaitForChild("Augments"))
 local courtVariant=nil
@@ -77,6 +80,8 @@ local nextServe=0
 local matchIntro=nil
 local introSerial=0
 local introUntil=0
+local introReady={}
+local introLoadDeadline=0
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -221,7 +226,7 @@ local function rosterChanged()
  syncServing()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
  ball.outLanding=nil; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
- introUntil=0; matchIntro=nil
+ introUntil=0; matchIntro=nil; introReady={}; introLoadDeadline=0
  if #home>0 and #away>0 then
   introSerial+=1
   introUntil=os.clock()+9.5
@@ -237,6 +242,10 @@ local function rosterChanged()
    return result
   end
   matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+9.5,home=portraits(1),away=portraits(-1)}
+  if environments.active=="Moon" then
+   matchIntro.loading=true
+   introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
+  end
  end
  for p,d in pairs(users) do
   d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.chargeAt=nil
@@ -252,6 +261,16 @@ local function rosterChanged()
  banner="TEAMS UPDATED / PREPARING SERVE"
  matchStatus({title="Teams Updated",fault="Preparing the next serve"},"rallyResult")
 end
+introReadyRemote.OnServerEvent:Connect(function(player,id)
+ if not matchIntro or not matchIntro.loading or matchIntro.id~=id then return end
+ if not users[player] or users[player].side==0 then return end
+ introReady[player]=true
+ for participant,data in pairs(users) do
+  if data.side~=0 and not introReady[participant] then return end
+ end
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+9.5
+ introUntil=os.clock()+9.5; nextServe=introUntil; introLoadDeadline=0
+end)
 local function rootOf(p)
  local c=p.Character
  return c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
@@ -563,23 +582,27 @@ local function leaveCourt(p)
  end
  rosterChanged()
 end
-session.OnServerEvent:Connect(function(p,mode,variant)
+session.OnServerEvent:Connect(function(p,mode,variant,environment)
  local d=users[p]
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
  if mode~="Lobby" and mode~="Spectate" and variant~="PowerUp" and variant~="Augmented" then
   session:FireClient(p,false,"Choose Power-Up or Augmented first."); return
  end
+ environment=environment or (courtMode and environments.active or "Rooftop")
+ if mode~="Lobby" and mode~="Spectate" and not CourtEnvironments.valid(environment) then
+  session:FireClient(p,false,"Choose Rooftop or Moon first."); return
+ end
  local now=os.clock()
  if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
  d.sessionAt=now
- if mode==d.mode and (d.side==0 or variant==d.variant) then session:FireClient(p,true,"Already connected."); return end
+ if mode==d.mode and (d.side==0 or (variant==d.variant and environment==environments.active)) then session:FireClient(p,true,"Already connected."); return end
  if mode=="Lobby" or mode=="Spectate" then
   leaveCourt(p); d.mode=mode
  else
   -- Validate before leaving, so a rejected choice never disrupts a live match.
-  if courtMode and (courtMode~=mode or courtVariant~=variant) then
-   session:FireClient(p,false,"Court is in "..courtMode.." / "..courtVariant..". Spectate or wait for the court to empty.")
+  if courtMode and (courtMode~=mode or courtVariant~=variant or environments.active~=environment) then
+   session:FireClient(p,false,"Court is in "..environments.active.." / "..courtMode.." / "..courtVariant..". Join those settings, spectate, or wait for it to empty.")
    return
   end
   local homeLimit=mode=="2V2" and 2 or 1
@@ -591,6 +614,13 @@ session.OnServerEvent:Connect(function(p,mode,variant)
   end
   advanceMatchSession(p)
   if mode=="Practice" then practice:reset() end
+  local environmentChanged=environments.active~=environment
+  environments:set(environment)
+  if environmentChanged then
+   for spectator,data in pairs(users) do
+    if data.mode=="Spectate" and spectator.Character then Spectator.enter(spectator,spectator.Character) end
+   end
+  end
   courtMode=mode
   courtVariant=variant; d.variant=variant; p:SetAttribute("MatchVariant",variant)
   d.side=(home<homeLimit and (home<=away or away>=awayLimit)) and 1 or -1
@@ -1002,6 +1032,18 @@ end)
 local accumulator,broadcast=0,0
 RunService.Heartbeat:Connect(function(dt)
  local now=os.clock()
+ if matchIntro and matchIntro.loading and now>=introLoadDeadline then
+  local waiting={}
+  for player,data in pairs(users) do
+   if data.side~=0 and not introReady[player] then table.insert(waiting,player) end
+  end
+  for _,player in ipairs(waiting) do
+   leaveCourt(player)
+   users[player].mode="Lobby"; player:SetAttribute("SessionMode","Lobby")
+   if player.Character then task.spawn(spawnCharacter,player,player.Character) end
+   session:FireClient(player,false,"The moon took too long to load. Please try joining again.")
+  end
+ end
  local paused=practicePaused()
  if paused then suspendPracticeTimers(dt) else updateDraft(now) end
  local pickupParticipants={}

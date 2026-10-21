@@ -8,6 +8,7 @@ local TweenService=game:GetService("TweenService")
 local SoundService=game:GetService("SoundService")
 local Debris=game:GetService("Debris")
 local player=Players.LocalPlayer
+require(script:WaitForChild("EnvironmentLighting")).start(player)
 local DiveController=require(script:WaitForChild("DiveController"))
 local HitboxOverlay=require(script:WaitForChild("HitboxOverlay"))
 local RallyEffects=require(script:WaitForChild("RallyEffects"))

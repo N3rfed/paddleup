@@ -36,7 +36,7 @@ function Spectator.enter(player,character)
  local court=workspace:FindFirstChild("PaddleUp")
  local benches={}
  if court then
-  for _,item in ipairs(court:GetChildren()) do
+  for _,item in ipairs(court:GetDescendants()) do
    if item:IsA("BasePart") and item.Name=="Lounge seat" then table.insert(benches,item) end
   end
  end

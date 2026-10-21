@@ -3,6 +3,13 @@
   "tree": {
     "$className": "DataModel",
     "$ignoreUnknownInstances": true,
+    "ReplicatedFirst": {
+      "$className": "ReplicatedFirst",
+      "$ignoreUnknownInstances": true,
+      "ArrivalLoading": {
+        "$path": "src/loading"
+      }
+    },
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "$ignoreUnknownInstances": true,

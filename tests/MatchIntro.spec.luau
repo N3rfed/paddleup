@@ -2,7 +2,7 @@ return function(MatchIntro)
  local parent=Instance.new("Folder")
  local signal=Instance.new("BindableEvent")
  local player={UserId=1,WaitForChild=function() return parent end}
- local network={WaitForChild=function() return {OnClientEvent=signal.Event} end}
+ local network={WaitForChild=function() return {OnClientEvent=signal.Event,FireServer=function() end} end}
  local ok,err=pcall(function()
   MatchIntro.start(player,network)
   local gui=parent:FindFirstChild("MatchIntro")
@@ -82,7 +82,14 @@ return function(MatchIntro)
    task.wait(0.1)
    assert(gui.Countdown.Visible and not gui.CourtPan.Visible,"Countdown follows the court pan")
   end
+  local pending={id=7,loading=true,endsAt=workspace:GetServerTimeNow()+9.5,home={member},away={member}}
+  signal:Fire({matchIntro=pending}); task.wait()
+  local cover=gui:FindFirstChild("PreparingCourt")
+  assert(cover and cover.BackgroundTransparency==0,"Loading hides incomplete moon scenery")
+  signal:Fire({matchIntro=pending}); task.wait()
+  assert(gui.PreparingCourt==cover,"Repeated loading broadcasts must not restart preparation")
   signal:Fire({}); task.wait()
+  assert(not gui:FindFirstChild("PreparingCourt"),"Leaving cancels the loading transition")
   assert(not gui:FindFirstChild("TeamReveal"),"Leaving or ending the intro dismisses it")
   assert(not gui:FindFirstChild("Countdown"),"Leaving also dismisses the countdown")
   assert(not gui:FindFirstChild("CourtPan"),"Leaving cleans up the wide court shot")
