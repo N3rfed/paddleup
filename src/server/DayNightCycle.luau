@@ -61,5 +61,19 @@ function DayNightCycle.start()
  rays.Enabled = true
  rays.Intensity = 0.045
  rays.Spread = 0.8
+
+
+ -- Clients restore this fixed rooftop profile after leaving the Moon.
+ local profile = Lighting:FindFirstChild("RooftopProfile") or Instance.new("Folder")
+ profile.Name = "RooftopProfile"
+ profile.Parent = Lighting
+ for _, property in ipairs({"ClockTime", "Brightness", "Ambient", "OutdoorAmbient",
+  "ExposureCompensation", "ColorShift_Top", "ColorShift_Bottom",
+  "EnvironmentDiffuseScale", "EnvironmentSpecularScale", "FogEnd", "GeographicLatitude"}) do
+  profile:SetAttribute(property, Lighting[property])
+ end
+ for _, property in ipairs({"Color", "Decay", "Density", "Haze", "Glare"}) do
+  profile:SetAttribute("Atmosphere" .. property, atmosphere[property])
+ end
 end
 return DayNightCycle

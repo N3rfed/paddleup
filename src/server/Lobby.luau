@@ -260,9 +260,26 @@ function Lobby.integrateCity(root)
  if spawn then spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0) end
  return root
 end
+-- Publish readiness only after the existing lobby and city setup has finished.
+local function configureLoading(root)
+ root.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
+ root:SetAttribute("ExpectedDescendants",#root:GetDescendants())
+ local city=workspace:FindFirstChild("LobbyCity")
+ if city then
+  city.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
+  city:SetAttribute("ExpectedDescendants",#city:GetDescendants())
+ end
+ root:SetAttribute("CityExpected",city~=nil)
+ -- Keep main's arrival position and facing, including its floor adjustments.
+ local spawn=workspace:FindFirstChildWhichIsA("SpawnLocation") or Instance.new("SpawnLocation")
+ spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0)
+ spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
+ spawn.Anchored=true; spawn.Enabled=true; spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
+ return root
+end
 function Lobby.build()
  local old=workspace:FindFirstChild("PaddleUpLobby")
- if old then return require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(old)))) end
+ if old then return configureLoading(require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(old))))) end
  local root=Instance.new("Model"); root.Name="PaddleUpLobby"
  root:SetAttribute("Version",VERSION)
  root:SetAttribute("FloorAreaIncrease",180*156/(156*136)-1)
@@ -611,6 +628,6 @@ function Lobby.build()
  spawn.Name="SpawnLocation"; spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0)
  spawn.Size=Vector3.new(5,0.3,5); spawn.Transparency=1; spawn.CanCollide=false
  spawn.Neutral=true; spawn.Duration=0; spawn.Parent=workspace
- return require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(Lobby.lightInterior(root)))))
+ return configureLoading(require(script.Parent:WaitForChild("CitySurroundings")).build(Lobby.integrateCity(Lobby.encloseBuilding(Lobby.moveToFirstFloor(Lobby.lightInterior(root))))))
 end
 return Lobby

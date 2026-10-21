@@ -48,6 +48,7 @@ function MatchIntro.start(player,network)
  gui.Name="MatchIntro"; gui.IgnoreGuiInset=true; gui.ResetOnSpawn=false; gui.DisplayOrder=30
  gui.Parent=player:WaitForChild("PlayerGui")
  local current,lastId,endsAt=nil,nil,0
+ local loading,pendingId
  local countdown,countdownText,lastCount
  local courtPan
  local savedCamera
@@ -59,7 +60,11 @@ function MatchIntro.start(player,network)
   end
  end
  local shots={}
- local function clear()
+ local function clear(keepLoading)
+  if not keepLoading then
+   pendingId=nil
+   if loading then loading:Destroy(); loading=nil end
+  end
   restoreCamera()
   if current then current:Destroy(); current=nil end
   if countdown then countdown:Destroy(); countdown=nil; countdownText=nil end
@@ -77,10 +82,11 @@ function MatchIntro.start(player,network)
   return item
  end
  local function show(data)
-  clear(); lastId=data.id; endsAt=data.endsAt
-  local root=Instance.new("CanvasGroup")
+  clear(true); lastId=data.id; endsAt=data.endsAt
+  -- Keep text and both camera views out of CanvasGroup's downsampled texture.
+  local root=Instance.new("Frame")
   root.Name="TeamReveal"; root.Size=UDim2.fromScale(1,1); root.BackgroundColor3=Color3.fromRGB(18,91,94)
-  root.BorderSizePixel=0; root.GroupTransparency=1; root.Parent=gui; current=root
+  root.BorderSizePixel=0; root.ClipsDescendants=true; root.Parent=gui; current=root
   countdown=Instance.new("Frame",gui)
   countdown.Name="Countdown"; countdown.Size=UDim2.fromScale(1,1)
   countdown.BackgroundColor3=Color3.fromRGB(15,23,30); countdown.BackgroundTransparency=0.65
@@ -96,7 +102,9 @@ function MatchIntro.start(player,network)
   courtPan=Instance.new("Frame",gui)
   courtPan.Name="CourtPan"; courtPan.Size=UDim2.fromScale(1,1)
   courtPan.BackgroundTransparency=1; courtPan.Visible=false
-  label(root,"COURT INTRO",UDim2.fromScale(0.15,0.06),UDim2.fromScale(0.7,0.05),18)
+  local court=workspace:FindFirstChild("PaddleUp")
+  local environmentTitle=court and court:GetAttribute("EnvironmentTitle") or "SKYLINE CLUB"
+  label(root,environmentTitle.."  /  COURT INTRO",UDim2.fromScale(0.15,0.06),UDim2.fromScale(0.7,0.05),18)
   label(root,tostring(#data.home).." V "..tostring(#data.away),UDim2.fromScale(0.35,0.13),UDim2.fromScale(0.3,0.08),36)
   label(root,"VS",UDim2.fromScale(0.44,0.45),UDim2.fromScale(0.12,0.1),48)
   label(root,"GET READY",UDim2.fromScale(0.3,0.88),UDim2.fromScale(0.4,0.05),22)
@@ -106,7 +114,7 @@ function MatchIntro.start(player,network)
    local viewport=Instance.new("ViewportFrame",root)
    viewport.Name="TeamShot"..teamIndex
    viewport.Position=UDim2.fromScale(0,0); viewport.Size=UDim2.fromScale(1,1)
-   viewport.BackgroundColor3=Color3.fromRGB(111,160,186); viewport.ZIndex=2
+   viewport.BackgroundColor3=court and court:GetAttribute("Environment")=="Moon" and Color3.new(0,0,0) or Color3.fromRGB(111,160,186); viewport.ZIndex=2
    -- A sharp transparency gradient clips the full-screen camera image itself.
    local mask=Instance.new("UIGradient",viewport)
    mask.Name="DiagonalMask"; mask.Rotation=15
@@ -129,11 +137,50 @@ function MatchIntro.start(player,network)
     name.Name="PlayerName"
    end
   end
-  TweenService:Create(root,TweenInfo.new(0.25),{GroupTransparency=0}):Play()
+  -- Fade a native overlay instead of flattening the full intro into another image.
+  local fade=Instance.new("Frame",root)
+  fade.Name="RevealFade"; fade.Size=UDim2.fromScale(1,1); fade.BorderSizePixel=0
+  fade.BackgroundColor3=Color3.fromRGB(15,23,30); fade.ZIndex=10
+  TweenService:Create(fade,TweenInfo.new(0.25),{BackgroundTransparency=1}):Play()
+  game:GetService("Debris"):AddItem(fade,0.3)
  end
  local stateConnection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
   local data=state.matchIntro
   if not data then clear(); return end
+  if data.loading then
+   if pendingId==data.id then return end
+   clear(); pendingId=data.id
+   loading=Instance.new("Frame",gui)
+   loading.Name="PreparingCourt"; loading.Size=UDim2.fromScale(1,1)
+   loading.BackgroundColor3=Color3.fromRGB(8,13,23); loading.BorderSizePixel=0; loading.ZIndex=20
+   local text=label(loading,"PREPARING LUNAR COURT",UDim2.fromScale(0.2,0.45),UDim2.fromScale(0.6,0.08),28)
+   text.ZIndex=21
+   task.spawn(function()
+    -- Request the destination while the opaque transition covers replication.
+    task.spawn(function() pcall(function() player:RequestStreamAroundAsync(Vector3.new(0,185,0),20) end) end)
+    local moon
+    while pendingId==data.id do
+     local court=workspace:FindFirstChild("PaddleUp")
+     moon=court and court:FindFirstChild("MoonEnvironment")
+     local expected=moon and moon:GetAttribute("ExpectedDescendants")
+     if expected and #moon:GetDescendants()>=expected then break end
+     task.wait(0.1)
+    end
+    if pendingId~=data.id then return end
+    local ok=pcall(function() game:GetService("ContentProvider"):PreloadAsync({moon,game:GetService("Lighting"):FindFirstChild("LunarSky")}) end)
+    if not ok or pendingId~=data.id then return end
+    show(data)
+    -- Build both viewport scenes before acknowledging readiness to the server.
+    RunService.RenderStepped:Wait(); RunService.RenderStepped:Wait()
+    if pendingId==data.id then network:WaitForChild("IntroReady"):FireServer(data.id) end
+   end)
+   return
+  end
+  if pendingId==data.id and current then
+   pendingId=nil; endsAt=data.endsAt
+   if loading then loading:Destroy(); loading=nil end
+   return
+  end
   if data.id==lastId then endsAt=data.endsAt end
   if data.endsAt>workspace:GetServerTimeNow() and data.id~=lastId then show(data) end
  end)
@@ -193,7 +240,7 @@ function MatchIntro.start(player,network)
   end
  end
  local function renderIntro()
-  if not current then return end
+  if not current or loading then return end
   local remaining=endsAt-workspace:GetServerTimeNow()
   if remaining>6 then updateShots(remaining) end
   if remaining>3 and remaining<=6 then
@@ -228,7 +275,7 @@ function MatchIntro.start(player,network)
  local binding="PaddleUpMatchIntro_"..game:GetService("HttpService"):GenerateGUID(false)
  RunService:BindToRenderStep(binding,Enum.RenderPriority.Camera.Value+2,renderIntro)
  gui.Destroying:Connect(function()
-  RunService:UnbindFromRenderStep(binding); stateConnection:Disconnect(); restoreCamera()
+  RunService:UnbindFromRenderStep(binding); stateConnection:Disconnect(); clear()
  end)
 end
 return MatchIntro

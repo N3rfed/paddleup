@@ -36,6 +36,7 @@ Augments.catalog={
  {id="baselineSentinel",tier=1,name="Baseline Sentinel",symbol="COURT",description="Move sideways 15% faster within 2 feet of the baseline."},
  {id="calculatedReturn",tier=1,name="Calculated Return",symbol="TARGET",description="Standard returns of serve send the ball back at 80% of its incoming velocity."},
  {id="momentumShift",tier=2,name="Momentum Shift",symbol="BOLT",description="Three consecutive perfect hits charge your fourth return with +15% rally acceleration."},
+ {id="airTime",tier=2,name="Air Time",symbol="APEX",description="Fall slowly for 1 second after your jump's apex, giving you more time to line up a slam. Diving cancels the effect."},
  {id="offensiveDive",tier=2,name="Offensive Dive",symbol="DIVE",description="Dive hits apply maximum topspin, sharply increasing descent after crossing the net."},
  {id="kitchenWarden",tier=2,name="Kitchen Warden",symbol="SHIELD",description="Stand still at the kitchen line to extend your hit sphere forward by 25%."},
  {id="deceptiveDrop",tier=2,name="Deceptive Drop",symbol="MASK",description="Hold dive while swinging to fake a smash and hit a soft drop. Enemy reticles disappear for 0.5s."},
@@ -45,6 +46,9 @@ Augments.catalog={
  {id="terminalVelocity",tier=3,name="Terminal Velocity",symbol="INFINITY",description="Uncapped +8% perfect-hit acceleration. Win a rally exceeding 1.5x speed for permanent +5% movement."},
 }
 function Augments.has(build,id) return build~=nil and build[id]==true end
+function Augments.slowFall(build,side,variant)
+ return side~=0 and variant=="Augmented" and Augments.has(build,"airTime")
+end
 function Augments.newRally()
  return {perfectChain=0,diveStarted=-math.huge,tension=0,camperActive=false,camperLost=false,lava=false,burstUntil=0,stunUntil=0,overchargeUsed=false}
 end
