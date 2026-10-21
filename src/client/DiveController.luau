@@ -76,7 +76,8 @@ function Controller.play(userId,direction,moveTime,poseTime)
    d.airForce=Instance.new("VectorForce")
    d.airForce.Attachment0=d.airAttachment; d.airForce.RelativeTo=Enum.ActuatorRelativeTo.World
    d.airForce.ApplyAtCenterOfMass=true
-   d.airForce.Force=Vector3.new(0,root.AssemblyMass*workspace.Gravity*0.8,0)
+   local gravity=workspace.Gravity*(p:GetAttribute("EnvironmentModifier")=="LowGravity" and 0.5 or 1)
+   d.airForce.Force=Vector3.new(0,root.AssemblyMass*gravity*0.8,0)
    d.airForce.Parent=root
   end
   d.autoRotate=humanoid.AutoRotate

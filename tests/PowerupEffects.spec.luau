@@ -15,7 +15,7 @@ return function(A)
  assert(A.drive(state,true)==1.2 and A.drive(state,true)==1,"Armed drive survives other shots and fires once")
  assert(not A.newRally().driveReady,"Tension cannot carry across rallies")
  local match={}
- assert(not A.retryServe({},match),"Mulligan requires augment")
+ assert(not A.retryServe({},match),"Mulligan requires powerup")
  assert(A.retryServe({secondServe=true},match),"First fault gets mulligan")
  assert(not A.retryServe({secondServe=true},match),"Only one mulligan per match")
  assert(A.retryServe({secondServe=true},{}),"Fresh match restores mulligan")
@@ -34,7 +34,7 @@ return function(A)
  assert(A.onFire({overcharge=true},state,16),"Sixteenth shot ignites")
  state.overchargeUsed=true
  assert(A.onFire({overcharge=true},state,17),"Spin immunity persists after smash consumption")
- assert(not A.onFire({},state,16),"Long rallies do not ignite unaugmented players")
+ assert(not A.onFire({},state,16),"Long rallies do not ignite players without powerups")
  for _,speed in ipairs({50,112,300}) do
   local low,high=A.flightTimes(50,-3,speed,45)
   assert(low and high>=low,"A reflected shot can reach the court")

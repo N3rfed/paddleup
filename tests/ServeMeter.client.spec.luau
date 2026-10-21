@@ -10,7 +10,11 @@ return function(player,allowUnfocused)
   assert(predicate(),"Timed out waiting for serve transition")
  end
  local ok,result=pcall(function()
-  network.Session:FireServer("Practice","PowerUp")
+  local setup
+  local queueConnection=network.Queue.OnClientEvent:Connect(function(data) setup=data.stage end)
+  network.Queue:FireServer("Join","Classic","Practice")
+  waitFor(function() return setup=="Setup" end,8)
+  queueConnection:Disconnect()
   waitFor(function() return latest and latest.canServe and not latest.matchIntro end,40)
   task.wait(0.4)
   local meter=player.PlayerGui.PaddleUpHUD.ServeTimingMeter

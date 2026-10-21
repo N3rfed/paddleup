@@ -1,5 +1,5 @@
 -- Run the actual return and launch code with isolated player/ball state.
-return function(source,Rules,Augments,Comeback)
+return function(source,Rules,Powerups,Comeback)
  local launchFirst=assert(source:find("local function launch(",1,true))
  local launchLast=assert(source:find("local function point(",launchFirst,true))
  local returnFirst=assert(source:find("local function overheadStatus(",1,true))
@@ -14,14 +14,14 @@ return function(source,Rules,Augments,Comeback)
  local root={Position=Vector3.new(0,188,16),AssemblyLinearVelocity=Vector3.zero}
  local data={}
  local env=setmetatable({
-  Rules=Rules,Augments=Augments,Comeback=Comeback,comeback=Comeback.new(),
+  Rules=Rules,Powerups=Powerups,Comeback=Comeback,comeback=Comeback.new(),
   ball=ball,GRAVITY=45,FLOOR=181.7,BASE_SPEED=56,servingSide=1,lastHitter={},users={},
   feedback={FireAllClients=function(_,event,kind) table.insert(events,{event=event,kind=kind}) end},
   perfect=function() return false end,landing=function() return Vector3.zero,1 end,
   facingTarget=function(_,_,side) return Vector3.new(0,181.7,-side*35),0 end,
   rootOf=function() return root,character.Humanoid end,
   point=function(_,reason) table.insert(faults,reason) end,
-  teamPlayers=function() return {} end,activateAugment=function() end,tell=function() end,
+  teamPlayers=function() return {} end,activatePowerup=function() end,tell=function() end,
   lobCrossesSlamZone=function() return false end,
  },{__index=getfenv()})
  local chunk=assert(loadstring(source:sub(launchFirst,launchLast-1)..source:sub(returnFirst,returnLast-1).."\nreturn tryReturn,slamReady"))
@@ -36,7 +36,7 @@ return function(source,Rules,Augments,Comeback)
    ball.v=Vector3.new(0,-12,side*40); ball.p=contact-ball.v*case[1]
    ball.live=true; ball.last=-side; ball.shots=2; ball.bounces=0; ball.bounceAt=-100
    ball.speed=1; ball.perfects=0
-   data.side=side; data.augments={}; data.augmentMatch={}; data.augmentRally=Augments.newRally()
+   data.side=side; data.powerups={}; data.powerupMatch={}; data.powerupRally=Powerups.newRally()
    data.diveUntil=0; data.divePoseUntil=0; data.lastSwing=0; data.powerUntil=0
    assert(slamReady(player,data,10)==(case[2]=="perfect"),"Slam readiness must match actual timing")
    assert(tryReturn(player,data,root,10,false,false,0),"In-range airborne swing must connect")

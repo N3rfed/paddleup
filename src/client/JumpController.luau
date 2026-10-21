@@ -8,7 +8,7 @@ function Controller.start(player)
  local jump,force,attachment
  local function enabled()
   return player:GetAttribute("SlowFallEnabled")==true
-   and (player:GetAttribute("CourtSide") or 0)~=0 and player:GetAttribute("MatchVariant")=="Augmented"
+   and (player:GetAttribute("CourtSide") or 0)~=0 and player:GetAttribute("MatchVariant")=="Chaos"
  end
  local function clear()
   jump=nil
@@ -63,7 +63,8 @@ function Controller.start(player)
   end
   if jump.remaining<=0 then clear(); return end
   -- Leave a little downward gravity so the avatar falls throughout the extra second.
-  local lift=math.max(0,workspace.Gravity-Rules.JUMP_DESCENT_GRAVITY)
+  local gravity=workspace.Gravity*(player:GetAttribute("EnvironmentModifier")=="LowGravity" and 0.5 or 1)
+  local lift=math.max(0,gravity-Rules.JUMP_DESCENT_GRAVITY)
   force.Force=Vector3.new(0,root.AssemblyMass*lift*math.min(1,jump.remaining/math.max(dt,1e-6)),0)
   jump.remaining-=dt
  end)

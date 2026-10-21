@@ -1,17 +1,17 @@
-local AugmentDraft={}
-local Art=require(script.Parent:WaitForChild("AugmentArt"))
+local PowerupDraft={}
+local Art=require(script.Parent:WaitForChild("PowerupArt"))
 local FigmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
-function AugmentDraft.start(player,network)
- require(script.Parent:WaitForChild("AugmentBuild")).start(player,network)
+function PowerupDraft.start(player,network)
+ require(script.Parent:WaitForChild("PowerupBuild")).start(player,network)
  local TweenService=game:GetService("TweenService")
  local RunService=game:GetService("RunService")
  local UIS=game:GetService("UserInputService")
  local GuiService=game:GetService("GuiService")
- local remote=network:WaitForChild("Augment")
+ local remote=network:WaitForChild("Powerup")
  local colors={Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)}
  local names={"SILVER","GOLD","PRISMATIC"}
  local gui=Instance.new("ScreenGui",player:WaitForChild("PlayerGui"))
- gui.Name="AugmentDraft"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=15
+ gui.Name="PowerupDraft"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=15
  local function frame(parent,size,position,color)
   local f=Instance.new("Frame",parent); f.Size=size; f.Position=position
   f.BackgroundColor3=color; f.BorderSizePixel=0; return f
@@ -69,7 +69,7 @@ function AugmentDraft.start(player,network)
   subtitle.TextColor3=color
   for index,card in ipairs(data.cards) do
    local b=Instance.new("TextButton",cards); buttons[index]=b
-   b.Name="Augment"..index; b.Position=UDim2.fromOffset((index-1)*308,0)
+   b.Name="Powerup"..index; b.Position=UDim2.fromOffset((index-1)*308,0)
    b.Size=UDim2.fromOffset(292,362); b.BackgroundColor3=Color3.fromRGB(20,29,44)
    b.Text=""; b.AutoButtonColor=false; round(b,16)
    local trim=frame(b,UDim2.new(1,-32,0,3),UDim2.fromOffset(16,0),color)
@@ -127,7 +127,7 @@ function AugmentDraft.start(player,network)
    local selectArt=FigmaAssets.image(pill,"select",0,0,256,42)
    if selectArt then selectArt.ScaleType=Enum.ScaleType.Fit end
    if selectArt then pill.BackgroundTransparency=1 end
-   local selectLabel=text(pill,"["..index.."]  SELECT AUGMENT",0,42,12,selectArt and Color3.fromRGB(246,246,255) or Color3.fromRGB(15,22,31))
+   local selectLabel=text(pill,"["..index.."]  SELECT POWERUP",0,42,12,selectArt and Color3.fromRGB(246,246,255) or Color3.fromRGB(15,22,31))
    selectLabel.ZIndex=2
    local function hover(on)
     TweenService:Create(cardScale,TweenInfo.new(0.15),{Scale=on and 1.025 or 1}):Play()
@@ -176,4 +176,4 @@ function AugmentDraft.start(player,network)
   end
  end)
 end
-return AugmentDraft
+return PowerupDraft

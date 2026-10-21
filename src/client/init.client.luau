@@ -1,4 +1,4 @@
-local AugmentVisuals=require(script:WaitForChild("AugmentVisuals"))
+local PowerupVisuals=require(script:WaitForChild("PowerupVisuals"))
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
@@ -24,10 +24,11 @@ end
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
-require(script:WaitForChild("AugmentDraft")).start(player,network)
+local MatchSetup=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MatchSetup"))
+require(script:WaitForChild("PowerupDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)
 require(script:WaitForChild("PracticeUI")).start(player,network)
-local function playing() return not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") end
+local function playing() return not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -350,18 +351,18 @@ local function specialShot(kind)
  chargeStarted=nil; chargeInput=nil; chargeCanShow=false; chargeTrack.Visible=false
  animateSwing(kind=="Lob")
 end
-CAS:BindAction("AugmentLob",function(_,status)
+CAS:BindAction("PowerupLob",function(_,status)
  if status==Enum.UserInputState.Begin then specialShot("Lob") end
  return Enum.ContextActionResult.Sink
 end,true,Enum.KeyCode.ButtonY)
-CAS:SetTitle("AugmentLob","LOB")
-CAS:SetPosition("AugmentLob",UDim2.new(1,-180,1,-180))
-CAS:BindAction("AugmentSlice",function(_,status)
+CAS:SetTitle("PowerupLob","LOB")
+CAS:SetPosition("PowerupLob",UDim2.new(1,-180,1,-180))
+CAS:BindAction("PowerupSlice",function(_,status)
  if status==Enum.UserInputState.Begin then specialShot("Slice") end
  return Enum.ContextActionResult.Sink
 end,true,Enum.KeyCode.ButtonX)
-CAS:SetTitle("AugmentSlice","SLICE")
-CAS:SetPosition("AugmentSlice",UDim2.new(1,-250,1,-180))
+CAS:SetTitle("PowerupSlice","SLICE")
+CAS:SetPosition("PowerupSlice",UDim2.new(1,-250,1,-180))
 touchSwing.InputBegan:Connect(function(key)
  if key.UserInputType==Enum.UserInputType.Touch then beginCharge(key) end
 end)
@@ -394,19 +395,19 @@ end)
 UIS.InputEnded:Connect(releaseCharge)
 UIS.InputEnded:Connect(function(key) if key.KeyCode==Enum.KeyCode.LeftShift then setDiveHeld(false) end end)
 UIS.WindowFocusReleased:Connect(function() setDiveHeld(false) end)
-player.CharacterRemoving:Connect(function() setDiveHeld(false); AugmentVisuals.clear() end)
+player.CharacterRemoving:Connect(function() setDiveHeld(false); PowerupVisuals.clear() end)
 UIS.WindowFocusReleased:Connect(cancelCharge)
 UIS.TextBoxFocused:Connect(cancelCharge)
 game:GetService("GuiService").MenuOpened:Connect(cancelCharge)
 player.CharacterRemoving:Connect(cancelCharge)
-player:GetAttributeChangedSignal("AugmentDetailsOpen"):Connect(function()
- if player:GetAttribute("AugmentDetailsOpen") then cancelCharge() end
+player:GetAttributeChangedSignal("PowerupDetailsOpen"):Connect(function()
+ if player:GetAttribute("PowerupDetailsOpen") then cancelCharge() end
 end)
 player:GetAttributeChangedSignal("LeaveConfirmationOpen"):Connect(function()
  if player:GetAttribute("LeaveConfirmationOpen") then cancelCharge() end
 end)
-player:GetAttributeChangedSignal("AugmentDraftOpen"):Connect(function()
- if player:GetAttribute("AugmentDraftOpen") then cancelCharge() end
+player:GetAttributeChangedSignal("PowerupDraftOpen"):Connect(function()
+ if player:GetAttribute("PowerupDraftOpen") then cancelCharge() end
 end)
 local arrows={}
 CAS:BindActionAtPriority("PaddleUpArrows",function(_,status,key)
@@ -455,7 +456,7 @@ local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); co
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
  if not snapshot or snapshot.shotId~=data.shotId or snapshot.heavy~=data.heavy or not data.live then trail:Clear() end
- if not data.live then AugmentVisuals.clear() end
+ if not data.live then PowerupVisuals.clear() end
  if data.practicePaused then cancelCharge()
  elseif snapshot and canServe(snapshot) and not canServe(data) then cancelCharge(data.live==true) end
  snapshot=data; receivedAt=os.clock()
@@ -474,11 +475,11 @@ state.OnClientEvent:Connect(function(data)
  speedText.Text=string.format("%.2fx  RALLY SPEED",data.speed)
  volleyText.Text=data.perfects.." PERFECT RETURNS"
  staminaFill.Size=UDim2.fromScale(data.stamina/100,1)
- staminaLabel.Text=data.comeback and "COMEBACK / +15% MOVE + HIT" or data.augmentStatus and data.augmentStatus~="" and data.augmentStatus or "STAMINA"
+ staminaLabel.Text=data.comeback and "COMEBACK / +15% MOVE + HIT" or data.powerupStatus and data.powerupStatus~="" and data.powerupStatus or "STAMINA"
  diveReadyAt=data.diveReadyAt or (workspace:GetServerTimeNow()+data.dive)
  powerButton.Text=data.armed>0 and string.format("Q   POWER ARMED    %.1fs",data.armed) or (data.power>0 and string.format("Q   POWER SHOT     %.1fs",data.power) or "Q   POWER SHOT      READY")
  powerButton.TextColor3=data.armed>0 and mint or cream
- powerButton.Visible=player:GetAttribute("MatchVariant")~="Augmented"
+ powerButton.Visible=MatchSetup.abilities(player:GetAttribute("MatchVariant"))
  slowButton.Visible=powerButton.Visible
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
@@ -486,7 +487,7 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
  if kind=="rallyResult" or kind=="point" then
   if not inMatch() or (matchSessionId~=nil and matchSessionId~=player:GetAttribute("MatchSessionId")) then return end
  end
- if kind=="augmentFX" then AugmentVisuals.activate(message.userId,message.tier); return end
+ if kind=="powerupFX" then PowerupVisuals.activate(message.userId,message.tier); return end
  if kind=="serveTiming" then
   if snapshot and snapshot.serverId==player.UserId then
    showServeTiming(message.grade); meterPending=true; meterExitRequested=true; setMeterShown(false); meterInput=nil
@@ -522,7 +523,7 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
   return
  end
  if kind=="rallyResult" then
-  AugmentVisuals.clear()
+  PowerupVisuals.clear()
   meterFeedbackUntil=0; meterInput=nil; setMeterShown(false,true)
   cancelCharge()
   announcement.Text=kind=="rallyResult" and (message.title.."\n"..message.fault) or tostring(message)
@@ -547,12 +548,12 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
  end
  if kind=="diveMotion" then
   if message.userId==player.UserId then diveReadyAt=message.diveReadyAt or (workspace:GetServerTimeNow()+(Rules and Rules.DIVE_COOLDOWN or 1.75)) end
-  if message.afterimage then AugmentVisuals.clone(message.userId) end
+  if message.afterimage then PowerupVisuals.clone(message.userId) end
   DiveController.play(message.userId,message.direction,message.moveTime,message.poseTime)
   return
  end
  if kind=="swing" then
-  if message.hidePaddle then AugmentVisuals.hidePaddle(message.userId,message.slam and 0.62 or 0.52+0.1*(message.charge or 0)) end
+  if message.hidePaddle then PowerupVisuals.hidePaddle(message.userId,message.slam and 0.62 or 0.52+0.1*(message.charge or 0)) end
   DiveController.swing(message.userId,message.backhand,message.slam,message.contact,message.direction,message.charge,message.soft)
   return
  end
@@ -633,8 +634,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local h=c and c:FindFirstChildOfClass("Humanoid")
  local courtSide=player:GetAttribute("CourtSide") or 0
  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
- canvas.Visible=not inLobby and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("AugmentDraftOpen"); devToggle.Visible=not inLobby
- abilities.Visible=developerMode and player:GetAttribute("MatchVariant")~="Augmented"
+ canvas.Visible=not inLobby and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("PowerupDraftOpen"); devToggle.Visible=not inLobby
+ abilities.Visible=developerMode and MatchSetup.abilities(player:GetAttribute("MatchVariant"))
  if not inLobby then lobbyCamera:disable() end
  local side=courtSide~=0 and courtSide or 1
  local age=snapshot and not snapshot.practicePaused and math.min(now-receivedAt,0.12) or 0
@@ -690,7 +691,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0 and not player:GetAttribute("PracticePaused")
-  local aiming=locked and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("AugmentDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=developerMode and aiming==true and not (snapshot and canServe(snapshot))
@@ -729,11 +730,11 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   meterFeedback.Position=UDim2.fromOffset(feedbackAt.X,feedbackAt.Y)
   meterFeedback.Visible=meterFeedback.Visible and feedbackOnScreen
   if h then
-   if player:GetAttribute("AugmentStunned") then h:Move(Vector3.zero,false) end
+   if player:GetAttribute("PowerupStunned") then h:Move(Vector3.zero,false) end
    local ax=(arrows[Enum.KeyCode.Right] and 1 or 0)-(arrows[Enum.KeyCode.Left] and 1 or 0)
    local az=(arrows[Enum.KeyCode.Down] and 1 or 0)-(arrows[Enum.KeyCode.Up] and 1 or 0)
-   if not player:GetAttribute("AugmentStunned") and (ax~=0 or az~=0) then h:Move(Vector3.new(ax,0,az).Unit,true) end
-   if player:GetAttribute("BaselineSentinelActive") and not player:GetAttribute("AugmentStunned") and not c:GetAttribute("Diving") then
+   if not player:GetAttribute("PowerupStunned") and (ax~=0 or az~=0) then h:Move(Vector3.new(ax,0,az).Unit,true) end
+   if player:GetAttribute("BaselineSentinelActive") and not player:GetAttribute("PowerupStunned") and not c:GetAttribute("Diving") then
     local movement=h.MoveDirection
     local lateral=Vector3.new(movement.X*1.15,0,movement.Z)
     if lateral.Magnitude>0.01 then h:Move(lateral.Unit,false) end
@@ -755,7 +756,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  end
  HitboxOverlay.update(developerMode)
  FloatingText.update(dt)
- AugmentVisuals.update()
+ PowerupVisuals.update()
  effects:update(dt,snapshot,chargeCanShow and chargeStarted or nil)
  ballShadow:update(predicted,snapshot~=nil and (snapshot.live or snapshot.serveReady))
  if not snapshot then return end

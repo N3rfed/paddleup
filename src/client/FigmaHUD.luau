@@ -53,6 +53,15 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local servingAway=Assets.image(serving,"serveCyan",0,0,213,51)
  local serveText=label(serving,"Server","SERVING · 1",12,6.5,189,38,20)
  serveText.Font=Enum.Font.GothamMedium
+ local serveCountdown=frame(gui,"ServeCountdown",240,56)
+ serveCountdown.AnchorPoint=Vector2.new(0.5,0); serveCountdown.Visible=false
+ serveCountdown.BackgroundTransparency=0; serveCountdown.BackgroundColor3=Color3.fromRGB(27,27,64)
+ local timerCorner=Instance.new("UICorner",serveCountdown); timerCorner.CornerRadius=UDim.new(0,7)
+ local timerBorder=Instance.new("UIStroke",serveCountdown); timerBorder.Color=Color3.fromRGB(80,232,255); timerBorder.Thickness=2
+ timerBorder.Transparency=0.15
+ local timerScale=Instance.new("UIScale",serveCountdown)
+ local timerText=label(serveCountdown,"Timer","",8,8,224,40,26)
+ timerText.TextColor3=Color3.fromRGB(80,232,255); timerText.Font=Enum.Font.GothamBold
  local stamina=frame(gui,"Stamina",523,120)
  stamina.AnchorPoint=Vector2.new(0.5,1); stamina.Position=UDim2.new(0.5,0,1,-24)
  local staminaScale=Instance.new("UIScale",stamina)
@@ -68,11 +77,11 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local introducing=false
  local function visibility()
   local mode=player:GetAttribute("SessionMode")
-  gui.Enabled=mode~=nil and mode~="Lobby" and not introducing and not player:GetAttribute("AugmentDraftOpen")
+  gui.Enabled=mode~=nil and mode~="Lobby" and not introducing and not player:GetAttribute("PowerupDraftOpen")
   legacyScore.Visible=false; legacyStamina.Visible=false
  end
  player:GetAttributeChangedSignal("SessionMode"):Connect(visibility)
- player:GetAttributeChangedSignal("AugmentDraftOpen"):Connect(visibility)
+ player:GetAttributeChangedSignal("PowerupDraftOpen"):Connect(visibility)
  -- The developer toggle may request the original panels again.
  legacyScore:GetPropertyChangedSignal("Visible"):Connect(function()
   if legacyScore.Visible then legacyScore.Visible=false end
@@ -124,7 +133,9 @@ function HUD.start(player, network, legacyScore, legacyStamina)
   particles:ClearAllChildren()
  end)
  local readyAt=0
+ local serveState
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+  serveState=data
   local introVisible=data.matchIntro~=nil
   if introducing~=introVisible then introducing=introVisible; visibility() end
   local currentHome,currentAway=data.score[1],data.score[2]
@@ -146,14 +157,34 @@ function HUD.start(player, network, legacyScore, legacyStamina)
   serving.Visible=not data.live
   serveText.Text="SERVING · "..tostring(data.serverNumber or 1)
   fill.Size=UDim2.fromScale(math.clamp(data.stamina/100,0,1),1)
-  status.Text=data.comeback and "COMEBACK / +15% MOVE + HIT" or data.augmentStatus and data.augmentStatus~="" and data.augmentStatus or "STAMINA"
+  status.Text=data.comeback and "COMEBACK / +15% MOVE + HIT" or data.powerupStatus and data.powerupStatus~="" and data.powerupStatus or "STAMINA"
   readyAt=data.diveReadyAt or workspace:GetServerTimeNow()+(data.dive or 0)
  end)
  game:GetService("RunService").RenderStepped:Connect(function()
   local camera=workspace.CurrentCamera
   if camera then
    local s=math.min(1,camera.ViewportSize.X/1920,camera.ViewportSize.Y/1080)
-   scoreScale.Scale=s*1.10; staminaScale.Scale=s*1.15
+   -- Keep the score about 20% smaller on desktop, with room for corner controls
+   -- on narrow screens and a height limit that preserves the view of high balls.
+   scoreScale.Scale=math.max(0.01,math.min(0.88,(camera.ViewportSize.X-128)/892,camera.ViewportSize.Y*0.14/173))
+   score.Position=UDim2.new(0.5,0,0,math.clamp(camera.ViewportSize.Y/60,8,18))
+   timerScale.Scale=math.min(1,math.max(0.5,(camera.ViewportSize.X-48)/240))
+   serveCountdown.Position=UDim2.new(0.5,0,0,score.Position.Y.Offset+173*scoreScale.Scale+6)
+   staminaScale.Scale=s*1.15
+  end
+  local data=serveState
+  if data then
+   local countdown=data.canServe and data.serverId==player.UserId and data.serveReady
+    and not data.live and not data.practicePaused and data.serveDeadline
+    and not data.matchIntro and not player:GetAttribute("PowerupDraftOpen")
+    and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("LeaveConfirmationOpen")
+   serveCountdown.Visible=countdown~=nil and countdown~=false
+   if countdown then
+    local seconds=math.ceil(math.max(0,data.serveDeadline-workspace:GetServerTimeNow()))
+    timerText.Text="SERVE IN "..seconds.."s"
+    local accent=seconds<=3 and Color3.fromRGB(255,85,200) or Color3.fromRGB(80,232,255)
+    timerText.TextColor3=accent; timerBorder.Color=accent
+   end
   end
   local remaining=math.max(0,readyAt-workspace:GetServerTimeNow())
   dive.Text=remaining>0 and string.format("DIVE  %.1fs",remaining) or "DIVE READY"

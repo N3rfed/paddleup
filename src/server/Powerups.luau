@@ -1,255 +1,174 @@
--- Server-owned pickup lifecycle. onCollected(player, kind) is the future effect hook.
-local Powerups = {}
-Powerups.__index = Powerups
-
-Powerups.SPAWN_INTERVAL = 8
-Powerups.LIFETIME = 6
-Powerups.FADE_SECONDS = 1.5
-Powerups.DROP_SECONDS = 2.4
-Powerups.PICKUP_RADIUS = 4
-
--- Stellate each octahedron face into a pyramid: eight points in all directions.
-local function starPieces(model, template)
- local pieces = {}
- local triangles = {}
- for _,x in ipairs({-1,1}) do
-  for _,y in ipairs({-1,1}) do
-   for _,z in ipairs({-1,1}) do
-    local vertices = {Vector3.new(x*0.8,0,0),Vector3.new(0,y*0.8,0),Vector3.new(0,0,z*0.8)}
-    local tip = Vector3.new(x,y,z).Unit*1.7
-    for index=1,3 do
-     table.insert(triangles,{tip,vertices[index],vertices[index%3+1]})
+-- Draft catalog and pure effect rules. Distances use the painted 20 x 44 foot court.
+-- The court is 40 x 80 studs; width defines two studs per foot.
+local Powerups={DURATION=20}
+local archetypes={
+ {"Fleet Foot", "speed", 0.08, "Move %d%% faster", "WIND"},
+ {"Second Wind", "regen", 0.18, "Recover stamina %d%% faster", "PULSE"},
+ {"Long Reach", "reach", 0.06, "Extend contact range by %d%%", "ORBIT"},
+ {"Quick Reset", "dive", 0.08, "Reduce dive cooldown by %d%%", "WIND"},
+ {"Light Steps", "speed", 0.07, "Move %d%% faster", "ORBIT"},
+ {"Deep Breath", "regen", 0.20, "Recover stamina %d%% faster", "PULSE"},
+ {"Wide Guard", "reach", 0.07, "Extend contact range by %d%%", "SHIELD"},
+ {"Acrobat", "dive", 0.09, "Reduce dive cooldown by %d%%", "ORBIT"},
+ {"Court Runner", "speed", 0.09, "Move %d%% faster", "WIND"},
+ {"Endless Rhythm", "regen", 0.16, "Recover stamina %d%% faster", "PULSE"},
+ {"Sweet Spot", "reach", 0.08, "Extend contact range by %d%%", "SHIELD"},
+ {"Fast Reset", "dive", 0.10, "Reduce dive cooldown by %d%%", "WIND"},
+}
+Powerups.catalog={
+ {id="kitchenCamper",tier=1,name="Kitchen Camper",symbol="WIND",description="Move 15% faster within 2 feet of the kitchen line. Retreating to baseline disables it this rally."},
+ {id="dinkSpecialist",tier=1,name="Dink Specialist",symbol="PULSE",description="Land 3 consecutive dinks to boost your next baseline drive speed by 20%."},
+ {id="carbonFiber",tier=1,name="Carbon Fiber Core",symbol="SHIELD",description="Your paddle sweet spot is 15% wider, reducing off-center mishits."},
+ {id="secondServe",tier=1,name="Second Serve",symbol="PULSE",description="Once per match, a serve fault grants a free retry and fully restores stamina."},
+ {id="sliceDice",tier=1,name="Slice and Dice",symbol="ORBIT",description="Slice shots bounce 10% lower. Press X to slice."},
+ {id="thirdShot",tier=2,name="The Third-Shot Drop",symbol="ORBIT",description="Your third shot is guided to the kitchen with +40% accuracy and heavy topspin."},
+ {id="serveVolley",tier=2,name="Serve and Volley",symbol="WIND",description="Gain 75% movement speed for 3 seconds after serving."},
+ {id="vampiricReach",tier=2,name="Vampiric Reach",symbol="PULSE",description="Win a point at the net to permanently gain 1% reach, up to 10%."},
+ {id="atpAssassin",tier=2,name="ATP (Around the Post) Assassin",symbol="ORBIT",description="Land a shot around a net post to drain 30% of opponents' max stamina."},
+ {id="baitSwitch",tier=2,name="Bait and Switch",symbol="WIND",description="Press lob (R) during a smash windup for a perfect drop. Retreating opponents are stunned for 1 second."},
+ {id="erne",tier=3,name="Erne Executioner",symbol="PULSE",description="A legal jumping volley outside the sideline has 300% power and wins on paddle contact."},
+ {id="phantom",tier=3,name="Phantom Paddle",symbol="SHIELD",description="Gain 8 inches of invisible paddle reach on your backhand side."},
+ {id="lava",tier=3,name="Kitchen is Lava",symbol="PULSE",description="Opponents touching their kitchen line suffer double stamina drain for the rest of the rally."},
+ {id="overcharge",tier=3,name="Rally Overcharge",symbol="WIND",description="After 15 shots, ignite your paddle, ignore incoming spin, and unleash one unreturnable smash."},
+ {id="deflector",tier=3,name="Deflector Shield",symbol="SHIELD",description="Torso drives automatically deflect into the opponent's court at twice their incoming speed."},
+ {id="perfectVision",tier=1,name="Perfect Vision",symbol="EYE",description="The green perfect-hit timing window is 20% longer, before and after a bounce."},
+ {id="quickRecovery",tier=1,name="Quick Recovery",symbol="RESET",description="Recover from dive movement and animation locks 50% faster."},
+ {id="baselineSentinel",tier=1,name="Baseline Sentinel",symbol="COURT",description="Move sideways 15% faster within 2 feet of the baseline."},
+ {id="calculatedReturn",tier=1,name="Calculated Return",symbol="TARGET",description="Standard returns of serve send the ball back at 80% of its incoming velocity."},
+ {id="momentumShift",tier=2,name="Momentum Shift",symbol="BOLT",description="Three consecutive perfect hits charge your fourth return with +15% rally acceleration."},
+ {id="airTime",tier=2,name="Air Time",symbol="APEX",description="Fall slowly for 1 second after your jump's apex, giving you more time to line up a slam. Diving cancels the effect."},
+ {id="offensiveDive",tier=2,name="Offensive Dive",symbol="DIVE",description="Dive hits apply maximum topspin, sharply increasing descent after crossing the net."},
+ {id="kitchenWarden",tier=2,name="Kitchen Warden",symbol="SHIELD",description="Stand still at the kitchen line to extend your hit sphere forward by 25%."},
+ {id="deceptiveDrop",tier=2,name="Deceptive Drop",symbol="MASK",description="Hold dive while swinging to fake a smash and hit a soft drop. Enemy reticles disappear for 0.5s."},
+ {id="apexPredator",tier=3,name="Apex Predator",symbol="APEX",description="Hit at the bounce apex to disguise accelerated ball speed until it crosses the net."},
+ {id="rhythmMaster",tier=3,name="Rhythm Master",symbol="RHYTHM",description="After 10 rally hits, perfect swings hide your paddle and its angle."},
+ {id="afterimage",tier=3,name="Afterimage",symbol="CLONE",description="Dives leave a solid visual clone for 2s. Hit within 1s to show opponents a decoy landing spot."},
+ {id="terminalVelocity",tier=3,name="Terminal Velocity",symbol="INFINITY",description="Uncapped +8% perfect-hit acceleration. Win a rally exceeding 1.5x speed for permanent +5% movement."},
+}
+function Powerups.has(build,id) return build~=nil and build[id]==true end
+function Powerups.slowFall(build,side,variant)
+ return side~=0 and variant=="Chaos" and Powerups.has(build,"airTime")
+end
+function Powerups.newRally()
+ return {perfectChain=0,diveStarted=-math.huge,tension=0,camperActive=false,camperLost=false,lava=false,burstUntil=0,stunUntil=0,overchargeUsed=false}
+end
+function Powerups.perfect(build,timeToBounce,sinceBounce)
+ local scale=Powerups.has(build,"perfectVision") and 1.2 or 1
+ return timeToBounce<=0.23*scale or sinceBounce<=0.28*scale
+end
+function Powerups.diveDuration(build)
+ local scale=Powerups.has(build,"quickRecovery") and 0.5 or 1
+ return 0.48*scale,0.66*scale
+end
+function Powerups.lateralScale(build,depth,x,lateral)
+ return Powerups.has(build,"baselineSentinel") and math.abs(depth-40)<=4 and math.abs(x)<=20
+  and math.sqrt(1+(1.15^2-1)*math.clamp(lateral*lateral,0,1)) or 1
+end
+function Powerups.warden(build,depth,x,speed,grounded)
+ return Powerups.has(build,"kitchenWarden") and grounded and math.abs(depth-14)<=1 and math.abs(x)<=20 and speed<=1
+end
+function Powerups.acceleration(build,state,speed,clean,slam,charged,normal)
+ local ready=Powerups.has(build,"momentumShift") and state.perfectChain>=3
+ state.perfectChain=clean and (ready and 0 or state.perfectChain+1) or 0
+ if ready then return math.max(1,speed)*1.15,"MOMENTUM SHIFT! +15%" end
+ if clean and Powerups.has(build,"terminalVelocity") then return math.max(1,speed)*1.08,"TERMINAL VELOCITY! +8%" end
+ return normal(speed,clean,slam,charged),nil
+end
+function Powerups.terminalWin(build,state,peak)
+ if Powerups.has(build,"terminalVelocity") and peak>1.5 then state.speedWins=(state.speedWins or 0)+1 end
+end
+function Powerups.apex(build,bounces,vy,gravity)
+ return Powerups.has(build,"apexPredator") and bounces>0 and math.abs(vy)<=gravity*0.06
+end
+function Powerups.tracking(opponent,live,now,hiddenUntil,glitchUntil,heavy,beforeNet)
+ return opponent and live and now<(hiddenUntil or 0), opponent and live and now<(glitchUntil or 0),
+  opponent and live and heavy==true and beforeNet
+end
+function Powerups.camp(state,depth,x,kitchen,baseline)
+ if state.camperActive and depth>=baseline then state.camperLost=true end
+ local near=math.abs(depth-kitchen)<=4 and math.abs(x)<=20
+ if near and not state.camperLost then state.camperActive=true end
+ return near and not state.camperLost
+end
+function Powerups.dink(state,landed)
+ state.tension=landed and math.min(3,state.tension+1) or 0
+ if state.tension==3 then state.driveReady=true end
+end
+function Powerups.drive(state,baseline)
+ if baseline and state.driveReady then state.tension=0; state.driveReady=false; return 1.2 end
+ return 1
+end
+function Powerups.onFire(build,state,shots)
+ return Powerups.has(build,"overcharge") and shots>15
+end
+function Powerups.retryServe(build,state)
+ if not Powerups.has(build,"secondServe") or state.secondServeUsed then return false end
+ state.secondServeUsed=true
+ return true
+end
+function Powerups.netWin(build,state,atNet)
+ if atNet and Powerups.has(build,"vampiricReach") then state.reachStacks=math.min(10,(state.reachStacks or 0)+1) end
+end
+function Powerups.extraReach(build,state,backhand)
+ return (state.reachStacks or 0)*0.01, (Powerups.has(build,"phantom") and backhand) and 4/3 or 0
+end
+-- Solve flight time for a specified launch speed; low arc first, high arc if needed.
+function Powerups.flightTimes(horizontal,height,speed,gravity)
+ local a=speed*speed-gravity*height
+ local discriminant=a*a-gravity*gravity*(horizontal*horizontal+height*height)
+ if discriminant<0 or a<=0 then return nil end
+ local root=math.sqrt(discriminant)
+ return math.sqrt(2*(a-root)/(gravity*gravity)),math.sqrt(2*(a+root)/(gravity*gravity))
+end
+function Powerups.bounceScale(spin,sliceBoost)
+ -- Scale velocity by sqrt(height ratio), since bounce height is proportional to v^2.
+ return spin=="slice" and math.sqrt(sliceBoost and 0.9 or 1) or spin=="topspin" and math.sqrt(0.55) or 1
+end
+Powerups.caps={speed=0.6,regen=1.5,reach=0.4,dive=0.5}
+function Powerups.roll(random)
+ local roll=random:NextNumber()
+ return roll<0.6 and 1 or roll<0.9 and 2 or 3
+end
+function Powerups.deal(random,count,builds)
+ assert(count>=1 and count<=4,"Draft supports one to four players")
+ local tier=Powerups.roll(random)
+ local pool={}
+ for index,base in ipairs(archetypes) do
+  local amount=base[3]*tier
+  table.insert(pool,{id=tostring(tier)..":"..index,name=base[1],stat=base[2],amount=amount,
+   description=string.format(base[4],math.floor(amount*100+0.5)),symbol=base[5],tier=tier})
+ end
+ for _,card in ipairs(Powerups.catalog) do
+  if card.tier==tier then table.insert(pool,card) end
+ end
+ for index=#pool,2,-1 do
+  local other=random:NextInteger(1,index)
+  pool[index],pool[other]=pool[other],pool[index]
+ end
+ local offers={}
+ for player=1,count do
+  offers[player]={}
+  for slot=1,3 do
+   for index,card in ipairs(pool) do
+    if card.stat or not Powerups.has(builds and builds[player],card.id) then
+     offers[player][slot]=table.remove(pool,index); break
     end
    end
+   assert(offers[player][slot],"Insufficient draft cards")
   end
  end
- for index,triangle in ipairs(triangles) do
-  local a,b,c = triangle[1],triangle[2],triangle[3]
-  local ab,ac,bc = b-a,c-a,c-b
-  if ab.Magnitude>ac.Magnitude and ab.Magnitude>bc.Magnitude then
-   a,c = c,a
-  elseif ac.Magnitude>bc.Magnitude then
-   a,b = b,a
-  end
-  ab,ac,bc = b-a,c-a,c-b
-  local right = ac:Cross(ab).Unit
-  local back = bc.Unit
-  local up = back:Cross(right).Unit
-  local height = math.abs(ab:Dot(up))
-  for _,half in ipairs({
-   {frame=CFrame.fromMatrix((a+b)/2,right,up,back),length=math.abs(ab:Dot(back))},
-   {frame=CFrame.fromMatrix((a+c)/2,-right,up,-back),length=math.abs(ac:Dot(back))},
-  }) do
-   local wedge = Instance.new("WedgePart")
-   wedge.Name = "Star facet"
-   wedge.Anchored = true
-   wedge.CanCollide = false
-   wedge.CanTouch = false
-   wedge.CanQuery = false
-   wedge.CastShadow = false
-   wedge.Material = Enum.Material.SmoothPlastic
-   wedge.Color = template.Color:Lerp(Color3.fromRGB(32,125,132),(index%3)*0.18)
-   local size = Vector3.new(0.025,height,half.length)
-   wedge.Size = size
-   wedge.Parent = model
-   table.insert(pieces,{part=wedge,frame=half.frame,size=size})
+ return tier,offers
+end
+function Powerups.choose(offer,id,stats)
+ if not offer or type(id)~="string" then return nil end
+ for _,card in ipairs(offer) do
+  if card.id==id then
+   if card.stat then
+    stats[card.stat]=math.min(Powerups.caps[card.stat],(stats[card.stat] or 0)+card.amount)
+   else stats[card.id]=true end
+   return card
   end
  end
- return pieces
+ return nil
 end
-
-local function animateStar(pickup, center, scale, rotation, transparency)
- local frame = CFrame.new(center)*CFrame.Angles(0.3,rotation,0.2)
- for index,piece in ipairs(pickup.star) do
-  piece.part.Size = piece.size*scale
-  piece.part.CFrame = frame*CFrame.new(piece.frame.Position*scale)*piece.frame.Rotation
-  piece.part.Transparency = transparency or 0
-  -- Both halves of each triangular face share a hue; adjacent faces span the rainbow.
-  piece.part.Color = Color3.fromHSV((rotation/3+math.floor((index-1)/2)/24)%1,0.8,1)
- end
-end
-
-function Powerups.new(parent, onCollected)
- local folder = Instance.new("Folder")
- folder.Name = "PowerupPickups"
- folder.Parent = parent
- return setmetatable({folder=folder, onCollected=onCollected, random=Random.new(), slots={}, bursts={}}, Powerups)
-end
-
-function Powerups:reset()
- self.folder:ClearAllChildren()
- table.clear(self.slots)
- table.clear(self.bursts)
-end
-
-function Powerups:spawn(side, now)
- local position = Vector3.new(self.random:NextNumber(-16,16),184,side*self.random:NextNumber(18,36))
- local model = Instance.new("Model")
- model.Name = "Placeholder Powerup"
- model:SetAttribute("PowerupKind", "Placeholder")
- model:SetAttribute("CourtSide", side)
- local orb = Instance.new("Part")
- orb.Name = "Pickup anchor"
- orb.Transparency = 1
- orb.Size = Vector3.new(2,2,2)
- orb.Material = Enum.Material.Neon
- orb.Color = Color3.fromRGB(110,245,218)
- orb.Anchored = true
- orb.CanCollide = false
- orb.CanTouch = false
- orb.CanQuery = false
- orb.CastShadow = false
- orb.Position = position + Vector3.new(0,8,0)
- orb.Parent = model
- model.PrimaryPart = orb
- local sparks = {}
- for index=1,4 do
-  local spark = orb:Clone()
-  spark.Name = "Orbit spark"
-  spark.Transparency = 0
-  spark.Shape = Enum.PartType.Block
-  spark.Size = Vector3.new(0.3,0.3,0.3)
-  spark.Color = Color3.fromRGB(245,225,145)
-  spark.Parent = model
-  sparks[index] = spark
- end
- local light = Instance.new("PointLight")
- light.Color = orb.Color
- light.Range = 8
- light.Brightness = 0.6
- light.Parent = orb
- local label = Instance.new("BillboardGui")
- label.Size = UDim2.fromOffset(160,42)
- label.StudsOffset = Vector3.new(0,2,0)
- label.MaxDistance = 65
- label.Parent = orb
- local text = Instance.new("TextLabel")
- text.Size = UDim2.fromScale(1,1)
- text.BackgroundTransparency = 1
- text.Font = Enum.Font.GothamBold
- text.TextSize = 12
- text.TextColor3 = Color3.fromRGB(235,255,246)
- text.TextStrokeTransparency = 0.4
- text.Text = "TEST POWERUP\nWalk into star to grab"
- text.Parent = label
- local pickup = {model=model, orb=orb, sparks=sparks, light=light, label=label, position=position, born=now}
- pickup.star = starPieces(model,orb)
- self:animate(pickup,0)
- model.Parent = self.folder
- return pickup
-end
-
-function Powerups:animate(pickup, age)
- local progress = math.clamp(age/self.DROP_SECONDS,0,1)
- local eased = progress*progress*(3-2*progress)
- local spiral = math.sin(progress*math.pi)*0.9
- local idle = math.max(0,age-self.DROP_SECONDS)
- local fade = math.clamp((idle-(self.LIFETIME-self.FADE_SECONDS))/self.FADE_SECONDS,0,1)
- local center = pickup.position+Vector3.new(math.sin(progress*math.pi*2)*spiral,
-  8*(1-eased)+math.sin(idle*3)*0.25,math.cos(progress*math.pi*2)*spiral)
- pickup.orb.Position = center
- local beat = (1+math.sin(age*math.pi*2*1.5))/2
- local pulse = 1.8+beat*0.7
- pickup.orb.Size = Vector3.new(pulse,pulse,pulse)
- animateStar(pickup,center,pulse/2,age*0.9,fade)
- pickup.light.Color = Color3.fromHSV((age*0.3)%1,0.65,1)
- pickup.light.Brightness = (0.6+beat*1.2)*(1-fade)
- pickup.light.Range = 7+beat*3
- local text = pickup.label:FindFirstChildOfClass("TextLabel")
- if text then
-  text.TextTransparency = fade
-  text.TextStrokeTransparency = 0.4+0.6*fade
- end
- for index,spark in ipairs(pickup.sparks) do
-  spark.Transparency = fade
-  spark.Color = Color3.fromHSV((age*0.3+(index-1)/4)%1,0.75,1)
-  local sparkSize = 0.22+beat*0.16
-  spark.Size = Vector3.new(sparkSize,sparkSize,sparkSize)
-  local angle = age*2+(index-1)*math.pi/2
-  local radius = 1.65+beat*0.35
-  spark.CFrame = CFrame.new(center+Vector3.new(math.cos(angle)*radius,math.sin(angle*2)*0.35,math.sin(angle)*radius))
-   *CFrame.Angles(age*2,angle,math.pi/4)
- end
-end
-
--- Claimed objects are already unavailable while their short visual burst finishes.
-function Powerups:animateBursts(now)
- for index=#self.bursts,1,-1 do
-  local burst = self.bursts[index]
-  local t = math.clamp((now-burst.at)/0.45,0,1)
-  local pickup = burst.pickup
-  if t>=1 then
-   pickup.model:Destroy()
-   table.remove(self.bursts,index)
-  else
-   local size = 2*(1-t)+0.05
-   pickup.orb.Size = Vector3.new(size,size,size)
-   pickup.orb.Position = burst.center+Vector3.new(0,t*1.5,0)
-   animateStar(pickup,pickup.orb.Position,size/2,(now-pickup.born)*0.9,t)
-   pickup.light.Brightness = (1-t)*2
-   for sparkIndex,spark in ipairs(pickup.sparks) do
-    local angle = (sparkIndex-1)*math.pi/2
-    spark.Position = burst.center+Vector3.new(math.cos(angle)*(1.7+t*3),t,math.sin(angle)*(1.7+t*3))
-    spark.Transparency = t
-   end
-  end
- end
-end
-
--- Participants are supplied by the authoritative court roster; spectators cannot collect.
-function Powerups:update(now, participants)
- self:animateBursts(now)
- for _,side in ipairs({1,-1}) do
-  local occupied = false
-  for _,entry in ipairs(participants) do
-   if entry.side == side then occupied = true; break end
-  end
-  local slot = self.slots[side]
-  if not occupied then
-   if slot and slot.pickup then slot.pickup.model:Destroy() end
-   self.slots[side] = nil
-   continue
-  end
-  if not slot then
-   slot = {nextSpawn=now+2}
-   self.slots[side] = slot
-  end
-  if not slot.pickup and now >= slot.nextSpawn then
-   slot.pickup = self:spawn(side, now)
-  end
-  local pickup = slot.pickup
-  if not pickup then continue end
-  local age = now-pickup.born
-  if age >= self.DROP_SECONDS+self.LIFETIME then
-   pickup.model:Destroy()
-   slot.pickup = nil
-   slot.nextSpawn = now+self.SPAWN_INTERVAL
-   continue
-  end
-  self:animate(pickup,age)
-  if age < self.DROP_SECONDS then continue end
-  for _,entry in ipairs(participants) do
-   local character = entry.player.Character
-   local root = character and character:FindFirstChild("HumanoidRootPart")
-   local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-   if entry.side == side and root and humanoid and humanoid.Health > 0
-    and (root.Position-pickup.orb.Position).Magnitude <= self.PICKUP_RADIUS then
-    -- Remove before invoking the hook: only one player can claim this instance.
-    slot.pickup = nil
-    slot.nextSpawn = now+self.SPAWN_INTERVAL
-    pickup.label.Enabled = false
-    table.insert(self.bursts,{pickup=pickup,at=now,center=pickup.orb.Position})
-    self:animateBursts(now)
-    self.onCollected(entry.player, "Placeholder")
-    break
-   end
-  end
- end
-end
-
-function Powerups:destroy()
- self:reset()
- self.folder:Destroy()
-end
-
 return Powerups

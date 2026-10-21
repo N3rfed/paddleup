@@ -114,7 +114,7 @@ Power-ups spawn periodically during play, dropping from above onto random court 
 * Achievements/stats screen.
 * Elevator to queue; right before the elevator goes up, you can choose whichever map/modifier/etc.
 * Players in that lobby vote on what they want.
-* Different elevators (classic, arcade, chaotic) and (1v1, 2v2).
+* Different elevators (classic, arcade, chaos) and (1v1, 2v2).
 * Player presses elevator button to queue; once match is created, players are teleported into elevator for map selection.
 * Barebones lobby system that allows players to queue 1v1, 2v2, spectate, or play w/ bots.
 * Simultaneous games, multiple court lobbies.

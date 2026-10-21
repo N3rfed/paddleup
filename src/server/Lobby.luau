@@ -401,7 +401,7 @@ function Lobby.build()
   local wallZ=-63.7
   part(bankRoot,"Walnut bank backdrop",Vector3.new(46,22,0.8),Vector3.new(bank.x,11,wallZ),P.walnut,Enum.Material.Wood)
   sign(bankRoot,bank.name.." header",bank.name,Vector3.new(bank.x,18,wallZ+0.6),12,2.6,P.brass,false)
-  for index,mode in ipairs({"CLASSIC","ARCADE","CHAOTIC"}) do
+  for index,mode in ipairs({"CLASSIC","ARCADE","CHAOS"}) do
    local x=bank.x+(index-2)*14
    local frame=part(bankRoot,bank.name.." "..mode.." elevator",Vector3.new(12,13.5,2),Vector3.new(x,6.75,wallZ+1.5),P.ivory,Enum.Material.Concrete)
    frame:SetAttribute("TeamFormat",bank.name); frame:SetAttribute("Mode",mode); frame:SetAttribute("Placeholder",true)
