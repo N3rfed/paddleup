@@ -18,28 +18,86 @@ function MainMenu.start(player,network)
  local gold=Color3.fromRGB(80,232,255)
  local panel=Instance.new("Frame",gui)
  panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
- panel.Name="MatchMenu"; panel.Size=UDim2.fromOffset(420,680); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.02
- local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,12)
- local stroke=Instance.new("UIStroke",panel); stroke.Color=Color3.new(1,1,1); stroke.Thickness=2
- local edge=Instance.new("UIGradient",stroke)
- edge.Color=ColorSequence.new(gold,Color3.fromRGB(255,85,200)); edge.Rotation=35
+ panel.Name="MatchMenu"; panel.Size=UDim2.fromOffset(420,502); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.02; panel.BorderSizePixel=0
+ local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,20)
+ local stroke=Instance.new("UIStroke",panel); stroke.Color=Color3.fromRGB(85,88,139); stroke.Thickness=1; stroke.Transparency=0.5
  local scale=Instance.new("UIScale",panel)
  local function label(value,y,height,size,color)
   local t=Instance.new("TextLabel",panel)
   t.Position=UDim2.fromOffset(24,y); t.Size=UDim2.new(1,-48,0,height)
-  t.BackgroundTransparency=1; t.Font=Enum.Font.GothamMedium; t.TextSize=size
+  t.BackgroundTransparency=1; t.Font=Enum.Font.GothamBold; t.TextSize=size
   t.TextColor3=color or cream; t.TextXAlignment=Enum.TextXAlignment.Left
   t.Text=value; t.TextWrapped=true
   return t
  end
- label("P A D D L E U P",22,24,14,gold)
- label("CHOOSE YOUR MODE",55,40,26).Name="Heading"
+ label("P A D D L E U P",22,24,12,gold)
+ local heading=label("LET'S PLAY!",52,44,30); heading.Name="Heading"; heading.Font=Enum.Font.GothamBold
  label("01  /  GAME MODE",99,22,12,gold).Name="Step"
+ for index=1,3 do
+  local marker=Instance.new("Frame",panel); marker.Name="Progress"..index
+  marker.Position=UDim2.fromOffset(24+(index-1)*126,128); marker.Size=UDim2.fromOffset(120,3)
+  marker.BorderSizePixel=0; marker.BackgroundColor3=index==1 and gold or Color3.fromRGB(60,61,96)
+  marker.Visible=false
+  local rounding=Instance.new("UICorner",marker); rounding.CornerRadius=UDim.new(1,0)
+ end
+ local divider=Instance.new("Frame",panel); divider.Name="FooterDivider"
+ divider.Position=UDim2.fromOffset(24,592); divider.Size=UDim2.new(1,-48,0,1)
+ divider.BackgroundColor3=gold; divider.BackgroundTransparency=0.8; divider.BorderSizePixel=0
+ divider.Visible=false
  local status=label("Choose a court experience.",600,56,13)
  status.TextColor3=Color3.fromRGB(181,187,225)
  local request=network:WaitForChild("Session")
  local menu=require(script.Parent:WaitForChild("MainMenuFlow")).start(player,network,panel,status)
  local function showModes() menu.reset() end
+ local collapsed=false
+ local slide
+ local hide=Instance.new("TextButton",panel)
+ hide.Name="HideMenu"; hide.Text="HIDE  <"; hide.Font=Enum.Font.GothamBold; hide.TextSize=11
+ hide.Position=UDim2.new(1,-94,0,22); hide.Size=UDim2.fromOffset(70,26)
+ hide.TextColor3=gold; hide.BackgroundColor3=dark; hide.BorderSizePixel=0; hide.AutoButtonColor=false
+ local hideCorner=Instance.new("UICorner",hide); hideCorner.CornerRadius=UDim.new(0,7)
+ local reopen=Instance.new("TextButton",gui)
+ reopen.Name="ShowMenu"; reopen.Text=""; reopen.Font=Enum.Font.GothamBold; reopen.TextSize=24
+ reopen.AnchorPoint=Vector2.new(0,0.5); reopen.Position=UDim2.new(0,16,0.5,0)
+ reopen.Size=UDim2.fromOffset(164,76); reopen.BackgroundColor3=gold; reopen.TextColor3=dark
+ reopen.BorderSizePixel=0; reopen.Visible=false; reopen.AutoButtonColor=false
+ local tabCorner=Instance.new("UICorner",reopen); tabCorner.CornerRadius=UDim.new(0,14)
+ local tabStroke=Instance.new("UIStroke",reopen); tabStroke.Color=dark; tabStroke.Thickness=2
+ local playLabel=Instance.new("TextLabel",reopen)
+ playLabel.Name="PlayLabel"; playLabel.BackgroundTransparency=1; playLabel.Text="PLAY"
+ playLabel.Position=UDim2.fromOffset(18,11); playLabel.Size=UDim2.fromOffset(104,30)
+ playLabel.Font=Enum.Font.GothamBold; playLabel.TextSize=26; playLabel.TextColor3=dark
+ playLabel.TextXAlignment=Enum.TextXAlignment.Left
+ local menuHint=Instance.new("TextLabel",reopen)
+ menuHint.Name="MenuHint"; menuHint.BackgroundTransparency=1; menuHint.Text="Open game menu"
+ menuHint.Position=UDim2.fromOffset(18,43); menuHint.Size=UDim2.fromOffset(130,20)
+ menuHint.Font=Enum.Font.GothamBold; menuHint.TextSize=12; menuHint.TextColor3=dark
+ menuHint.TextXAlignment=Enum.TextXAlignment.Left
+ local expand=Instance.new("TextLabel",reopen)
+ expand.Name="ExpandArrow"; expand.BackgroundTransparency=1; expand.Text=utf8.char(8250)
+ expand.Position=UDim2.fromOffset(124,10); expand.Size=UDim2.fromOffset(24,32)
+ expand.Font=Enum.Font.GothamBold; expand.TextSize=32; expand.TextColor3=dark
+ local function highlightTab(active)
+  TweenService:Create(reopen,TweenInfo.new(0.15),{BackgroundColor3=active and Color3.fromRGB(156,243,255) or gold}):Play()
+ end
+ reopen.MouseEnter:Connect(function() highlightTab(true) end)
+ reopen.MouseLeave:Connect(function() highlightTab(false) end)
+ reopen.SelectionGained:Connect(function() highlightTab(true) end)
+ reopen.SelectionLost:Connect(function() highlightTab(false) end)
+ local function setCollapsed(value)
+  collapsed=value
+  if slide then slide:Cancel() end
+  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
+  panel.Visible=inLobby; reopen.Visible=inLobby and collapsed
+  slide=TweenService:Create(panel,TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
+   {Position=UDim2.new(0,collapsed and -(420*scale.Scale+8) or 24,0.5,0)})
+  slide.Completed:Once(function(playback)
+   if playback==Enum.PlaybackState.Completed and collapsed then panel.Visible=false end
+  end)
+  slide:Play()
+ end
+ hide.Activated:Connect(function() setCollapsed(true) end)
+ reopen.Activated:Connect(function() setCollapsed(false) end)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
  exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-12,0,16)
@@ -142,7 +200,7 @@ function MainMenu.start(player,network)
  end)
  local function refresh()
   local inLobby=player:GetAttribute("SessionMode")=="Lobby" or player:GetAttribute("SessionMode")==nil
-  panel.Visible=inLobby; exit.Visible=not inLobby
+  panel.Visible=inLobby and not collapsed; reopen.Visible=inLobby and collapsed; exit.Visible=not inLobby
   lobbyMusic:setActive(inLobby)
   if musicModes[player:GetAttribute("SessionMode")] then
    if not courtMusic.IsPlaying then courtMusic:Resume() end
@@ -164,7 +222,13 @@ function MainMenu.start(player,network)
  local function resize()
   local camera=workspace.CurrentCamera
   if camera then
-   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/680,(camera.ViewportSize.X-48)/420)
+   local nextScale=math.max(0.1,math.min(1,(camera.ViewportSize.Y-40)/panel.Size.Y.Offset,(camera.ViewportSize.X-48)/panel.Size.X.Offset))
+   if scale.Scale~=nextScale then
+    scale.Scale=nextScale
+    if slide then slide:Cancel() end
+    panel.Position=UDim2.new(0,collapsed and -(420*nextScale+8) or 24,0.5,0)
+    if collapsed then panel.Visible=false end
+   end
    dialogScale.Scale=math.min(1,(camera.ViewportSize.X-32)/420,(camera.ViewportSize.Y-32)/238)
   end
  end
