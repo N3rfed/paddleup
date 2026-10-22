@@ -13,7 +13,7 @@ function LobbyCamera.new(player,UIS)
   if self.active then UIS.MouseBehavior=Enum.MouseBehavior.Default end
  end
  UIS.InputBegan:Connect(function(input,processed)
-  if not self.active or processed or UIS:GetFocusedTextBox() then return end
+  if not self.active or processed or player:GetAttribute("CheckInOpen") or UIS:GetFocusedTextBox() then return end
   if input.UserInputType==Enum.UserInputType.MouseButton2 then
    self.dragging=true
    previousMouse=Vector2.new(input.Position.X,input.Position.Y)
@@ -25,7 +25,7 @@ function LobbyCamera.new(player,UIS)
   end
  end)
  UIS.InputChanged:Connect(function(input,processed)
-  if not self.active then return end
+  if not self.active or player:GetAttribute("CheckInOpen") then return end
   if input.UserInputType==Enum.UserInputType.MouseMovement and self.dragging then
    local position=Vector2.new(input.Position.X,input.Position.Y)
    local delta=Vector2.new(input.Delta.X,input.Delta.Y)
@@ -71,6 +71,7 @@ function LobbyCamera.new(player,UIS)
    self.yaw=math.atan2(-look.X,-look.Z); self.pitch=math.rad(-15)
    player.CameraMode=Enum.CameraMode.Classic
   end
+  if player:GetAttribute("CheckInOpen") then releaseDrag() end
   if self.stick.Magnitude>0.15 then
    self.yaw-=self.stick.X*dt*2.5
    self.pitch=math.clamp(self.pitch+self.stick.Y*dt*2,math.rad(-65),math.rad(35))

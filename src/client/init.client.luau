@@ -24,6 +24,7 @@ end
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
+task.spawn(function() require(script:WaitForChild("ProgressionUI")).start(player,network) end)
 local MatchSetup=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MatchSetup"))
 require(script:WaitForChild("PowerupDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)

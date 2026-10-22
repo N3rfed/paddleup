@@ -99,3 +99,6 @@ Jumps use normal gravity by default. The Gold **Air Time** powerup adds one seco
 
 ## Comeback boost
 At exactly 9–3 (or 3–9), the trailing team receives +15% movement speed, +15% normal/perfect contact reach, and +15% return-shot velocity. The team keeps the boost across rallies until it ties the score or the match ends. It triggers once per match and resets with a new match or roster change. Both rulesets and the practice partner use this rule. Serve timing and fault rules still apply normally. A cyan character aura and stamina-HUD label identify the boosted players. `tests/Comeback.spec.luau` covers activation, team isolation, catchup, expiry, and resets.
+
+## XP and daily check-in
+Press **E** at the existing lobby reception table for daily rewards and the weekly check-in calendar. Your profile shows level and XP toward the next level. Qualified completed games award XP; checking in activates the daily gameplay multiplier. See [progression rules, persistence, setup, and verification](PROGRESSION.md).

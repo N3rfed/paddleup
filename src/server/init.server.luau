@@ -7,7 +7,7 @@ local courtRoot=require(script:WaitForChild("World")).build()
 local Spectator=require(script:WaitForChild("Spectator"))
 local Lobby=require(script:WaitForChild("Lobby"))
 -- Lobby construction samples the original city parts before environments regroup them.
-Lobby.build()
+local lobbyRoot=Lobby.build()
 local CourtEnvironments=require(script:WaitForChild("CourtEnvironments"))
 local environments=CourtEnvironments.new(courtRoot)
 require(script:WaitForChild("DayNightCycle")).start()
@@ -21,6 +21,8 @@ end
 local input,state,feedback=remote("Input"),remote("State"),remote("Feedback")
 local session=remote("Session")
 local queueRemote=remote("Queue")
+local progression=require(script:WaitForChild("ProgressionService")).start(folder,lobbyRoot)
+local matchRewards=require(script:WaitForChild("MatchRewards")).new(progression)
 local MatchSetup=require(script:WaitForChild("MatchSetup"))
 local courtModifier="None"
 local introReadyRemote=remote("IntroReady")
@@ -138,7 +140,7 @@ powerupRemote.OnServerEvent:Connect(function(p,serial,id)
 end)
 local function updateDraft(now)
  if draftDue and not draft and not ball.live and now>=introUntil and now>=nextServe then
-  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
+  if ball.resetScore then matchRewards:begin(users,courtMode); rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
   local roster={}
   local home,away=false,false
   for p,d in pairs(users) do
@@ -239,6 +241,7 @@ local function matchStatus(message,kind)
  end
 end
 local function rosterChanged()
+ matchRewards:begin(users,courtMode)
  releasePracticePlayers()
  practice:reset(courtMode=="Practice" and practice.difficulty or "Normal")
  comeback=Comeback.new()
@@ -477,6 +480,7 @@ local function point(winner,reason)
   tell(server,"SECOND SERVE / MULLIGAN + FULL STAMINA","perfect")
   return
  end
+ if matchRewards then matchRewards:rally(ball.shots) end
  for player,data in pairs(users) do
   if data.side==winner then
    local root=rootOf(player)
@@ -512,6 +516,7 @@ local function point(winner,reason)
  }
  matchStatus({title=scored and (scorerName.." Scored for Team "..index.."!") or outcome=="secondServer" and "Second Server!" or "Side Out!",fault=faultNames[reason] or (reason.."!")},"rallyResult")
  if scored and score[index]>=11 and math.abs(score[1]-score[2])>=2 then
+  if matchRewards then matchRewards:complete(winner) end
   banner="TEAM "..index.." WINS!  /  New game in 6 seconds"
   matchStatus(banner,"point")
   nextServe=os.clock()+6
@@ -716,7 +721,7 @@ Players.PlayerRemoving:Connect(function(p)
  users[p]=nil
 end)
 local function prepareServe()
- if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
+ if ball.resetScore then matchRewards:begin(users,courtMode); rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
  syncServing()
  if not occupant(1) or (courtMode~="Practice" and not occupant(-1)) then return end
  table.clear(lastHitter)
@@ -947,6 +952,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local soft=(guided or feint or deceptive) and "drop" or softRequested and clean and Rules.softShot(r.Position,d.side) or nil
   if soft or (shotKind=="Slice" and clean) then quality="perfect" end
   if shotKind=="Lob" and not feint and not guided and not deceptive then quality="lob"; soft=nil end
+  if matchRewards then matchRewards:contact(p) end
   local serveReturn=ball.shots==0
   ball.shots+=1
   local slam=slamTiming~=nil
