@@ -27,6 +27,7 @@ function Environments.new(root)
    self.moon=require(script.Parent:WaitForChild("MoonEnvironment")).build()
    self.moon.Parent=self.cache
   end
+  require(script.Parent:WaitForChild("MapPreviews")).publish(self.root,self.rooftop,self.moon)
  end)
  return self
 end

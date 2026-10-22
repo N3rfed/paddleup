@@ -12,156 +12,119 @@ function MainMenu.start(player,network)
  courtMusic.Looped=true; courtMusic.Volume=0.2
  courtMusic.Parent=game:GetService("SoundService")
  -- Current court sessions share the Classic/Arcade soundtrack.
- local musicModes={Practice=true,["1V1"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
- local cream=Color3.fromRGB(241,240,248)
- local dark=Color3.fromRGB(32,32,65)
- local gold=Color3.fromRGB(168,187,212)
+ local musicModes={Practice=true,["1V1"]=true,["1V2"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
+ local cream=Color3.fromRGB(246,246,255)
+ local dark=Color3.fromRGB(27,27,64)
+ local gold=Color3.fromRGB(80,232,255)
  local panel=Instance.new("Frame",gui)
  panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
- panel.Size=UDim2.fromOffset(350,566); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.06
- local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,16)
- local stroke=Instance.new("UIStroke",panel); stroke.Color=gold; stroke.Transparency=0.4
+ panel.Name="MatchMenu"; panel.Size=UDim2.fromOffset(420,502); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.02; panel.BorderSizePixel=0
+ local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,20)
+ local stroke=Instance.new("UIStroke",panel); stroke.Color=Color3.fromRGB(85,88,139); stroke.Thickness=1; stroke.Transparency=0.5
  local scale=Instance.new("UIScale",panel)
  local function label(value,y,height,size,color)
   local t=Instance.new("TextLabel",panel)
   t.Position=UDim2.fromOffset(24,y); t.Size=UDim2.new(1,-48,0,height)
-  t.BackgroundTransparency=1; t.Font=Enum.Font.GothamMedium; t.TextSize=size
+  t.BackgroundTransparency=1; t.Font=Enum.Font.GothamBold; t.TextSize=size
   t.TextColor3=color or cream; t.TextXAlignment=Enum.TextXAlignment.Left
   t.Text=value; t.TextWrapped=true
   return t
  end
- label("P A D D L E U P",22,24,14,gold)
- label("",55,40,30)
- label("PLAY & UNWIND",99,22,11,gold)
- local status=label("Choose a court experience.",476,65,13)
+ label("P A D D L E U P",22,24,12,gold)
+ local heading=label("LET'S PLAY!",52,44,30); heading.Name="Heading"; heading.Font=Enum.Font.GothamBold
+ label("01  /  GAME MODE",99,22,12,gold).Name="Step"
+ for index=1,3 do
+  local marker=Instance.new("Frame",panel); marker.Name="Progress"..index
+  marker.Position=UDim2.fromOffset(24+(index-1)*126,128); marker.Size=UDim2.fromOffset(120,3)
+  marker.BorderSizePixel=0; marker.BackgroundColor3=index==1 and gold or Color3.fromRGB(60,61,96)
+  marker.Visible=false
+  local rounding=Instance.new("UICorner",marker); rounding.CornerRadius=UDim.new(1,0)
+ end
+ local divider=Instance.new("Frame",panel); divider.Name="FooterDivider"
+ divider.Position=UDim2.fromOffset(24,592); divider.Size=UDim2.new(1,-48,0,1)
+ divider.BackgroundColor3=gold; divider.BackgroundTransparency=0.8; divider.BorderSizePixel=0
+ divider.Visible=false
+ local status=label("Choose a court experience.",600,56,13)
+ status.TextColor3=Color3.fromRGB(181,187,225)
  local request=network:WaitForChild("Session")
- local pending=false
- local buttons={}
- local chosenMode=nil
- local chosenVariant=nil
- local variantButtons={}
- local mapButtons={}
- local function showModes()
-  chosenMode=nil
-  chosenVariant=nil
-  for _,button in ipairs(buttons) do button.Visible=true end
-  for _,button in ipairs(variantButtons) do button.Visible=false end
-  for _,button in ipairs(mapButtons) do button.Visible=false end
-  status.Text="Choose a court experience."
+ local menu=require(script.Parent:WaitForChild("MainMenuFlow")).start(player,network,panel,status)
+ local function showModes() menu.reset() end
+ local collapsed=false
+ local slide
+ local hide=Instance.new("TextButton",panel)
+ hide.Name="HideMenu"; hide.Text="HIDE  <"; hide.Font=Enum.Font.GothamBold; hide.TextSize=11
+ hide.Position=UDim2.new(1,-94,0,22); hide.Size=UDim2.fromOffset(70,26)
+ hide.TextColor3=gold; hide.BackgroundColor3=dark; hide.BorderSizePixel=0; hide.AutoButtonColor=false
+ local hideCorner=Instance.new("UICorner",hide); hideCorner.CornerRadius=UDim.new(0,7)
+ local reopen=Instance.new("TextButton",gui)
+ reopen.Name="ShowMenu"; reopen.Text=""; reopen.Font=Enum.Font.GothamBold; reopen.TextSize=24
+ reopen.AnchorPoint=Vector2.new(0,0.5); reopen.Position=UDim2.new(0,16,0.5,0)
+ reopen.Size=UDim2.fromOffset(164,76); reopen.BackgroundColor3=gold; reopen.TextColor3=dark
+ reopen.BorderSizePixel=0; reopen.Visible=false; reopen.AutoButtonColor=false
+ local tabCorner=Instance.new("UICorner",reopen); tabCorner.CornerRadius=UDim.new(0,14)
+ local tabStroke=Instance.new("UIStroke",reopen); tabStroke.Color=dark; tabStroke.Thickness=2
+ local playLabel=Instance.new("TextLabel",reopen)
+ playLabel.Name="PlayLabel"; playLabel.BackgroundTransparency=1; playLabel.Text="PLAY"
+ playLabel.Position=UDim2.fromOffset(18,11); playLabel.Size=UDim2.fromOffset(104,30)
+ playLabel.Font=Enum.Font.GothamBold; playLabel.TextSize=26; playLabel.TextColor3=dark
+ playLabel.TextXAlignment=Enum.TextXAlignment.Left
+ local menuHint=Instance.new("TextLabel",reopen)
+ menuHint.Name="MenuHint"; menuHint.BackgroundTransparency=1; menuHint.Text="Open game menu"
+ menuHint.Position=UDim2.fromOffset(18,43); menuHint.Size=UDim2.fromOffset(130,20)
+ menuHint.Font=Enum.Font.GothamBold; menuHint.TextSize=12; menuHint.TextColor3=dark
+ menuHint.TextXAlignment=Enum.TextXAlignment.Left
+ local expand=Instance.new("TextLabel",reopen)
+ expand.Name="ExpandArrow"; expand.BackgroundTransparency=1; expand.Text=utf8.char(8250)
+ expand.Position=UDim2.fromOffset(124,10); expand.Size=UDim2.fromOffset(24,32)
+ expand.Font=Enum.Font.GothamBold; expand.TextSize=32; expand.TextColor3=dark
+ local function highlightTab(active)
+  TweenService:Create(reopen,TweenInfo.new(0.15),{BackgroundColor3=active and Color3.fromRGB(156,243,255) or gold}):Play()
  end
- local function connect(mode,variant,environment)
-  if pending then return end
-  pending=true; status.Text="Connecting to "..(environment or "the court").."..."
-  request:FireServer(mode,variant,environment)
-  task.delay(5,function() if pending then pending=false; status.Text="No response yet. Please try again." end end)
- end
- for index,item in ipairs({
-  {"PRACTICE","Warm up with the practice partner","Practice"},
-  {"1V1","Join this server's singles court","1V1"},
-  {"1V2","One player against a team of two","1V2"},
-  {"2V2","Join this server's doubles court","2V2"},
-  {"SPECTATE","Watch the current court","Spectate"},
- }) do
-  local b=Instance.new("TextButton",panel)
-  b.Position=UDim2.fromOffset(24,140+(index-1)*66); b.Size=UDim2.new(1,-48,0,56)
-  b.BackgroundColor3=Color3.fromRGB(47,49,80); b.Text=""; b.AutoButtonColor=false
-  b.Name=item[3]; b.Selectable=true; buttons[index]=b
-  local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,10)
-  for line=1,2 do
-   local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
-   t.Position=UDim2.fromOffset(16,line==1 and 7 or 29); t.Size=UDim2.new(1,-32,0,20)
-   t.Font=line==1 and Enum.Font.GothamBold or Enum.Font.GothamMedium
-   t.TextSize=line==1 and 17 or 11; t.TextColor3=line==1 and cream or gold
-   t.TextXAlignment=Enum.TextXAlignment.Left; t.Text=item[line]
-  end
-  local function hover(on)
-   TweenService:Create(b,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(64,73,107) or Color3.fromRGB(47,49,80)}):Play()
-  end
-  b.MouseEnter:Connect(function() hover(true) end); b.MouseLeave:Connect(function() hover(false) end)
-  b.SelectionGained:Connect(function() hover(true) end); b.SelectionLost:Connect(function() hover(false) end)
-  b.Activated:Connect(function()
-   if pending then return end
-   if item[3]=="Spectate" then connect("Spectate"); return end
-   chosenMode=item[3]
-   for _,button in ipairs(buttons) do button.Visible=false end
-   for _,button in ipairs(variantButtons) do button.Visible=true end
-   status.Text=item[1].." / Choose your ruleset.\nAugmented: shared rarity, personal upgrades."
+ reopen.MouseEnter:Connect(function() highlightTab(true) end)
+ reopen.MouseLeave:Connect(function() highlightTab(false) end)
+ reopen.SelectionGained:Connect(function() highlightTab(true) end)
+ reopen.SelectionLost:Connect(function() highlightTab(false) end)
+ local function setCollapsed(value)
+  collapsed=value
+  if slide then slide:Cancel() end
+  local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
+  panel.Visible=inLobby; reopen.Visible=inLobby and collapsed
+  slide=TweenService:Create(panel,TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
+   {Position=UDim2.new(0,collapsed and -(420*scale.Scale+8) or 24,0.5,0)})
+  slide.Completed:Once(function(playback)
+   if playback==Enum.PlaybackState.Completed and collapsed then panel.Visible=false end
   end)
+  slide:Play()
  end
- for index,item in ipairs({
-  {"POWER-UP", "Collect court pickups.\nPlay with Power Shot and Slow.", "PowerUp",Color3.fromRGB(75,214,202)},
-  {"AUGMENTED", "Draft 1 of 3 cards. Build your playstyle.\nGREEN 60% / YELLOW 30% / RED 10%", "Augmented",Color3.fromRGB(246,183,77)},
-  {"< BACK", "Choose a different team format", "Back",gold},
- }) do
-  local b=Instance.new("TextButton",panel)
-  b.Name=item[3]; b.Position=UDim2.fromOffset(24,145+(index-1)*108)
-  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(39,42,71)
-  b.Text=""; b.Visible=false; table.insert(variantButtons,b)
-  local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,12)
-  local s=Instance.new("UIStroke",b); s.Color=item[4]; s.Transparency=0.35
-  for line=1,2 do
-   local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
-   t.Position=UDim2.fromOffset(16,line==1 and 10 or 38); t.Size=UDim2.new(1,-32,0,line==1 and 24 or 45)
-   t.Text=item[line]; t.Font=line==1 and Enum.Font.GothamBold or Enum.Font.GothamMedium
-   t.TextSize=line==1 and 19 or 11; t.TextColor3=line==1 and item[4] or cream
-   t.TextXAlignment=Enum.TextXAlignment.Left; t.TextWrapped=true
-  end
-  b.Activated:Connect(function()
-   if pending then return end
-   if item[3]=="Back" then showModes(); return end
-   chosenVariant=item[3]
-   for _,button in ipairs(variantButtons) do button.Visible=false end
-   for _,button in ipairs(mapButtons) do button.Visible=true end
-   status.Text="Choose your court environment.\nJoin the same environment as an ongoing game."
-  end)
- end
- for index,item in ipairs({
-  {"ROOFTOP", "Skyline Club\nCity views above the penthouse", "Rooftop",gold},
-  {"MOON", "Selene Lunar Court\nPlay among craters beneath the stars", "Moon",Color3.fromRGB(108,217,245)},
-  {"< BACK", "Choose a different ruleset", "Back",gold},
- }) do
-  local b=Instance.new("TextButton",panel)
-  b.Name="Environment"..item[3]; b.Position=UDim2.fromOffset(24,145+(index-1)*108)
-  b.Size=UDim2.new(1,-48,0,94); b.BackgroundColor3=Color3.fromRGB(37,57,62)
-  b.Text=""; b.Visible=false; table.insert(mapButtons,b)
-  local c=Instance.new("UICorner",b); c.CornerRadius=UDim.new(0,12)
-  local s=Instance.new("UIStroke",b); s.Color=item[4]; s.Transparency=0.35
-  for line=1,2 do
-   local t=Instance.new("TextLabel",b); t.BackgroundTransparency=1
-   t.Position=UDim2.fromOffset(16,line==1 and 10 or 38); t.Size=UDim2.new(1,-32,0,line==1 and 24 or 45)
-   t.Text=item[line]; t.Font=line==1 and Enum.Font.GothamBold or Enum.Font.GothamMedium
-   t.TextSize=line==1 and 19 or 11; t.TextColor3=line==1 and item[4] or cream
-   t.TextXAlignment=Enum.TextXAlignment.Left; t.TextWrapped=true
-  end
-  b.Activated:Connect(function()
-   if pending then return end
-   if item[3]=="Back" then
-    for _,button in ipairs(mapButtons) do button.Visible=false end
-    for _,button in ipairs(variantButtons) do button.Visible=true end
-    status.Text=chosenMode.." / Choose your ruleset."
-   else
-    connect(chosenMode,chosenVariant,item[3])
-   end
-  end)
- end
+ hide.Activated:Connect(function() setCollapsed(true) end)
+ reopen.Activated:Connect(function() setCollapsed(false) end)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
- exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-24,0,24)
- exit.Size=UDim2.fromOffset(28,28); exit.BackgroundColor3=Color3.fromRGB(26,28,51)
- exit.BackgroundTransparency=0.2; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
- local exitCorner=Instance.new("UICorner",exit); exitCorner.CornerRadius=UDim.new(1,0)
- local exitStroke=Instance.new("UIStroke",exit); exitStroke.Color=Color3.fromRGB(91,97,135); exitStroke.Thickness=1.5
- -- Draw the log-out symbol directly so its silhouette does not depend on an asset.
+ exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-12,0,16)
+ exit.Size=UDim2.fromOffset(44,44); exit.BackgroundColor3=Color3.fromRGB(27,27,64)
+ exit.BackgroundTransparency=1; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
+ local exitKey=Instance.new("TextLabel",exit)
+ exitKey.Name="LeaveKeybind"; exitKey.AnchorPoint=Vector2.new(0.5,0)
+ exitKey.Position=UDim2.new(0.5,0,1,6); exitKey.Size=UDim2.fromOffset(28,24)
+ exitKey.BackgroundTransparency=1; exitKey.BorderSizePixel=0; exitKey.Text="M"; exitKey.Font=Enum.Font.GothamBlack
+ exitKey.TextSize=20; exitKey.TextColor3=Color3.fromRGB(246,246,255); exitKey.Visible=UIS.KeyboardEnabled
+ local keyStroke=Instance.new("UIStroke",exitKey); keyStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
+ keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=2; keyStroke.Transparency=0
+ -- Outline the symbol itself for contrast against both bright rocks and dark sky.
  local icon=Instance.new("Frame",exit)
  icon.Name="ExitIcon"; icon.AnchorPoint=Vector2.new(0.5,0.5); icon.Position=UDim2.fromScale(0.5,0.5)
  icon.Size=UDim2.fromOffset(24,24); icon.BackgroundTransparency=1
+ local iconScale=Instance.new("UIScale",icon); iconScale.Scale=1.4
  local function iconLine(name,from,to)
   local delta=to-from
   local line=Instance.new("Frame",icon); line.Name=name; line.AnchorPoint=Vector2.new(0.5,0.5)
   line.Position=UDim2.fromOffset((from.X+to.X)/2,(from.Y+to.Y)/2)
-  line.Size=UDim2.fromOffset(delta.Magnitude+2,2); line.Rotation=math.deg(math.atan2(delta.Y,delta.X))
-  line.BackgroundColor3=Color3.fromRGB(255,255,255); line.BorderSizePixel=0
+  line.Size=UDim2.fromOffset(delta.Magnitude+3,3); line.Rotation=math.deg(math.atan2(delta.Y,delta.X))
+  line.BackgroundColor3=Color3.fromRGB(255,85,200); line.BorderSizePixel=0; line.ZIndex=2
   local cap=Instance.new("UICorner",line); cap.CornerRadius=UDim.new(1,0)
+  local outline=line:Clone(); outline.Name=name.."Outline"; outline.ZIndex=1
+  outline.Size=UDim2.fromOffset(delta.Magnitude+6,6); outline.BackgroundColor3=Color3.fromRGB(12,12,30)
+  outline.Parent=icon
  end
  -- Open door frame on the left; arrow points out through the opening to the right.
  iconLine("DoorTop",Vector2.new(4,4),Vector2.new(10,4))
@@ -172,17 +135,13 @@ function MainMenu.start(player,network)
  iconLine("ArrowShaft",Vector2.new(10,12),Vector2.new(21,12))
  iconLine("ArrowTop",Vector2.new(17,8),Vector2.new(21,12))
  iconLine("ArrowBottom",Vector2.new(17,16),Vector2.new(21,12))
- local figmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
- if figmaAssets.get("exit") then
-  icon.Visible=false; exit.Image=figmaAssets.get("exit"); exit.ScaleType=Enum.ScaleType.Fit
-  -- Custom artwork uses the full square image area, without the fallback circle.
-  exitCorner:Destroy(); exit.ClipsDescendants=false
-  exit.Size=UDim2.fromOffset(28,28)
-  exit.BackgroundTransparency=1; exitStroke.Transparency=1
- end
  local function exitHover(on)
-  TweenService:Create(exit,TweenInfo.new(0.15),{BackgroundColor3=on and Color3.fromRGB(50,20,24) or Color3.fromRGB(26,28,51)}):Play()
-  TweenService:Create(exitStroke,TweenInfo.new(0.15),{Color=on and Color3.fromRGB(112,137,155) or Color3.fromRGB(91,97,135)}):Play()
+  local color=on and Color3.fromRGB(80,232,255) or Color3.fromRGB(255,85,200)
+  for _,line in ipairs(icon:GetChildren()) do
+   if line:IsA("Frame") and line.ZIndex==2 then
+    TweenService:Create(line,TweenInfo.new(0.15),{BackgroundColor3=color}):Play()
+   end
+  end
  end
  exit.MouseEnter:Connect(function() exitHover(true) end); exit.MouseLeave:Connect(function() exitHover(false) end)
  exit.SelectionGained:Connect(function() exitHover(true) end); exit.SelectionLost:Connect(function() exitHover(false) end)
@@ -241,7 +200,7 @@ function MainMenu.start(player,network)
  end)
  local function refresh()
   local inLobby=player:GetAttribute("SessionMode")=="Lobby" or player:GetAttribute("SessionMode")==nil
-  panel.Visible=inLobby; exit.Visible=not inLobby
+  panel.Visible=inLobby and not collapsed; reopen.Visible=inLobby and collapsed; exit.Visible=not inLobby
   lobbyMusic:setActive(inLobby)
   if musicModes[player:GetAttribute("SessionMode")] then
    if not courtMusic.IsPlaying then courtMusic:Resume() end
@@ -249,11 +208,11 @@ function MainMenu.start(player,network)
    courtMusic:Pause()
   end
   if inLobby then closeDialog(); leaving=false end
-  if inLobby then pending=false; showModes() end
+  if inLobby then showModes() end
  end
  sessionConnection=player:GetAttributeChangedSignal("SessionMode"):Connect(refresh)
  request.OnClientEvent:Connect(function(ok,message)
-  pending=false; status.Text=message
+  status.Text=message
   if leaving then
    leaving=false; leave.Text="LEAVE"; leave.Active=true
    if ok then closeDialog() else detail.Text=message end
@@ -263,7 +222,13 @@ function MainMenu.start(player,network)
  local function resize()
   local camera=workspace.CurrentCamera
   if camera then
-   scale.Scale=math.min(1,(camera.ViewportSize.Y-40)/566,(camera.ViewportSize.X-48)/350)
+   local nextScale=math.max(0.1,math.min(1,(camera.ViewportSize.Y-40)/panel.Size.Y.Offset,(camera.ViewportSize.X-48)/panel.Size.X.Offset))
+   if scale.Scale~=nextScale then
+    scale.Scale=nextScale
+    if slide then slide:Cancel() end
+    panel.Position=UDim2.new(0,collapsed and -(420*nextScale+8) or 24,0.5,0)
+    if collapsed then panel.Visible=false end
+   end
    dialogScale.Scale=math.min(1,(camera.ViewportSize.X-32)/420,(camera.ViewportSize.Y-32)/238)
   end
  end

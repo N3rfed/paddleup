@@ -1,15 +1,23 @@
 # Paddle Up!
 
 Arcade pickleball on an apartment rooftop. Players arrive in a separate
-penthouse lobby facing reception. The menu directly admits players to the
-existing shared court: Practice reserves the free court for one player and
-the existing bot, 1V1 allows one player per side, and 2V2 allows two per side.
-Multiplayer waits for a player on both sides; partial doubles uses the existing
-2v1 rules. The court keeps its selected format until everyone leaves.
-A busy or incompatible court returns a message without changing the player's
-current session. Spectate uses the existing elevated court camera and never
-automatically promotes viewers. Return to Lobby (M on keyboard, or the button with Alt held during play)
-releases the court slot.
+penthouse lobby facing reception. Choose Classic, Arcade, or Chaos first, then
+Practice, 1V1, 1V2, or 2V2 to join the corresponding queue. Practice needs one
+player, singles two, 1V2 three, and doubles four. Complete groups wait for the
+shared court to empty. Every player chooses Rooftop or Moon during a 15-second map vote. Live player
+picks and vote counts remain visible throughout the countdown. The majority map
+wins; ties get a random roulette reveal. With no votes, both maps enter the draw.
+All group members enter together automatically after the result.
+Classic goes directly from map selection to standard play. Arcade offers an
+optional Low Gravity toggle on that same screen; its gameplay features are
+reserved for later. Chaos requires exactly one environmental modifier, currently
+Low Gravity, and uses the powerup card draft system. Low Gravity halves ball and
+court-player gravity without changing lobby or spectator gravity. Leaving the
+queue returns to mode selection; if someone leaves setup, the group waits for a
+replacement, then restarts the countdown. Arcade Low Gravity uses a majority
+vote, with ties off. Chaos always requires it.
+Spectate uses the elevated court camera and never automatically promotes viewers.
+Return to Lobby (M on keyboard, or the exit button) releases the court slot.
 Respawns preserve the chosen role. All testers must join the same Roblox server.
 
 Lobby geometry lives in src/server/Lobby.luau, separate from the rooftop World.
@@ -28,15 +36,15 @@ their existing controls. All lighting is local to the lobby; the rooftop day/nig
 cycle remains shared and unchanged. Fixtures use shadow-free lights, and small
 props have collision, touch, query, and shadow work disabled. Seats are usable.
 Elevators carry TeamFormat, Mode, and Placeholder attributes for future wiring;
-Classic, Arcade, and Chaotic are visual labels only. Shop, Cafe, and achievement
+Classic, Arcade, and Chaos labels match the menu modes; elevator admission is not wired. Shop, Cafe, and achievement
 displays have no transactions, powerups, or persistent statistics yet.
-The future flow remains Menu ? Lobby ? Elevator ? Queue ? Voting ? Rooftop.
+The menu flow is Mode ? Player Count ? Queue ? Map/Modifier Setup ? Game.
 MainMenu.luau contains presentation; admission uses the server's existing roster,
 serve rotation, ball simulation, input remotes, and practice partner.
 
 Studio acceptance check: start a four-player local server, verify all players
 start at reception, then join 2V2 and confirm 2 players on each side. Test 1V1
-with two players, full/incompatible court rejection, a fifth spectator, leaving
+with two players, queueing while the court is occupied, a fifth spectator, leaving
 and rejoining, and character resets. With an empty court, test Practice through
 a bot serve and rally. Lobby players and spectators must not swing or dive.
 Inspect the six labeled elevators, shop displays, cafe props, trophies,
@@ -50,8 +58,8 @@ warm fixtures, window walls, and unobstructed central arrival path.
 | Space | Jump |
 | Left mouse button | Swing with a 9-stud sphere around the paddle |
 | Left Shift | Dive toward the ball; 35 stamina, 1.1-second cooldown |
-| Q | Arm a power shot for 5 seconds; 10-second cooldown |
-| E | Slow the opponent for 2.5 seconds; 12-second cooldown |
+| Q | Reserved for future Arcade abilities |
+| E | Reserved for future Arcade abilities |
 
 Gameplay uses an always-on shift-lock camera. Serves and returns follow the
 character's horizontal facing direction at impact, including during dives.
@@ -72,7 +80,7 @@ The landing ring pulses red, yellow, then green. Returns within 0.23 seconds
 before a bounce or 0.28 seconds afterward count as perfect. Perfect hits have
 no swing cooldown and multiply rally speed by 1.05. Other swings have a
 0.28-second cooldown. A point resets rally speed. Stamina regenerates at
-22 per second. Power shots add a temporary 22% speed boost.
+22 per second. Power Shot and Slow are disabled pending Arcade implementation.
 
 First to 11, win by two. Net faults, out balls, and double bounces score points.
 Serves start on click or tap; points reset the court for the next serve.

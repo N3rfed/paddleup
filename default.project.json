@@ -40,6 +40,9 @@
         },
         "MatchRules": {
           "$path": "src/server/MatchRules.luau"
+        },
+        "MatchSetup": {
+          "$path": "src/server/MatchSetup.luau"
         }
       }
     },

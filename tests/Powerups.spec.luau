@@ -1,71 +1,48 @@
 return function(Powerups)
- local parent = Instance.new("Folder")
- local character = Instance.new("Model")
- local root = Instance.new("Part")
- root.Name = "HumanoidRootPart"
- root.Parent = character
- local humanoid = Instance.new("Humanoid")
- humanoid.Parent = character
- local player = {Character=character}
- local collected = 0
- local system = Powerups.new(parent,function(who,kind)
-  assert(who == player and kind == "Placeholder")
-  collected += 1
- end)
- local ok,err = pcall(function()
-  system:update(0,{})
-  assert(#system.folder:GetChildren() == 0,"Empty courts must not spawn")
-  local roster = {{player=player,side=1},{player=player,side=1}}
-  system:update(0,roster)
-  system:update(2,roster)
-  local pickup = system.slots[1].pickup
-  assert(pickup and #system.folder:GetChildren() == 1,"One orb per occupied half")
-  assert(#pickup.star == 48,"Eight pyramid points have 24 triangular faces")
-  assert(math.abs(pickup.position.X)<=16 and pickup.position.Z>=18 and pickup.position.Z<=36)
-  root.Position = pickup.orb.Position
-  system:update(2.1,roster)
-  assert(collected == 0,"Cannot collect during drop")
-  root.Position = pickup.position
-  humanoid.Health = 0
-  system:update(3.2,roster)
-  assert(math.abs(pickup.orb.Position.Y-pickup.position.Y-4)<0.01,"Slow descent is halfway down after 1.2 seconds")
-  assert(#pickup.sparks == 4,"Custom orbit animation has four sparks")
-  system:update(4.5,roster)
-  assert(collected == 0,"Dead players cannot collect")
-  humanoid.Health = 100
-  root.Position = pickup.position+Vector3.new(3.6,0,0)
-  system:update(4.6,roster)
-  assert(collected == 1 and system.slots[1].pickup == nil,"Wider pickup radius accepts a passing player exactly once")
-  assert(#system.bursts == 1 and not pickup.label.Enabled,"Collection plays a burst without a pickup label")
-  system:update(4.8,roster)
-  assert(collected == 1 and pickup.star[1].part.Transparency > 0,"Burst fades and cannot be collected twice")
-  system:update(5.1,roster)
-  assert(#system.bursts == 0,"Completed bursts are cleaned up")
-  assert(#system.folder:GetChildren() == 0,"Respawn cooldown")
-  root.Position = Vector3.zero
-  system:update(12.7,roster)
-  assert(system.slots[1].pickup,"Collected pickups respawn")
-  local expiring = system.slots[1].pickup
-  system:update(19.6,roster)
-  assert(expiring.star[1].part.Transparency < 0.001,"Floor lifetime starts after descent")
-  system:update(20.35,roster)
-  assert(math.abs(expiring.star[1].part.Transparency-0.5)<0.001,"Expiry gradually fades the star")
-  assert(math.abs(expiring.sparks[1].Transparency-0.5)<0.001,"Sparks fade with the star")
-  assert(math.abs(expiring.label.TextLabel.TextTransparency-0.5)<0.001,"Label fades with the star")
-  system:update(21.2,roster)
-  assert(system.slots[1].pickup == nil,"Unclaimed pickups expire")
-  system:update(29.3,roster)
-  assert(system.slots[1].pickup,"Expired pickups respawn")
-  system:update(30,{{player=player,side=0}})
-  assert(#system.folder:GetChildren() == 0,"Spectators do not keep pickups alive")
-  system:update(31,roster)
-  system:update(33,roster)
-  system:reset()
-  assert(next(system.slots) == nil and #system.folder:GetChildren() == 0,"Reset removes all state")
- end)
- system:destroy()
- character:Destroy()
- parent:Destroy()
- assert(ok,err)
- return "Powerup spawn, collection, expiry, respawn, and cleanup passed"
+ local low={NextNumber=function() return 0 end}
+ local mid={NextNumber=function() return 0.6 end}
+ local high={NextNumber=function() return 0.9 end}
+ assert(Powerups.roll(low)==1 and Powerups.roll(mid)==2 and Powerups.roll(high)==3,"Rarity boundaries")
+ local random={seed=741}
+ function random:NextNumber() self.seed=self.seed*16807%2147483647; return self.seed/2147483647 end
+ function random:NextInteger(low,high) return low+math.floor(self:NextNumber()*(high-low+1)) end
+ local counts={0,0,0}
+ local all={}
+ for _,card in ipairs(Powerups.catalog) do
+  assert(not all[card.id],"Unique effect IDs")
+  counts[card.tier]+=1; all[card.id]=true
+ end
+ assert(counts[1]==9 and counts[2]==10 and counts[3]==9,"Air Time joins the Gold catalog")
+ assert(not Powerups.slowFall({},1,"Chaos"),"Normal jumps are the default")
+ assert(Powerups.slowFall({airTime=true},1,"Chaos"),"Air Time grants slow fall")
+ assert(not Powerups.slowFall({airTime=true},0,"Chaos"),"No powerup effect in the lobby")
+ assert(not Powerups.slowFall({airTime=true},1,"Classic"),"Effect is exclusive to its powerup-based build")
+ for pass=1,300 do
+  local builds=pass%2==0 and {all,all,all,all} or nil
+  local tier,offers=Powerups.deal(random,4,builds)
+  local seen={}
+  for _,offer in ipairs(offers) do
+   assert(#offer==3,"Three cards per player")
+   for _,card in ipairs(offer) do
+    assert(card.tier==tier,"Shared rarity")
+    assert(not seen[card.id],"Globally disjoint offers")
+    assert(not builds or card.stat,"Owned unique effects are excluded")
+    seen[card.id]=true
+   end
+  end
+  local stats={}
+  assert(not Powerups.choose(offers[1],offers[2][1].id,stats),"Reject another player's card")
+  assert(not Powerups.choose(nil,offers[1][1].id,stats),"Reject a consumed offer")
+  assert(not Powerups.choose(offers[1],{},stats),"Reject malformed selection")
+  assert(next(stats)==nil,"Invalid selection cannot grant effects")
+  local card=Powerups.choose(offers[1],offers[1][1].id,stats)
+  for _=1,100 do Powerups.choose(offers[1],card.id,stats) end
+  if card.stat then assert(stats[card.stat]==Powerups.caps[card.stat],"Stats remain capped")
+  else assert(stats[card.id]==true,"Unique effects cannot stack") end
+ end
+ for _,card in ipairs(Powerups.catalog) do
+  local build={}
+  assert(Powerups.choose({card},card.id,build)==card and Powerups.has(build,card.id),"Every named effect is selectable")
+ end
+ return "Catalog, rarity, exhausted builds, multiplayer uniqueness, selection validation and caps passed"
 end

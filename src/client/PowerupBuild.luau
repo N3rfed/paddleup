@@ -1,5 +1,5 @@
 -- Persistent inventory of drafted cards, with server-reported activation state.
-local Art=require(script.Parent:WaitForChild("AugmentArt"))
+local Art=require(script.Parent:WaitForChild("PowerupArt"))
 local Build={}
 function Build.start(player,network)
  local UIS=game:GetService("UserInputService")
@@ -7,8 +7,8 @@ function Build.start(player,network)
  local GuiService=game:GetService("GuiService")
  local colors={Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)}
  local gui=Instance.new("ScreenGui",player:WaitForChild("PlayerGui"))
- gui.Name="AugmentBuild"; gui.ResetOnSpawn=false; gui.DisplayOrder=14
- player:SetAttribute("AugmentDetailsOpen",false)
+ gui.Name="PowerupBuild"; gui.ResetOnSpawn=false; gui.DisplayOrder=14
+ player:SetAttribute("PowerupDetailsOpen",false)
  local entries,ordered={},{}
  local effects,progress,stats={},{},{}
  local selected,previousSelection
@@ -21,19 +21,19 @@ function Build.start(player,network)
   local r=Instance.new("UICorner",parent); r.CornerRadius=UDim.new(0,10)
  end
  local strip=Instance.new("ScrollingFrame",gui)
- strip.Name="ChosenAugmentIcons"; strip.AnchorPoint=Vector2.new(0,1); strip.Position=UDim2.new(0,16,1,-50)
+ strip.Name="ChosenPowerupIcons"; strip.AnchorPoint=Vector2.new(0,1); strip.Position=UDim2.new(0,16,1,-50)
  strip.Size=UDim2.fromOffset(540,60); strip.BackgroundTransparency=1; strip.BorderSizePixel=0
  strip.ScrollBarThickness=3; strip.ScrollingDirection=Enum.ScrollingDirection.X
  strip.AutomaticCanvasSize=Enum.AutomaticSize.X; strip.CanvasSize=UDim2.new()
  local layout=Instance.new("UIListLayout",strip); layout.FillDirection=Enum.FillDirection.Horizontal; layout.Padding=UDim.new(0,7)
  local inspect=Instance.new("TextButton",gui)
- inspect.Name="InspectAugments"; inspect.AnchorPoint=Vector2.new(0,1); inspect.Position=UDim2.new(0,16,1,-16)
+ inspect.Name="InspectPowerups"; inspect.AnchorPoint=Vector2.new(0,1); inspect.Position=UDim2.new(0,16,1,-16)
  inspect.Size=UDim2.fromOffset(180,25); inspect.BackgroundColor3=Color3.fromRGB(22,32,47); round(inspect)
- inspect.Text="AUGMENTS  [B / SELECT]"; inspect.TextColor3=Color3.fromRGB(209,221,245); inspect.Font=Enum.Font.GothamBold; inspect.TextSize=11
+ inspect.Text="POWERUPS  [B / SELECT]"; inspect.TextColor3=Color3.fromRGB(209,221,245); inspect.Font=Enum.Font.GothamBold; inspect.TextSize=11
  local panel=Instance.new("Frame",gui); panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5)
  panel.Size=UDim2.fromOffset(560,420); panel.BackgroundColor3=Color3.fromRGB(13,21,34); panel.Visible=false; round(panel)
  local scale=Instance.new("UIScale",panel)
- local heading=label(panel,"YOUR AUGMENTS",22); heading.Position=UDim2.fromOffset(18,15); heading.Size=UDim2.fromOffset(480,34)
+ local heading=label(panel,"YOUR POWERUPS",22); heading.Position=UDim2.fromOffset(18,15); heading.Size=UDim2.fromOffset(480,34)
  local hint=label(panel,"Select an icon to inspect. The match continues while this panel is open.",12)
  hint.Position=UDim2.fromOffset(18,52); hint.Size=UDim2.new(1,-36,0,32)
  local close=Instance.new("TextButton",panel); close.Text="X"; close.TextSize=18; close.TextColor3=Color3.new(1,1,1)
@@ -47,12 +47,12 @@ function Build.start(player,network)
  local description=label(panel,"",16); description.Position=UDim2.fromOffset(238,194); description.Size=UDim2.fromOffset(300,112)
  local status=label(panel,"",14); status.Position=UDim2.fromOffset(238,314); status.Size=UDim2.fromOffset(300,76)
  local function available()
-  return player:GetAttribute("MatchVariant")=="Augmented" and not player:GetAttribute("AugmentDraftOpen") and not player:GetAttribute("LeaveConfirmationOpen") and #ordered>0
+  return player:GetAttribute("MatchVariant")=="Chaos" and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("LeaveConfirmationOpen") and #ordered>0
  end
  local function setOpen(open)
   open=open and available()
   if panel.Visible==open then return end
-  panel.Visible=open; player:SetAttribute("AugmentDetailsOpen",open)
+  panel.Visible=open; player:SetAttribute("PowerupDetailsOpen",open)
   if open then
    previousSelection=GuiService.SelectedObject
    if UIS.GamepadEnabled then GuiService.SelectedObject=selected and selected.detailButton or close end
@@ -80,7 +80,7 @@ function Build.start(player,network)
   if processed or UIS:GetFocusedTextBox() then return end
   if input.KeyCode==Enum.KeyCode.B or input.KeyCode==Enum.KeyCode.ButtonSelect then setOpen(not panel.Visible) end
  end)
- network:WaitForChild("Augment").OnClientEvent:Connect(function(data)
+ network:WaitForChild("Powerup").OnClientEvent:Connect(function(data)
   if data.kind=="reset" then
    setOpen(false)
    for _,entry in ipairs(ordered) do entry.button:Destroy(); entry.detailButton:Destroy() end
@@ -97,7 +97,7 @@ function Build.start(player,network)
   end
  end)
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
-  effects=data.augmentEffects or {}; progress=data.augmentProgress or {}
+  effects=data.powerupEffects or {}; progress=data.powerupProgress or {}
  end)
  RunService.RenderStepped:Connect(function()
   local camera=workspace.CurrentCamera

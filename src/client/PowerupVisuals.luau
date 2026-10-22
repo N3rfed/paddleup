@@ -11,7 +11,7 @@ function Visuals.activate(userId,tier)
  if not root or (bursts[userId] and os.clock()-bursts[userId]<0.15) then return end
  bursts[userId]=os.clock()
  local sphere=Instance.new("Part")
- sphere.Name="Augment activation"; sphere.Shape=Enum.PartType.Ball; sphere.Material=Enum.Material.Neon
+ sphere.Name="Powerup activation"; sphere.Shape=Enum.PartType.Ball; sphere.Material=Enum.Material.Neon
  sphere.Color=({Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)})[tier] or Color3.new(1,1,1)
  sphere.Size=Vector3.new(2.5,2.5,2.5); sphere.CFrame=root.CFrame; sphere.Transparency=0.8
  sphere.Anchored=false; sphere.Massless=true; sphere.CanCollide=false; sphere.CanTouch=false; sphere.CanQuery=false; sphere.CastShadow=false
@@ -68,7 +68,7 @@ function Visuals.update()
  local now=os.clock()
  local present={}
  for _,player in ipairs(Players:GetPlayers()) do
-  local tier=player:GetAttribute("ActiveAugmentTier") or 0
+  local tier=player:GetAttribute("ActivePowerupTier") or 0
   local comeback=player:GetAttribute("ComebackBoost")==true
   local character=player.Character
   local root=character and character:FindFirstChild("HumanoidRootPart")
@@ -79,7 +79,7 @@ function Visuals.update()
   if active then
    present[player]=true
    if not aura then
-    local attachment=Instance.new("Attachment",root); attachment.Name="Active augment aura"
+    local attachment=Instance.new("Attachment",root); attachment.Name="Active powerup aura"
     local particles=Instance.new("ParticleEmitter",attachment)
     particles.Texture="rbxasset://textures/particles/sparkles_main.dds"
     particles.Rate=14; particles.Lifetime=NumberRange.new(0.4,0.8); particles.Speed=NumberRange.new(1,2)
