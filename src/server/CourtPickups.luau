@@ -83,7 +83,7 @@ function Powerups:reset()
 end
 
 function Powerups:spawn(side, now)
- local position = Vector3.new(self.random:NextNumber(-16,16),184,side*self.random:NextNumber(18,36))
+ local position = Vector3.new(self.random:NextNumber(-16,16),184+(self.folder.Parent:GetAttribute("CourtHeight") or 0),side*self.random:NextNumber(18,36))
  local model = Instance.new("Model")
  model.Name = "Placeholder Powerup"
  model:SetAttribute("PowerupKind", "Placeholder")

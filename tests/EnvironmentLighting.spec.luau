@@ -2,7 +2,7 @@ return function(EnvironmentLighting)
  local Lighting=game:GetService("Lighting")
  local signal=Instance.new("BindableEvent")
  local mode="Lobby"
- local player={GetAttribute=function() return mode end,GetAttributeChangedSignal=function() return signal.Event end}
+ local player={GetAttribute=function(_,key) return key=="CourtEnvironment" and "Moon" or mode end,GetAttributeChangedSignal=function() return signal.Event end}
  local originalEnvironment=workspace:GetAttribute("CourtEnvironment")
  local grade=Lighting:FindFirstChild("ArcadeSunsetGrade")
  local gradeEnabled=grade and grade.Enabled

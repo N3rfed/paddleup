@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- A ground projection, independent of the sun, court lamps, and shadow quality.
 local Shadow={}
 Shadow.__index=Shadow
@@ -29,7 +30,7 @@ function Shadow:update(position,visible)
  if not self.surface.Enabled then return end
  if os.clock()>=self.scanAt then
   self.scanAt=os.clock()+1; table.clear(self.ground)
-  local world=workspace:FindFirstChild("PaddleUp")
+  local world=CourtView.root()
   if world then
    -- Ignore players, the net, and fixtures so the projection stays on the floor.
    for _,p in ipairs(world:GetChildren()) do
@@ -40,8 +41,8 @@ function Shadow:update(position,visible)
   end
   self.params.FilterDescendantsInstances=self.ground
  end
- local hit=workspace:Raycast(Vector3.new(position.X,190,position.Z),Vector3.new(0,-20,0),self.params)
- local floor=hit and hit.Position.Y or 181.28
+ local hit=workspace:Raycast(Vector3.new(position.X,190+CourtView.height(),position.Z),Vector3.new(0,-20,0),self.params)
+ local floor=hit and hit.Position.Y or (181.28+CourtView.height())
  local height=math.max(0,position.Y-floor)
  local size=1.45+math.min(height,25)*0.025
  self.anchor.Size=Vector3.new(size,0.02,size)

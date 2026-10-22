@@ -140,6 +140,7 @@ function PowerupDraft.start(player,network)
   if UIS.GamepadEnabled then GuiService.SelectedObject=buttons[1] end
  end
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   if active and data.practice and data.practice.draftRemaining then
    active.endsAt=workspace:GetServerTimeNow()+data.practice.draftRemaining
   end

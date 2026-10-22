@@ -1,3 +1,4 @@
+local CourtView=require(script:WaitForChild("CourtView"))
 local PowerupVisuals=require(script:WaitForChild("PowerupVisuals"))
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
@@ -278,6 +279,7 @@ devToggle.Activated:Connect(function() setDeveloperMode(not developerMode) end)
 setDeveloperMode(false)
 require(script:WaitForChild("FigmaHUD")).start(player,network,scorePanel,staminaPanel)
 local snapshot,receivedAt=nil,0
+player:GetAttributeChangedSignal("MatchSessionId"):Connect(function() snapshot=nil end)
 local localHitReadyAt=0
 local function hitInputReady()
  if not playing() then return false end
@@ -455,6 +457,7 @@ local landingGui=Instance.new("BillboardGui",marker); landingGui.Size=UDim2.from
 local countdown=text(landingGui,"",Vector2.zero,Vector2.new(140,48),16,mint); countdown.TextXAlignment=Enum.TextXAlignment.Center; countdown.Font=Enum.Font.GothamBold; countdown.TextStrokeTransparency=0.4
 local aim=Instance.new("Part",workspace); aim.Name="Facing aim"; aim.CanTouch=false; aim.Size=Vector3.new(0.2,0.06,3); aim.Anchored=true; aim.CanCollide=false; aim.CanQuery=false; aim.Material=Enum.Material.Neon; aim.Color=mint; aim.Transparency=1
 state.OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
  if not snapshot or snapshot.shotId~=data.shotId or snapshot.heavy~=data.heavy or not data.live then trail:Clear() end
  if not data.live then PowerupVisuals.clear() end
  if data.practicePaused then cancelCharge()
@@ -465,7 +468,7 @@ state.OnClientEvent:Connect(function(data)
   local params=RaycastParams.new(); params.FilterType=Enum.RaycastFilterType.Exclude
   params.FilterDescendantsInstances={player.Character,outMarker}; params.RespectCanCollide=true
   local hit=workspace:Raycast(data.outLanding+Vector3.new(0,1,0),Vector3.new(0,-10,0),params)
-  local groundY=hit and hit.Position.Y or 181.3
+  local groundY=hit and hit.Position.Y or (181.3+CourtView.height())
   outMarker.Position=Vector3.new(data.outLanding.X,groundY+0.015,data.outLanding.Z)
  end
  lastOutLanding=data.outLanding
@@ -484,6 +487,7 @@ state.OnClientEvent:Connect(function(data)
  slowButton.Text=data.slow>0 and string.format("E   SLOW OPPONENT  %.1fs",data.slow) or "E   SLOW OPPONENT   READY"
 end)
 feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
+ if matchSessionId~=nil and matchSessionId~=player:GetAttribute("MatchSessionId") then return end
  if kind=="rallyResult" or kind=="point" then
   if not inMatch() or (matchSessionId~=nil and matchSessionId~=player:GetAttribute("MatchSessionId")) then return end
  end
@@ -496,7 +500,7 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
  end
  if kind=="playerText" then
   local actor=message.userId~=0 and Players:GetPlayerByUserId(message.userId)
-  local world=workspace:FindFirstChild("PaddleUp")
+  local world=CourtView.root()
   local character=actor and actor.Character or (message.userId==0 and world and world:FindFirstChild("Practice Partner"))
   FloatingText.show(character,message.text,message.tone)
   return
@@ -563,7 +567,7 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
   TweenService:Create(visual,TweenInfo.new(0.25),{Size=Vector3.new(0.85,0.85,0.85)}):Play()
  end
 end)
-local flyPosition=Vector3.new(40,210,65)
+local flyPosition=Vector3.new(40,210+CourtView.height(),65)
 local wasSpectating=false
 local cameraRoot,cameraSide,trackedCamera
 local yaw,pitch=0,math.rad(-18)
@@ -643,10 +647,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  if snapshot then
   if Rules then predicted=Rules.advanceFlight(snapshot.p,snapshot.v,(snapshot.flightGravity or 45)*(snapshot.visualRate or 1)^2,age,snapshot.lob,(snapshot.bounces or 0)>0,snapshot.offensive,snapshot.last)
   else predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0) end
-  predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
+  predicted=Vector3.new(predicted.X,math.max(181.7+CourtView.height(),predicted.Y),predicted.Z)
   if snapshot.serveReady and not snapshot.practicePaused and Rules then
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
-   local world=workspace:FindFirstChild("PaddleUp")
+   local world=CourtView.root()
    local holder=server and server.Character or (snapshot.bot and world and world:FindFirstChild("Practice Partner"))
    predicted=Rules.heldBallPosition(holder) or predicted
   end
@@ -661,7 +665,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local enteredSpectate=spectating and not wasSpectating
  wasSpectating=spectating
  if spectating then
-  if enteredSpectate then flyPosition=Vector3.new(40,210,65); yaw=math.rad(30); pitch=math.rad(-20) end
+  if enteredSpectate then flyPosition=Vector3.new(40,210+CourtView.height(),65); yaw=math.rad(30); pitch=math.rad(-20) end
   local available=windowFocused and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   local looking=available and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
   UIS.MouseBehavior=looking and Enum.MouseBehavior.LockCurrentPosition or Enum.MouseBehavior.Default
@@ -703,8 +707,8 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   if h then h.AutoRotate=not locked end
   local desired,focus
   if courtSide==0 then
-   focus=Vector3.new(r.Position.X*0.2,181,side*9)
-   desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225,side*79),focus)
+   focus=Vector3.new(r.Position.X*0.2,181+CourtView.height(),side*9)
+   desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225+CourtView.height(),side*79),focus)
   else
    local heading=CFrame.Angles(0,yaw,0)
    if locked then r.CFrame=CFrame.new(r.Position)*heading end
@@ -713,10 +717,10 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    -- Shorten the orbit when looking up so the camera stays above the roof.
    local distance=16
    if orbit.LookVector.Y>0 then
-    distance=math.min(distance,math.max(0,(focus.Y-183)/orbit.LookVector.Y))
+    distance=math.min(distance,math.max(0,(focus.Y-(183+CourtView.height()))/orbit.LookVector.Y))
    end
    local position=focus-orbit.LookVector*distance+orbit.RightVector*2
-   position=Vector3.new(position.X,math.max(183,position.Y),position.Z)
+   position=Vector3.new(position.X,math.max(183+CourtView.height(),position.Y),position.Z)
    desired=CFrame.lookAt(position,position+orbit.LookVector)
   end
   camera.CFrame=desired
@@ -744,7 +748,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    if Rules then direction=Rules.shotAim(r.CFrame,r.AssemblyLinearVelocity,predicted) end
    crosshair.Position=UDim2.fromScale(0.5,0.5)
    if direction.Magnitude>0 then
-    local at=Vector3.new(r.Position.X,181.42,r.Position.Z)
+    local at=Vector3.new(r.Position.X,181.42+CourtView.height(),r.Position.Z)
     aim.CFrame=CFrame.lookAt(at+direction.Unit*3,at+direction.Unit*6)
    end
   end
@@ -768,7 +772,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local radius=1.6+math.sin(now*9)*0.2+math.min(eta,1.5)*0.6
  for i,p in ipairs(ring) do
   local angle=i*math.pi*2/#ring
-  local pos=Vector3.new(snapshot.landing.X+math.cos(angle)*radius,181.37,snapshot.landing.Z+math.sin(angle)*radius)
+  local pos=Vector3.new(snapshot.landing.X+math.cos(angle)*radius,181.37+CourtView.height(),snapshot.landing.Z+math.sin(angle)*radius)
   p.CFrame=CFrame.new(pos)*CFrame.Angles(0,-angle,0)
   p.Color=color; p.Transparency=visible and 0.1 or 1
  end
@@ -776,11 +780,11 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   local target=snapshot.decoyLanding
   if target and visible then
    local angle=i*math.pi*2/#decoyRing
-   part.CFrame=CFrame.new(target.X+math.cos(angle)*radius,181.37,target.Z+math.sin(angle)*radius)*CFrame.Angles(0,-angle,0)
+   part.CFrame=CFrame.new(target.X+math.cos(angle)*radius,181.37+CourtView.height(),target.Z+math.sin(angle)*radius)*CFrame.Angles(0,-angle,0)
    part.Color=color; part.Transparency=0.1+0.2*(0.5+0.5*math.sin(now*40))
   else part.Transparency=1 end
  end
- marker.Position=Vector3.new(snapshot.landing.X,181.5,snapshot.landing.Z)
+ marker.Position=Vector3.new(snapshot.landing.X,181.5+CourtView.height(),snapshot.landing.Z)
  landingGui.Enabled=visible
  countdown.Text=snapshot.green and "PERFECT" or string.format("%.1fs",eta)
  countdown.TextColor3=color

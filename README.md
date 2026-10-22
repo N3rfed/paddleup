@@ -28,14 +28,16 @@ Visual Studio Code
 12. In a different command prompt window, type the command `codex` in the repository destination
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
+See [server scaling and live verification](SERVER_SCALING.md) for place settings, lifecycle behavior, and the multi-client test checklist.
+
 ## Modes and queue flow
-Choose **Classic**, **Arcade**, or **Chaos**, then Practice, 1V1 (2 players), 1V2 (3 players), or 2V2 (4 players). This joins a queue for that mode and format. Complete groups wait for the shared court to empty. Every player gets a map vote; leaving setup returns the remaining players to the queue until a replacement joins. Spectate skips the queue.
+Choose **Classic**, **Arcade**, or **Chaos**, then Practice, 1V1 (2 players), 1V2 (3 players), or 2V2 (4 players). This joins a queue for that mode and format. Complete groups enter an independent court session; other matches and solo practice sessions can continue at the same time. Every player gets a map vote; leaving setup returns the remaining players to the queue until a replacement joins. Spectate skips the queue.
 
 - **Classic:** queue -> map selection -> game.
 - **Arcade:** queue -> map selection and optional Low Gravity on the same screen -> game. Arcade gameplay features will be added later; it currently uses standard rules.
 - **Chaos:** queue -> map selection and exactly one required environmental modifier (Low Gravity) on the same screen -> game, with powerup drafts.
 
-Each player picks Rooftop or Moon during a shared 15-second countdown. All players see the live vote counts and each other's picks, and can change their selection until voting closes. The map with the most votes wins; tied maps enter a short roulette reveal with a server-selected random winner. If everyone abstains, both maps enter the draw. The group enters the match automatically after the reveal. Arcade players also vote on Low Gravity; it needs a majority and stays off on a tie. Chaos always requires Low Gravity. Low Gravity halves ball and player gravity on the court. Lobby players and spectators retain normal gravity. Standard gravity returns when the court empties. Classic has no pickups, Power Shot, Slow, or drafts; Arcade's abilities and test pickups remain disabled pending its later implementation.
+Each player picks Rooftop or Moon during a shared 15-second countdown. All players see the live vote counts and each other's picks, and can change their selection until voting closes. The map with the most votes wins; tied maps enter a short roulette reveal with a server-selected random winner. If everyone abstains, both maps enter the draw. The group enters the match automatically after the reveal. Arcade players also vote on Low Gravity; it needs a majority and stays off on a tie. Chaos always requires Low Gravity. Low Gravity halves ball and player gravity on the court. Lobby players and spectators retain normal gravity. Gravity settings belong to each court. Classic has no pickups, Power Shot, Slow, or drafts; Arcade's abilities and test pickups remain disabled pending its later implementation.
 
 `src/server/MatchQueue.luau` owns queue membership, voting deadlines, and random tie resolution; `MatchSetup.luau` validates shared mode/map/modifier rules. `tests/MatchQueue.spec.luau` covers queue isolation, capacity, live picks, voting deadlines, departures, majority results, randomized ties, admission, and modifier constraints.
 

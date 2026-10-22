@@ -1,5 +1,5 @@
 -- Execute the real launch/scoring functions in an isolated server fixture.
--- Pass init.server.Source, Powerups, MatchRules, and Comeback from Studio's command bar.
+-- Pass CourtSession.Source, Powerups, MatchRules, and Comeback from Studio's command bar.
 -- Vector3 components use float precision; trajectory tolerances stay below 0.0001 studs.
 return function(source,A,Rules,Comeback)
  local first=assert(source:find("local function launch(",1,true))
@@ -13,7 +13,7 @@ return function(source,A,Rules,Comeback)
  local awards,events=0,{}
  local ball={live=false,p=Vector3.new(0,184,40),v=Vector3.zero,speed=1,last=1,shots=0}
  local rotation={award=function() awards+=1; return "point" end}
- local environment=setmetatable({
+ local environment=setmetatable({HEIGHT=0,
   Comeback=Comeback,comeback=Comeback.new(),Powerups=A,Rules=Rules,Vector3=Vector3,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,
   ball=ball,users=users,serverId=42,servingSide=1,score={0,0},rotation=rotation,
   courtVariant="Chaos",rallies=0,lastHitter={},
