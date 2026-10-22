@@ -4,11 +4,12 @@ local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local RunService=game:GetService("RunService")
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 local courtRoot=require(script:WaitForChild("World")).build()
-local CourtEnvironments=require(script:WaitForChild("CourtEnvironments"))
-local environments=CourtEnvironments.new(courtRoot)
 local Spectator=require(script:WaitForChild("Spectator"))
 local Lobby=require(script:WaitForChild("Lobby"))
+-- Lobby construction samples the original city parts before environments regroup them.
 Lobby.build()
+local CourtEnvironments=require(script:WaitForChild("CourtEnvironments"))
+local environments=CourtEnvironments.new(courtRoot)
 require(script:WaitForChild("DayNightCycle")).start()
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
@@ -459,6 +460,13 @@ end
 local function point(winner,reason)
  if practicePaused() then return end
  if not ball.live then return end
+ -- A return is only missed once the incoming ball double-bounces.
+ -- Swing attempts can still be followed by a successful return or dive.
+ if reason=="Double bounce" then
+  for player,data in pairs(users) do
+   if data.side==-winner then tell(player,"Miss!","miss") end
+  end
+ end
  local server=serverId and Players:GetPlayerByUserId(serverId)
  local serverData=server and users[server]
  if ball.shots==0 and winner==-servingSide and serverData
@@ -914,7 +922,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
   if not valid then
    feedback:FireAllClients({userId=p.UserId,backhand=backhand,soft=softRequested and Rules.softShot(r.Position,d.side) or nil},"swing")
-   if not automatic then tell(p,"Miss!","miss") end
+   -- An out-of-range swing does not end the return opportunity; report faults only when the rally resolves.
    return
   end
   if ball.shots==0 and receiverId and p.UserId~=receiverId then

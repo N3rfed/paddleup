@@ -89,7 +89,7 @@ function Flow.start(player,network,panel,status)
    buttons.LowGravity.Active=stage=="Setup" and mode=="Arcade"; buttons.LowGravity.Selectable=buttons.LowGravity.Active
   end
   status.Text=mode=="Arcade" and "Low Gravity uses a majority vote; ties stay off. Arcade features arrive later."
-   or "Change your map pick until time runs out. Tied maps enter a random draw."
+   or "Starts when everyone picks a map. Tied maps enter a random draw."
   timer()
  end
  render=function()

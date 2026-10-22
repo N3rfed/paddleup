@@ -71,7 +71,11 @@ function Queue:update(available)
   end
   return
  end
- if group.stage=="Setup" and now>=group.endsAt then
+ local allSelected=true
+ for _,player in ipairs(group.players) do
+  if not group.votes[player] then allSelected=false; break end
+ end
+ if group.stage=="Setup" and (allSelected or now>=group.endsAt) then
   local counts={Rooftop=0,Moon=0}
   local lowGravity=0
   for _,player in ipairs(group.players) do
@@ -86,9 +90,10 @@ function Queue:update(available)
   group.map=group.candidates[self.random:NextInteger(1,#group.candidates)]
   group.modifier=(group.mode=="Chaos" or (group.mode=="Arcade" and lowGravity>#group.players/2)) and "LowGravity" or "None"
   group.stage="Reveal"; group.revealAt=now
-  group.revealEndsAt=now+(#group.candidates>1 and Queue.REVEAL_SECONDS or 2)
+  group.revealEndsAt=now+(#group.candidates>1 and Queue.REVEAL_SECONDS or (allSelected and now<group.endsAt and 0 or 2))
   self:publish(group)
- elseif group.stage=="Reveal" and now>=group.revealEndsAt then
+ end
+ if group.stage=="Reveal" and now>=group.revealEndsAt then
   self.active=nil; table.remove(self.groups,table.find(self.groups,group))
   for _,player in ipairs(group.players) do self.members[player]=nil end
   return group
