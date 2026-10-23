@@ -320,4 +320,14 @@ function Rules.returnSpeed(speed,clean,slam,charged)
  return speed*(slam and 1.10 or 1.05)
 end
 
+-- Court coordinates differ only in height; each runtime gets its own wrapper table.
+function Rules.withHeight(height)
+ local scoped=table.clone(Rules)
+ for _,name in ipairs({"serveTarget","timedServeTarget","startPosition"}) do
+  scoped[name]=function(...)
+   return Rules[name](...)+Vector3.new(0,height,0)
+  end
+ end
+ return scoped
+end
 return Rules

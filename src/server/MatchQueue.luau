@@ -99,4 +99,9 @@ function Queue:update(available)
   return group
  end
 end
+function Queue:destroy()
+ local players={}; for player in pairs(self.members) do table.insert(players,player) end
+ for _,player in ipairs(players) do self:remove(player) end
+ table.clear(self.groups); table.clear(self.members); self.active=nil
+end
 return Queue

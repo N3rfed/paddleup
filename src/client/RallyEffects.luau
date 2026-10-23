@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- Cosmetic only: driven by authoritative contacts and replicated charge poses.
 local Players=game:GetService("Players")
 local Lighting=game:GetService("Lighting")
@@ -78,7 +79,7 @@ end
 
 function Effects:ripple(position,color,size)
  local p=part("Bounce ripple",self.folder)
- p.Size=Vector3.new(0.8,0.02,0.8); p.Position=Vector3.new(position.X,181.36,position.Z)
+ p.Size=Vector3.new(0.8,0.02,0.8); p.Position=Vector3.new(position.X,181.36+CourtView.height(),position.Z)
  local surface=Instance.new("SurfaceGui")
  surface.Face=Enum.NormalId.Top; surface.CanvasSize=Vector2.new(128,128); surface.LightInfluence=0; surface.Parent=p
  local circle=Instance.new("Frame")
@@ -136,7 +137,7 @@ function Effects:hitActor(userId)
   local player=Players:GetPlayerByUserId(userId)
   return self:actor(player and player.Character)
  end
- local world=workspace:FindFirstChild("PaddleUp")
+ local world=CourtView.root()
  return self:actor(world and world:FindFirstChild("Practice Partner"))
 end
 
@@ -180,7 +181,7 @@ function Effects:reset()
 end
 
 function Effects:scan()
- local world=workspace:FindFirstChild("PaddleUp")
+ local world=CourtView.root()
  local rig=world and world:FindFirstChild("RallyLights")
  if rig~=self.rig then
   self.rig=rig; table.clear(self.lamps); table.clear(self.strips)
