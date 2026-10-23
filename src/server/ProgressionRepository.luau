@@ -12,6 +12,9 @@ function Repository.errorInfo(err)
  if message:find("StudioAccessToApisNotAllowed",1,true) or message:find("API access is not enabled",1,true) then
   return {code="StudioAPI",retryable=false,message="Studio API access is disabled. Enable Studio Access to API Services in a published test experience, then Retry."}
  end
+ if message:find("Time-zone",1,true) then
+  return {code="TimeZoneData",retryable=false,message="Time-zone data needs an update. No progress was changed. Please contact the game team."}
+ end
  if message:find("Unsupported progression data",1,true) or message:find("Invalid ",1,true) then
   return {code="InvalidData",retryable=false,message="Your saved progression could not be validated. No progress was changed. Retry or contact the game team."}
  end

@@ -71,7 +71,7 @@ function UI.start(player,network)
  local claim=button(daily,"CHECK IN & ACTIVATE",468,45,218,46,cyan,13); claim.Name="ClaimReward"
  local active=text(daily,"",468,99,218,28,11,green,13); active.TextXAlignment=Enum.TextXAlignment.Center
  local streak=text(panel,"",28,316,470,24,14,gold,12); streak.Name="WeeklyStreak"
- local calendarHeading=text(panel,"MON - SUN / UTC",548,316,184,24,11,muted,12); calendarHeading.TextXAlignment=Enum.TextXAlignment.Right
+ local calendarHeading=text(panel,"MON - SUN / UTC",548,316,184,24,11,muted,12); calendarHeading.Name="UTCToday"; calendarHeading.TextXAlignment=Enum.TextXAlignment.Right
  local progress=frame(panel,"StreakProgress",28,346,704,5,dark,12)
  local segments={}
  for index=1,7 do
@@ -96,6 +96,19 @@ function UI.start(player,network)
  local weekly=text(weeklyBox,"Check in for 7 consecutive days to earn bonus XP worth 20% of the XP required for your next level.",16,27,672,32,12,muted,13)
  local message=text(panel,"",28,555,704,18,11,muted,12)
  local reset=text(panel,"",28,576,704,18,11,muted,12)
+ local zoneButton=button(panel,"TIME ZONE",28,139,704,15,dark,12); zoneButton.Name="TimeZoneSetting"
+ zoneButton.TextColor3=cyan; zoneButton.TextSize=10; zoneButton.TextXAlignment=Enum.TextXAlignment.Left; zoneButton.BackgroundTransparency=1
+ local zonePanel=frame(panel,"TimeZonePicker",28,156,704,380,dark,16); round(zonePanel,14); stroke(zonePanel,cyan); zonePanel.Visible=false
+ local zoneTitle=text(zonePanel,"CHOOSE YOUR TIME ZONE",18,12,500,24,13,cyan,17)
+ local zoneDone=button(zonePanel,"DONE",610,12,76,28,cyan,17)
+ local search=Instance.new("TextBox"); search.Name="SearchZones"; search.Position=UDim2.fromOffset(18,52); search.Size=UDim2.fromOffset(668,32)
+ search.PlaceholderText="Search city or region"; search.Text=""; search.ClearTextOnFocus=false
+ search.Font=Enum.Font.GothamBold; search.TextSize=13; search.TextColor3=white; search.BackgroundColor3=Color3.fromRGB(43,45,82)
+ search.BorderSizePixel=0; search.ZIndex=17; search.Parent=zonePanel; round(search,8)
+ local zoneHelp=text(zonePanel,"",18,92,668,66,11,muted,17)
+ local zoneList=Instance.new("ScrollingFrame"); zoneList.Name="ZoneChoices"; zoneList.Position=UDim2.fromOffset(18,166); zoneList.Size=UDim2.fromOffset(668,196)
+ zoneList.BackgroundTransparency=1; zoneList.BorderSizePixel=0; zoneList.ScrollBarThickness=4; zoneList.ZIndex=17; zoneList.Parent=zonePanel
+ local zoneRows={}
  local loading=frame(panel,"DataStatus",28,156,704,390,dark,14)
  local statusLabel=text(loading,"Loading check-in data...",22,94,660,90,15,muted,15); statusLabel.Name="StatusMessage"; statusLabel.TextXAlignment=Enum.TextXAlignment.Center
  local retry=button(loading,"RETRY",267,204,170,44,cyan,15); retry.Name="RetryLoad"; retry.Visible=false
@@ -107,9 +120,9 @@ function UI.start(player,network)
  local state,receivedAt,lastRefresh=nil,os.clock(),0
  local revision,requestId,pendingId,lastOpenId,closedOpenId=0,0,0,0,0
  local contentWidth=704
- local function send(action)
+ local function send(action,value)
   requestId+=1
-  remote:FireServer(action,requestId,lastOpenId)
+  remote:FireServer(action,requestId,lastOpenId,value)
   return requestId
  end
  local pending=false
@@ -138,6 +151,12 @@ function UI.start(player,network)
   close.Position=UDim2.fromOffset(width-106,22); close.Size=UDim2.fromOffset(78,30)
   summary.Size=UDim2.fromOffset(contentWidth,24); summary.TextSize=compact and 11 or 14
   bar.Size=UDim2.fromOffset(contentWidth,6)
+  zoneButton.Size=UDim2.fromOffset(contentWidth,15)
+  zonePanel.Size=UDim2.fromOffset(contentWidth,380); zoneTitle.Size=UDim2.fromOffset(contentWidth-110,30)
+  zoneDone.Position=UDim2.fromOffset(contentWidth-94,12)
+  search.Size=UDim2.fromOffset(contentWidth-36,32); zoneHelp.Size=UDim2.fromOffset(contentWidth-36,66)
+  zoneList.Size=UDim2.fromOffset(contentWidth-36,196)
+  for _,row in pairs(zoneRows) do row.Size=UDim2.new(1,-8,0,30) end
   daily.Size=UDim2.fromOffset(contentWidth,compact and 212 or 144)
   bonus.Size=UDim2.fromOffset(contentWidth-(compact and 36 or 270),36); bonus.TextSize=compact and 24 or 28
   explanation.Size=UDim2.fromOffset(contentWidth-(compact and 36 or 270),compact and 47 or 36)
@@ -148,7 +167,10 @@ function UI.start(player,network)
   active.Size=UDim2.fromOffset(compact and contentWidth-36 or 218,compact and 14 or 28)
   local streakY=compact and 383 or 316
   streak.Position=UDim2.fromOffset(28,streakY); streak.Size=UDim2.fromOffset(contentWidth,24); streak.TextSize=compact and 13 or 14
-  calendarHeading.Visible=not compact
+  calendarHeading.Visible=true
+  calendarHeading.Position=UDim2.fromOffset(compact and 28 or 548,compact and streakY+36 or streakY)
+  calendarHeading.Size=UDim2.fromOffset(compact and contentWidth or 184,compact and 12 or 24)
+  calendarHeading.TextSize=compact and 9 or 11
   progress.Position=UDim2.fromOffset(28,streakY+30); progress.Size=UDim2.fromOffset(contentWidth,5)
   local segmentWidth=(contentWidth-48)/7
   for index,segment in ipairs(segments) do
@@ -166,6 +188,7 @@ function UI.start(player,network)
  end
  local function setOpen(value)
   if overlay.Visible==value then return end
+  if not value then zonePanel.Visible=false end
   overlay.Visible=value; profile.Visible=not value; player:SetAttribute("CheckInOpen",value)
   if value then
    resize(); panel.Position=UDim2.new(0.5,0,0.5,18)
@@ -179,15 +202,29 @@ function UI.start(player,network)
    CAS:UnbindAction("CheckInControls"); send("Close")
   end
  end
+ local function filterZones()
+  local query=search.Text:lower()
+  local count=0
+  for _,id in ipairs(state and state.timeZones or {}) do
+   local row=zoneRows[id]
+   if row then
+    row.Visible=id:lower():find(query,1,true)~=nil
+    if row.Visible then row.Position=UDim2.fromOffset(0,count*34); count+=1 end
+   end
+  end
+  zoneList.CanvasSize=UDim2.fromOffset(0,count*34)
+ end
  local function render()
   local estimatedNow=(state and state.serverNow or 0)+(os.clock()-receivedAt)
   local timedOut=state and state.pendingSince and estimatedNow-state.pendingSince>15
    or (not state or state.status=="Loading") and os.clock()-receivedAt>15
    or pending and os.clock()-requestSentAt>15
   local ready=state~=nil and state.ready==true and not timedOut
+  zoneButton.Visible=ready
+  if not ready then zonePanel.Visible=false end
   loading.Visible=not ready
   daily.Visible=ready; streak.Visible=ready; progress.Visible=ready; calendar.Visible=ready; weeklyBox.Visible=ready; bar.Visible=ready
-  summary.Text=""; message.Text=""; reset.Text=""
+  summary.Text=""; message.Text=""; reset.Text=""; calendarHeading.Text=""
   if not ready then
    levelLabel.Text="CLUB PROFILE"; xpLabel.Text="Progress unavailable"
    local failed=timedOut or state and state.status=="Error" or false
@@ -202,6 +239,22 @@ function UI.start(player,network)
    for _,card in ipairs(cards) do card.label.Text=""; card.date.Text=""; card.mark.Text=""; card.status.Text="" end
    return
   end
+  zoneButton.Text="TIME ZONE: "..state.timeZone..(state.pendingTimeZone and " -> "..state.pendingTimeZone.." (next reset)" or " / CHANGE")
+  for _,id in ipairs(state.timeZones) do
+   if not zoneRows[id] then
+    local row=button(zoneList,id,0,0,668,30,Color3.fromRGB(43,45,82),18); row.Name=id; row.TextColor3=white; row.TextSize=12
+    row.Size=UDim2.new(1,-8,0,30); zoneRows[id]=row
+    connect(row.Activated,function()
+     if not state or not state.ready or state.pending or pending or (state.zoneChangeAvailableAt or 0)>state.serverNow then return end
+     pending=true; requestSentAt=os.clock(); pendingId=send("SetTimeZone",id); zonePanel.Visible=false
+    end)
+   end
+   zoneRows[id].BackgroundColor3=(state.pendingTimeZone or state.timeZone)==id and Color3.fromRGB(40,65,93) or Color3.fromRGB(43,45,82)
+  end
+  zoneHelp.Text=state.pendingTimeZone and "Saved: "..state.pendingTimeZone..". It starts at the current zone's next reset. Existing rewards and bonus expiry stay unchanged."
+   or (state.zoneChangeAvailableAt or 0)>state.serverNow and "Your time zone is saved. Changes are limited to once every "..state.zoneChangeDays.." days to prevent extra daily rewards."
+   or "Pick your local IANA time zone. Changes after a check-in start at the next reset; they cannot unlock an extra claim. Changes are limited to once every "..state.zoneChangeDays.." days."
+  filterZones()
   local ratio=math.clamp(state.xp/state.required,0,1)
   local percent=state.dailyBonusPercent
   levelLabel.Text="LEVEL "..state.level..(state.multiplier>1 and " / +"..percent.."% XP" or "")
@@ -212,7 +265,8 @@ function UI.start(player,network)
   bonus.Text="+"..percent.."% BONUS XP"
   explanation.Text="Earn "..percent.."% extra XP from eligible games played after checking in today."
   flatReward.Text="Check-in XP: +"..state.dailyXP.." (separate reward)"
-  active.Text=state.checkedIn and "DAILY BONUS ACTIVE / UNTIL MIDNIGHT UTC" or "EXPIRES AT MIDNIGHT UTC"
+  active.Text=state.multiplier>1 and "DAILY BONUS ACTIVE / UNTIL YOUR RESET" or "RESETS AT LOCAL MIDNIGHT"
+  calendarHeading.Text="TODAY: "..state.todayLabel:upper()
   streak.Text=string.format("WEEKLY STREAK: %d/7 DAYS",state.cycle)
   for index,segment in ipairs(segments) do segment.BackgroundColor3=index<=state.cycle and gold or Color3.fromRGB(60,61,96) end
   local names={Done="COMPLETED",TodayDone="TODAY / DONE",Available="TODAY",Missed="MISSED",Upcoming="UPCOMING"}
@@ -230,17 +284,20 @@ function UI.start(player,network)
   weeklyTitle.Text=state.weeklyCompletedToday and "WEEKLY REWARD CONFIRMED "..checkmark or "WEEKLY REWARD / +"..state.weeklyPreview.." XP PREVIEW"
   weeklyTitle.TextColor3=state.weeklyCompletedToday and green or gold
   local busy=pending or state.pending
-  local available=not state.checkedIn and not busy
-  claim.Text=state.checkedIn and "CHECKED IN "..checkmark or busy and "ACTIVATING..." or "CHECK IN & ACTIVATE"
+  local available=state.canCheckIn and not busy
+  claim.Text=state.checkedIn and "CHECKED IN "..checkmark or busy and "SAVING..." or not state.canCheckIn and "AVAILABLE AFTER RESET" or "CHECK IN & ACTIVATE"
   claim.Active=available; claim.AutoButtonColor=available
   claim.BackgroundColor3=available and cyan or Color3.fromRGB(60,61,96)
   claim.TextColor3=available and dark or state.checkedIn and green or muted
   message.Text=noticeText or (state.checkedIn and "Today's bonus is active. Your weekly streak has been updated." or "Check in today to activate your gameplay bonus.")
-  reset.Text="NEXT RESET / "..state.resetLabel
+  reset.Text="NEXT LOCAL RESET / "..state.resetLabel
  end
+ connect(zoneButton.Activated,function() if state and state.ready then zonePanel.Visible=not zonePanel.Visible end end)
+ connect(zoneDone.Activated,function() zonePanel.Visible=false end)
+ connect(search:GetPropertyChangedSignal("Text"),filterZones)
  connect(close.Activated,function() setOpen(false) end)
  connect(claim.Activated,function()
-  if not state or not state.ready or state.checkedIn or state.pending or pending then return end
+  if not state or not state.ready or not state.canCheckIn or state.pending or pending then return end
   pending=true; noticeText=nil; requestSentAt=os.clock(); pendingId=send("Claim"); render()
  end)
  connect(retry.Activated,function()

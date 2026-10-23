@@ -23,7 +23,7 @@ return function(source,Rules)
  function player:GetAttribute(key) return attributes[key] end
  function player:GetAttributeChangedSignal(key) changed[key]=changed[key] or signal(); return changed[key] end
  local requests={}
- local remote={OnClientEvent=signal(),FireServer=function(_,action,id,openId) table.insert(requests,{action=action,id=id,openId=openId}) end}
+ local remote={OnClientEvent=signal(),FireServer=function(_,action,id,openId,value) table.insert(requests,{action=action,id=id,openId=openId,value=value}) end}
  local input={InputBegan=signal()}
  local render=signal()
  local actions={BindActionAtPriority=function() end,UnbindAction=function() end}
@@ -35,10 +35,17 @@ return function(source,Rules)
  instrumented,count=instrumented:gsub("connect%(retry.Activated,",
   "connect({Connect=function(_,fn) captures.retry=fn; return retry.Activated:Connect(fn) end},")
  assert(count==1)
+ instrumented,count=instrumented:gsub("connect%(zoneButton.Activated,",
+  "connect({Connect=function(_,fn) captures.zoneButton=fn; return zoneButton.Activated:Connect(fn) end},")
+ assert(count==1)
+ captures.zones={}
+ instrumented,count=instrumented:gsub("connect%(row.Activated,",
+  "connect({Connect=function(_,fn) captures.zones[id]=fn; return row.Activated:Connect(fn) end},")
+ assert(count==1)
  local clock=100
  local viewport={ViewportSize=Vector2.new(1280,800)}
  local chunk=assert(loadstring(instrumented))
- setfenv(chunk,setmetatable({captures=captures,os={clock=function() return clock end},game={GetService=function(_,name) return assert(services[name],name) end},
+ setfenv(chunk,setmetatable({captures=captures,os={clock=function() return clock end,date=function() error("Client local dates must not be used") end},game={GetService=function(_,name) return assert(services[name],name) end},
   workspace={CurrentCamera=viewport}},{__index=getfenv()}))
  local UI=chunk()
  local ok,err=pcall(function()
@@ -73,7 +80,7 @@ return function(source,Rules)
   local state=Rules.snapshot(Rules.new(),today)
   publish(state)
   assert(not panel.DataStatus.Visible and panel.Calendar.Visible and claim.Active)
-  assert(panel.TodayReward.DailyBonus.Text=="+10% BONUS XP" and claim.Text=="CHECK IN & ACTIVATE")
+  assert(panel.TodayReward.DailyBonus.Text=="+5% BONUS XP" and claim.Text=="CHECK IN & ACTIVATE")
   for index,day in ipairs(state.days) do
    assert(panel.Calendar["Day"..index].Date.Text==day.shortDate and panel.Calendar["Day"..index].Weekday.Text==day.label:upper(),"Calendar dates come only from the server")
   end
@@ -99,6 +106,12 @@ return function(source,Rules)
   assert(gui.DailyCheckInOverlay.Visible,"A new confirmed desk interaction can open again")
   viewport.ViewportSize=Vector2.new(390,844); render:Fire()
   assert(panel.Size.X.Offset==366 and panel.Calendar.Size.X.Offset<panel.Calendar.CanvasSize.X.Offset,"Phone layout preserves readable calendar cards with horizontal scrolling")
+  local midnight=DateTime.fromUniversalTime(2026,10,23,0,0,0).UnixTimestamp
+  publish(Rules.snapshot(Rules.new(),midnight-1))
+  assert(panel.UTCToday.Visible and panel.UTCToday.Text=="TODAY: THU, OCT 22","Phone layout explicitly labels the server's UTC date")
+  assert(panel.Calendar.Day4.Status.Text=="TODAY" and panel.Calendar.Day5.Status.Text=="UPCOMING")
+  publish(Rules.snapshot(Rules.new(),midnight))
+  assert(panel.UTCToday.Text=="TODAY: FRI, OCT 23" and panel.Calendar.Day4.Status.Text=="MISSED" and panel.Calendar.Day5.Status.Text=="TODAY","Calendar switches only on the server's UTC snapshot")
   local week=Rules.new()
   for day=20000-6,20000 do week=Rules.apply(week,{kind="CheckIn",id="week-"..day,at=day*86400+3600},day*86400+3600) end
   publish(Rules.snapshot(week,today),{notice={amount=200,weekly=50,level=week.level}})
@@ -106,8 +119,18 @@ return function(source,Rules)
   for index=1,7 do assert(panel.StreakProgress["Segment"..index].BackgroundColor3==Color3.fromRGB(255,214,138)) end
   assert(panel.WeeklyReward:GetChildren()[2]~=nil and gui.XPNotification.Visible)
   assert(panel.WeeklyReward:FindFirstChildWhichIsA("TextLabel").Text:find("CONFIRMED",1,true))
+  publish(Rules.snapshot(Rules.new(),midnight))
+  captures.zoneButton()
+  assert(panel.TimeZonePicker.Visible)
+  panel.TimeZonePicker.SearchZones.Text="New_York"; task.wait()
+  assert(panel.TimeZonePicker.ZoneChoices["America/New_York"].Visible and not panel.TimeZonePicker.ZoneChoices["Europe/London"].Visible,"Zone picker searches the server allowlist")
+  captures.zones["America/New_York"]()
+  assert(requests[#requests].action=="SetTimeZone" and requests[#requests].value=="America/New_York" and not panel.TimeZonePicker.Visible)
+  local selected=Rules.apply(nil,{kind="SetTimeZone",id="ui-zone",zone="America/New_York",at=midnight},midnight)
+  publish(Rules.snapshot(selected,midnight))
+  assert(panel.TimeZoneSetting.Text:find("America/New_York",1,true) and panel.UTCToday.Text=="TODAY: THU, OCT 22","Labels use the selected zone rather than the client local clock")
  end)
  folder:Destroy()
  assert(ok,err)
- return "Single loading/error state, Retry, real dates, +10% action, duplicate/stale/closed-response guards, claim confirmation, phone layout, and seven streak segments passed"
+ return "Single loading/error state, Retry, real dates, +5% action, duplicate/stale/closed-response guards, claim confirmation, phone layout, and seven streak segments passed"
 end

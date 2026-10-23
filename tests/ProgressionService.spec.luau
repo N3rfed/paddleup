@@ -118,10 +118,51 @@ return function(source,modules)
   time+=2; remote.OnServerEvent:Fire(player,"Claim",10,api.entries[player].openId); task.wait()
   assert(record.weeklyAwards==1 and record.totalXP==expected.totalXP)
   assert(not api:award(player,"UntrustedReward","fake"))
+  local midnight=DateTime.fromUniversalTime(2026,10,23,0,0,0).UnixTimestamp
+  time=midnight-1
+  captures.prompt(player)
+  local utcOpen=api.entries[player].openId
+  remote.OnServerEvent:Fire(player,"Claim",11,utcOpen,"2026-10-23"); task.wait()
+  assert(record.lastDay==modules.ProgressionRules.day(midnight-1),"A client-supplied future date is ignored; only server Thursday is claimed")
+  time=midnight
+  remote.OnServerEvent:Fire(player,"Sync",12,utcOpen); task.wait()
+  assert(packets[#packets].state.todayDate=="2026-10-23" and not packets[#packets].state.checkedIn and packets[#packets].state.multiplier==1)
+  remote.OnServerEvent:Fire(player,"Claim",13,utcOpen); task.wait()
+  assert(record.lastDay==modules.ProgressionRules.day(midnight) and record.streak==2)
+  for _,packet in ipairs(packets) do
+   if packet.state.ready then
+    assert(packet.state.todayDate==os.date("!%Y-%m-%d",math.floor(packet.state.serverNow)),"Every calendar and published timestamp agree on UTC today")
+   end
+  end
+  -- The real remote accepts only a zone ID; server clocks and atomic storage decide eligibility.
+  time+=2
+  local zoneOpen=api.entries[player].openId
+  local beforeZoneXP=record.totalXP
+  remote.OnServerEvent:Fire(player,"SetTimeZone",14,zoneOpen,"Not/AZone"); task.wait()
+  assert(record.timeZone=="UTC" and not record.pendingTimeZone,"Unknown zones cannot enter saved data")
+  time+=2
+  remote.OnServerEvent:Fire(player,"SetTimeZone",15,zoneOpen-1,"America/New_York"); task.wait()
+  assert(not record.pendingTimeZone,"Stale panel interactions cannot change settings")
+  time+=2; root.Position=Vector3.new(1000,0,0)
+  remote.OnServerEvent:Fire(player,"SetTimeZone",16,zoneOpen,"America/New_York"); task.wait()
+  assert(not record.pendingTimeZone,"Zone selection requires the existing desk interaction and proximity")
+  time+=2; root.Position=Vector3.zero
+  remote.OnServerEvent:Fire(player,"SetTimeZone",17,zoneOpen,"America/New_York"); task.wait()
+  assert(record.timeZone=="UTC" and record.pendingTimeZone=="America/New_York" and record.totalXP==beforeZoneXP)
+  local effective=record.zoneEffectiveAt
+  local expiration=record.multiplierUntil
+  time+=2
+  remote.OnServerEvent:Fire(player,"SetTimeZone",18,zoneOpen,"Asia/Tokyo"); task.wait()
+  assert(record.pendingTimeZone=="America/New_York" and record.multiplierUntil==expiration,"Atomic cooldown preserves the saved change and boost deadline")
+  player.Parent=nil; players.PlayerRemoving:Fire(player); task.wait()
+  time=effective
+  player.Parent=players; players.PlayerAdded:Fire(player); task.wait()
+  assert(record.timeZone=="America/New_York" and not record.pendingTimeZone and record.totalXP==beforeZoneXP,"Rejoin persists and activates the setting without rewards")
+  assert(packets[#packets].state.timeZone=="America/New_York" and packets[#packets].state.todayDate=="2026-10-23")
   player.Parent=nil; players.PlayerRemoving:Fire(player); task.wait()
   assert(api.entries[player]==nil,"Player departure cleans idle profile resources")
  end)
  close(); character:Destroy(); lobby:Destroy()
  assert(ok,err)
- return "Disabled API failure, safe/rate-limited Retry, cached-write recovery, single opening/claim, +10% gameplay, rejoin, seven-day reward, and shutdown passed"
+ return "Disabled API failure, safe/rate-limited Retry, cached-write recovery, single opening/claim, +5% gameplay, rejoin, seven-day reward, and shutdown passed"
 end

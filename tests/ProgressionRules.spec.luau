@@ -22,7 +22,19 @@ return function(Rules,Config)
  local oldRecord=table.clone(checked); oldRecord.history=table.clone(checked.history)
  oldRecord.history[tostring(day)]={at=day*86400+3600,multiplier=2}
  local tuned,tunedReceipt=Rules.apply(oldRecord,{kind="Gameplay",reward="MatchCompleted",id="legacy-boost",at=day*86400+7200},day*86400+7200)
- assert(tunedReceipt.amount==math.floor(Config.Rewards.MatchCompleted*1.10),"Existing claims follow the configured +10% tuning without resetting saved progress")
+ assert(tunedReceipt.amount==math.floor(Config.Rewards.MatchCompleted*Config.DailyMultiplier),"Existing claims follow the configured daily bonus tuning without resetting saved progress")
+ -- Verify the requested 100-XP example through the actual rules without changing production rewards.
+ local originalReward=Config.Rewards.MatchCompleted
+ Config.Rewards.MatchCompleted=100
+ local verified,verificationError=pcall(function()
+  local _,inactive=Rules.apply(fresh,{kind="Gameplay",reward="MatchCompleted",id="hundred-inactive",at=day*86400+100},day*86400+100)
+  local _,active=Rules.apply(checked,{kind="Gameplay",reward="MatchCompleted",id="hundred-active",at=day*86400+7200},day*86400+7200)
+  local _,afterReset=Rules.apply(checked,{kind="Gameplay",reward="MatchCompleted",id="hundred-reset",at=(day+1)*86400},(day+1)*86400)
+  assert(inactive.amount==100 and active.amount==105 and afterReset.amount==100,"100 XP stays 100 when inactive, becomes 105 after check-in, and returns to 100 at UTC reset")
+  assert(Rules.snapshot(checked,day*86400+7200).dailyBonusPercent==5,"UI percentage is derived from the same server configuration")
+ end)
+ Config.Rewards.MatchCompleted=originalReward
+ assert(verified,verificationError)
  local expired,plain=Rules.apply(boosted,{kind="Gameplay",reward="MatchCompleted",id="tomorrow",at=(day+1)*86400+1},(day+1)*86400+1)
  assert(plain.amount==Config.Rewards.MatchCompleted,"Multiplier expires at UTC midnight")
  local midnight=Rules.snapshot(checked,(day+1)*86400)

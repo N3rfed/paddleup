@@ -34,7 +34,12 @@ function Service.start(network,lobby)
  local function publish(entry,notice,open)
   local player=entry.player
   if player.Parent~=Players then return end
-  local snapshot=entry.data and Rules.snapshot(entry.data,now()) or {ready=false}
+  local publishedAt=now()
+  local snapshot={ready=false}
+  if entry.data then
+   local ok,result=pcall(Rules.snapshot,entry.data,publishedAt)
+   if ok then snapshot=result else entry.failed=true; entry.failure=Repository.errorInfo(result) end
+  end
   snapshot.ready=entry.data~=nil and not entry.failed
   snapshot.pending=entry.running==true or not entry.failed and #entry.queue>0
   snapshot.pendingSince=entry.workStartedAt
@@ -42,8 +47,8 @@ function Service.start(network,lobby)
    or entry.failed and "Error" or entry.data and "Ready" or "Loading"
   snapshot.error=snapshot.status=="Error" and entry.failure.message or nil
   snapshot.errorCode=entry.failure and entry.failure.code or nil
-  snapshot.serverNow=now()
-  snapshot.retryAfter=math.max(0,(entry.lastRetry or -math.huge)+Config.ManualRetrySeconds-now())
+  snapshot.serverNow=publishedAt
+  snapshot.retryAfter=math.max(0,(entry.lastRetry or -math.huge)+Config.ManualRetrySeconds-publishedAt)
   snapshot.canRetry=snapshot.status=="Error" and snapshot.retryAfter==0
   entry.revision+=1
   if snapshot.ready then
@@ -85,7 +90,10 @@ function Service.start(network,lobby)
      notice={amount=receipt and receipt.amount or 0,weekly=receipt and receipt.weekly or 0,
       levelUp=receipt and receipt.levelAfter and receipt.levelBefore and receipt.levelAfter>receipt.levelBefore or false,
       level=data.level,
-      message=kind=="Already" and "Already checked in today!" or kind=="Reset" and "A new UTC day started. Please check in again."
+      message=kind=="ZoneCooldown" and "Time-zone changes are limited to once every "..Config.TimeZoneChangeDays.." days."
+       or kind=="ZoneUnchanged" and "That time zone is already selected."
+       or operation.kind=="SetTimeZone" and (data.pendingTimeZone and "Time-zone change saved for your next daily reset." or "Time zone saved.")
+       or kind=="Already" and "Already checked in for this reward day!" or kind=="Reset" and "A new day started in your selected time zone. Please check in again."
        or kind=="Expired" and "This reward request expired." or operation.kind=="CheckIn" and "Checked in! Your daily XP boost is active."
        or receipt and receipt.amount==0 and "Daily gameplay XP limit reached." or nil}
     end
@@ -113,14 +121,16 @@ function Service.start(network,lobby)
   local entry=self.entries[player]
   -- No optimistic rewards or replacement defaults when loading/validation fails.
   if not entry or not entry.data or entry.failed or player.Parent~=Players then return false end
-  local today=Rules.day(now())
+  local earnedAt=now()
+  local zone=Rules.zone(entry.data,earnedAt)
+  local today=Rules.day(earnedAt,zone)
   if (entry.data.budgets[tostring(today)] or 0)>=Config.GameplayDailyCap then
    if entry.capNoticeDay~=today then
-    entry.capNoticeDay=today; publish(entry,{message="Daily gameplay XP limit reached. More XP is available after midnight UTC."})
+    entry.capNoticeDay=today; publish(entry,{message="Daily gameplay XP limit reached. More XP is available after your next daily reset."})
    end
    return false
   end
-  return enqueue(entry,{kind="Gameplay",id=eventId,reward=reward,at=now()})
+  return enqueue(entry,{kind="Gameplay",id=eventId,reward=reward,at=earnedAt,zone=zone})
  end
  connect(Players.PlayerAdded,add)
  connect(Players.PlayerRemoving,function(player)
@@ -139,7 +149,7 @@ function Service.start(network,lobby)
   -- Refresh periodically; repeated prompt interactions cannot consume a write per opening.
   if not entry.lastVerified or now()-entry.lastVerified>=Config.RefreshSeconds then load(entry) end
  end)
- connect(remote.OnServerEvent,function(player,action,requestId,openId)
+ connect(remote.OnServerEvent,function(player,action,requestId,openId,value)
   local entry=api.entries[player]
   if api.closing or not entry or type(action)~="string" then return end
   if requestId~=nil then
@@ -150,7 +160,7 @@ function Service.start(network,lobby)
    if openId==entry.openId then entry.openUntil=nil end
    return
   end
-  if action~="Sync" and action~="Claim" and action~="Retry" then return end
+  if action~="Sync" and action~="Claim" and action~="Retry" and action~="SetTimeZone" then return end
   if now()-(entry.requests[action] or -math.huge)<Config.RemoteCooldown then publish(entry); return end
   entry.requests[action]=now()
   if action=="Sync" then
@@ -163,18 +173,25 @@ function Service.start(network,lobby)
    elseif not entry.data or entry.failed then load(entry)
    end
    publish(entry)
+  elseif action=="SetTimeZone" then
+   if openId~=entry.openId then publish(entry); return end
+   if not entry.data or entry.failed or not entry.openUntil or now()>entry.openUntil or not near(player) then publish(entry); return end
+   if not Rules.validTimeZone(value) then publish(entry,{message="Select a supported time zone."}); return end
+   for _,operation in ipairs(entry.queue) do if operation.kind=="SetTimeZone" then return end end
+   if enqueue(entry,{kind="SetTimeZone",id=guid(),at=now(),zone=value}) then publish(entry) end
   elseif action=="Claim" then
    if openId~=nil and openId~=entry.openId then publish(entry); return end
    if not entry.openUntil or now()>entry.openUntil or not near(player) then
     publish(entry,{message="Return to the check-in desk and press E."}); return
    end
    if not entry.data or entry.failed then publish(entry); return end
-   if entry.data.lastDay>=Rules.day(now()) then
+   local claimAt=now()
+   if not Rules.canClaim(entry.data,claimAt) then
     publish(entry,{message="Already checked in today!"}); return
    end
    -- One queued claim at a time, including failures with an unknown backend outcome.
    for _,operation in ipairs(entry.queue) do if operation.kind=="CheckIn" then return end end
-   if enqueue(entry,{kind="CheckIn",id=guid(),at=now()}) then publish(entry) end
+   if enqueue(entry,{kind="CheckIn",id=guid(),at=claimAt}) then publish(entry) end
   end
  end)
  local maintenance=task.spawn(function()
