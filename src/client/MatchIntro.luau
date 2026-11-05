@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- Roster-driven presentation; the server holds the serve until endsAt.
 local MatchIntro={}
 function MatchIntro.countdown(remaining)
@@ -102,7 +103,7 @@ function MatchIntro.start(player,network)
   courtPan=Instance.new("Frame",gui)
   courtPan.Name="CourtPan"; courtPan.Size=UDim2.fromScale(1,1)
   courtPan.BackgroundTransparency=1; courtPan.Visible=false
-  local court=workspace:FindFirstChild("PaddleUp")
+  local court=CourtView.root()
   local environmentTitle=court and court:GetAttribute("EnvironmentTitle") or "SKYLINE CLUB"
   label(root,environmentTitle.."  /  COURT INTRO",UDim2.fromScale(0.15,0.06),UDim2.fromScale(0.7,0.05),18)
   label(root,tostring(#data.home).." V "..tostring(#data.away),UDim2.fromScale(0.35,0.13),UDim2.fromScale(0.3,0.08),36)
@@ -127,7 +128,7 @@ function MatchIntro.start(player,network)
    viewport.LightDirection=Vector3.new(-1,-1,-1)
    local world=Instance.new("WorldModel",viewport)
    local camera=Instance.new("Camera",viewport); camera.FieldOfView=38; viewport.CurrentCamera=camera
-   MatchIntro.copyCourt(world,workspace:FindFirstChild("PaddleUp"))
+   MatchIntro.copyCourt(world,CourtView.root())
    local shot={viewport=viewport,world=world,camera=camera,team=team,loaded={},height=6,width=#team*4,
     direction=teamIndex==1 and 1 or -1,nextCheck=0}
    table.insert(shots,shot)
@@ -144,7 +145,11 @@ function MatchIntro.start(player,network)
   TweenService:Create(fade,TweenInfo.new(0.25),{BackgroundTransparency=1}):Play()
   game:GetService("Debris"):AddItem(fade,0.3)
  end
+ local sessionConnection=player:GetAttributeChangedSignal("MatchSessionId"):Connect(function()
+  clear(); lastId=nil; pendingId=nil
+ end)
  local stateConnection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
+ if state.matchSessionId~=nil and state.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   local data=state.matchIntro
   if not data then clear(); return end
   if data.loading then
@@ -157,10 +162,10 @@ function MatchIntro.start(player,network)
    text.ZIndex=21
    task.spawn(function()
     -- Request the destination while the opaque transition covers replication.
-    task.spawn(function() pcall(function() player:RequestStreamAroundAsync(Vector3.new(0,185,0),20) end) end)
+    task.spawn(function() pcall(function() player:RequestStreamAroundAsync(Vector3.new(0,185+CourtView.height(),0),20) end) end)
     local moon
     while pendingId==data.id do
-     local court=workspace:FindFirstChild("PaddleUp")
+     local court=CourtView.root()
      moon=court and court:FindFirstChild("MoonEnvironment")
      local expected=moon and moon:GetAttribute("ExpectedDescendants")
      if expected and #moon:GetDescendants()>=expected then break end
@@ -193,14 +198,14 @@ function MatchIntro.start(player,network)
      if not shot.loaded[index] then
       local source
       if member.bot then
-       local court=workspace:FindFirstChild("PaddleUp")
+       local court=CourtView.root()
        source=court and court:FindFirstChild("Practice Partner")
       else
        local memberPlayer=Players:GetPlayerByUserId(member.userId)
        source=memberPlayer and memberPlayer.Character
       end
       local body=source and (source:FindFirstChild("HumanoidRootPart") or source:FindFirstChild("Body"))
-      if body and body.Position.Y>178 and body.Position.Z*shot.direction>0 then
+      if body and body.Position.Y>178+CourtView.height() and body.Position.Z*shot.direction>0 then
        local archivable=source.Archivable
        source.Archivable=true
        local ok,model=pcall(function() return source:Clone() end)
@@ -226,7 +231,7 @@ function MatchIntro.start(player,network)
    local size=shot.viewport.AbsoluteSize
    local aspect=math.max(0.2,size.X/math.max(1,size.Y))
    local distance=math.max(shot.height/2+1,(shot.width/2+2)/(aspect*0.4))/math.tan(math.rad(19))+2
-   local target=shot.low and (shot.low+shot.high)/2 or Vector3.new(0,184,shot.direction*28)
+   local target=shot.low and (shot.low+shot.high)/2 or Vector3.new(0,184+CourtView.height(),shot.direction*28)
    local nearest=shot.low and (shot.direction==1 and shot.low.Z or -shot.high.Z) or 28
    local frame=MatchIntro.panFrame(target,distance,(9.5-remaining)/3.5,shot.direction,nearest)
    local actualDistance=math.max(1,(target-frame.Position).Magnitude)
@@ -254,7 +259,7 @@ function MatchIntro.start(player,network)
    -- A wide sideline sweep keeps both baselines and the net in view.
    local distance=math.max(76,60/aspect)
    local angle=-0.18+progress*0.36
-   local target=Vector3.new(0,183,0)
+   local target=Vector3.new(0,183+CourtView.height(),0)
    camera.CFrame=CFrame.lookAt(target+Vector3.new(math.cos(angle)*distance,38,math.sin(angle)*distance),target)
   end
   if remaining<=0 then clear()
@@ -275,7 +280,7 @@ function MatchIntro.start(player,network)
  local binding="PaddleUpMatchIntro_"..game:GetService("HttpService"):GenerateGUID(false)
  RunService:BindToRenderStep(binding,Enum.RenderPriority.Camera.Value+2,renderIntro)
  gui.Destroying:Connect(function()
-  RunService:UnbindFromRenderStep(binding); stateConnection:Disconnect(); clear()
+  RunService:UnbindFromRenderStep(binding); stateConnection:Disconnect(); sessionConnection:Disconnect(); clear()
  end)
 end
 return MatchIntro

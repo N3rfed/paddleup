@@ -106,6 +106,7 @@ function PracticeUI.start(player,network)
  end
  player:GetAttributeChangedSignal("SessionMode"):Connect(visibility)
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   if player:GetAttribute("SessionMode")~="Practice" or not data.practice then return end
   latest=data.practice
   if pendingRevision and latest.revision~=pendingRevision then

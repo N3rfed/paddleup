@@ -33,7 +33,8 @@ function Spectator.enter(player,character)
  local h=clone:FindFirstChildOfClass("Humanoid")
  if h then h.DisplayDistanceType=Enum.HumanoidDisplayDistanceType.None; h.AutoRotate=false; h.EvaluateStateMachine=false end
  -- Reuse the court's lounge benches; no seat instances or seat welds are created.
- local court=workspace:FindFirstChild("PaddleUp")
+ local id=player:GetAttribute("CourtId") or 0
+ local court=workspace:FindFirstChild(id==0 and "PaddleUp" or "PaddleUpCourt"..id)
  local benches={}
  if court then
   for _,item in ipairs(court:GetDescendants()) do

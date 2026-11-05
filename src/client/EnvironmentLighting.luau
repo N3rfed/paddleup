@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- Moon presentation is local so lobby players retain the city lighting and scenery.
 local EnvironmentLighting={}
 function EnvironmentLighting.start(player)
@@ -56,7 +57,7 @@ function EnvironmentLighting.start(player)
  end
  local function update()
   local mode=player:GetAttribute("SessionMode")
-  local active=mode~=nil and mode~="Lobby" and workspace:GetAttribute("CourtEnvironment")=="Moon"
+  local active=mode~=nil and mode~="Lobby" and player:GetAttribute("CourtEnvironment")=="Moon"
   if active==moon then return end
   moon=active
   if not moon then restore(); return end
@@ -70,7 +71,7 @@ function EnvironmentLighting.start(player)
    elapsed+=dt; pending+=dt
    if pending<0.08 then return end
    pending=0
-   local court=workspace:FindFirstChild("PaddleUp")
+   local court=CourtView.root()
    local environment=court and court:FindFirstChild("MoonEnvironment")
    local sky=environment and environment:FindFirstChild("Lunar sky")
    if sky~=starfield then
@@ -93,7 +94,7 @@ function EnvironmentLighting.start(player)
   end))
  end
  local modeConnection=player:GetAttributeChangedSignal("SessionMode"):Connect(update)
- local environmentConnection=workspace:GetAttributeChangedSignal("CourtEnvironment"):Connect(update)
+ local environmentConnection=player:GetAttributeChangedSignal("CourtEnvironment"):Connect(update)
  update()
  return function()
   modeConnection:Disconnect(); environmentConnection:Disconnect()

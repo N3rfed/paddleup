@@ -135,6 +135,7 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local readyAt=0
  local serveState
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   serveState=data
   local introVisible=data.matchIntro~=nil
   if introducing~=introVisible then introducing=introVisible; visibility() end
