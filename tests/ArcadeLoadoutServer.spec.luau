@@ -2,7 +2,7 @@
 return function(source,Deck)
  local first=assert(source:find("local function updateDraft(now)",1,true))
  local last=assert(source:find("local botSlowUntil",first,true))
- local listenerFirst=assert(source:find("loadoutRemote.OnServerEvent:Connect",1,true))
+ local listenerFirst=assert(source:find("connect(loadoutRemote.OnServerEvent,",1,true))
  local listenerLast=assert(source:find("local function choosePowerup",listenerFirst,true))
  local chunk=assert(loadstring(source:sub(listenerFirst,listenerLast-1)..source:sub(first,last-1).."\nreturn updateDraft"))
  local attributes,events={},{}
@@ -16,7 +16,7 @@ return function(source,Deck)
  local a,b=player("A"),player("B")
  local users={[a]={side=1},[b]={side=-1}}
  local receive,clock
- local env=setmetatable({users=users,ArcadeDeck=Deck,loadoutPending=true,loadoutSerial=7,
+ local env=setmetatable({connect=function(signal,callback) return signal:Connect(callback) end,users=users,ArcadeDeck=Deck,loadoutPending=true,loadoutSerial=7,
   introUntil=10,draftDue=false,courtVariant="Arcade",os={clock=function() return clock or 10 end},
   loadoutRemote={OnServerEvent={Connect=function(_,fn) receive=fn end},FireClient=function(_,p,data) table.insert(events,{player=p,data=data}) end},
  },{__index=getfenv()})

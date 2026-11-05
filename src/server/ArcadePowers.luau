@@ -2,8 +2,8 @@
 local Deck=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ArcadeDeck"))
 local Arcade={}
 Arcade.__index=Arcade
-function Arcade.new(random)
- return setmetatable({random=random or Random.new(),players={},hazards={},zeroUntil=0,glowUntil=0},Arcade)
+function Arcade.new(random,height)
+ return setmetatable({height=height or 0,random=random or Random.new(),players={},hazards={},zeroUntil=0,glowUntil=0},Arcade)
 end
 function Arcade:reset()
  for _,hazard in ipairs(self.hazards) do if hazard.part then hazard.part:Destroy() end end
@@ -155,7 +155,7 @@ function Arcade:activate(player,index,now,side,opponents,root,world,chaos)
  elseif card.id=="glowBall" then self.glowUntil=math.max(self.glowUntil,slot.activeUntil)
  elseif card.id=="dropPickles" or card.id=="slipStream" then
   for i=1,(card.id=="dropPickles" and 3 or 1) do
-   local position=Vector3.new(math.clamp(root.Position.X+(i-2)*6,-16,16),181.4,-side*self.random:NextNumber(12,32))
+   local position=Vector3.new(math.clamp(root.Position.X+(i-2)*6,-16,16),181.4+self.height,-side*self.random:NextNumber(12,32))
    local part=Instance.new("Part"); part.Name=card.name; part.Anchored=true; part.CanCollide=false; part.CanTouch=false
    part.Material=Enum.Material.Neon; part.Color=card.id=="dropPickles" and Color3.fromRGB(149,255,63) or Color3.fromRGB(255,221,60)
    part.Size=card.id=="dropPickles" and Vector3.new(1.5,0.5,3) or Vector3.new(10,0.12,12)
@@ -178,7 +178,7 @@ function Arcade:heatTarget(player,now,opponentPositions,side)
  end
  local best,bestDistance
  for _,x in ipairs({-17,17}) do
-  local target=Vector3.new(x,181.7,-side*35); local nearest=math.huge
+  local target=Vector3.new(x,181.7+self.height,-side*35); local nearest=math.huge
   for _,position in ipairs(opponentPositions) do nearest=math.min(nearest,(target-position).Magnitude) end
   if not best or nearest>bestDistance then best=target; bestDistance=nearest end
  end
@@ -231,7 +231,7 @@ function Arcade:chaosUpdate(dt,now,participants,world,live)
    data.chaosTimers[id]=0
    local count=id=="dropPickles" and values.pickleCount or 1
    for _=1,count do
-    local position=Vector3.new(self.random:NextNumber(-14,14),181.4,-entry.side*self.random:NextNumber(16,34))
+    local position=Vector3.new(self.random:NextNumber(-14,14),181.4+self.height,-entry.side*self.random:NextNumber(16,34))
     local part=Instance.new("Part"); part.Name="Chaos "..Deck.find(id).name
     part.Anchored=true; part.CanCollide=false; part.CanTouch=false; part.Material=Enum.Material.Neon
     part.Color=id=="dropPickles" and Color3.fromRGB(149,255,63) or Color3.fromRGB(255,221,60)
@@ -268,7 +268,7 @@ function Arcade:chaosStep(dt,now,participants,world)
  elseif event.id=="pickles" then
   for _,side in ipairs({-1,1}) do
    for i=1,3 do
-    local position=Vector3.new(self.random:NextNumber(-16,16),181.4,side*self.random:NextNumber(16,36))
+    local position=Vector3.new(self.random:NextNumber(-16,16),181.4+self.height,side*self.random:NextNumber(16,36))
     local part=Instance.new("Part"); part.Name="ChaosPickle"; part.Anchored=true; part.CanCollide=false; part.CanTouch=false
     part.Material=Enum.Material.Neon; part.Color=Color3.fromRGB(149,255,63)
     part.Size=Vector3.new(1.5,0.5,3); part.Position=position; part.Rotation=Vector3.new(0,self.random:NextNumber(-90,90),0); part.Parent=world

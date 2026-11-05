@@ -18,7 +18,7 @@ return function(Arcade,source)
  local chunk=assert(loadstring(source:sub(first,last-1).."\nreturn launch"))
  local ball={live=false,speed=1}
  local activations=0
- local env=setmetatable({ball=ball,GRAVITY=45,FLOOR=181.7,BASE_SPEED=56,arcade=engine,Rules={},
+ local env=setmetatable({HEIGHT=0,ball=ball,GRAVITY=45,FLOOR=181.7,BASE_SPEED=56,arcade=engine,Rules={},
   os={clock=function() return 20 end},feedback={FireAllClients=function() end},
   activateArmedPowers=function(now)
    activations+=1

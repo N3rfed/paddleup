@@ -1,7 +1,7 @@
 -- Exercise the actual server draft and selection functions with isolated players.
 return function(source,Arcade,Powerups)
  local chooseFirst=assert(source:find("local function choosePowerup(",1,true))
- local chooseLast=assert(source:find("powerupRemote.OnServerEvent:Connect",chooseFirst,true))
+ local chooseLast=assert(source:find("connect(powerupRemote.OnServerEvent,",chooseFirst,true))
  local updateFirst=assert(source:find("local function updateDraft(now)",1,true))
  local updateLast=assert(source:find("local botSlowUntil",updateFirst,true))
  local chunk=assert(loadstring(source:sub(chooseFirst,chooseLast-1)..source:sub(updateFirst,updateLast-1).."\nreturn choosePowerup,updateDraft"))

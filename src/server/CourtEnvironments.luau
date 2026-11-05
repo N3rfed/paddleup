@@ -7,8 +7,10 @@ local shared={
  ["Net collision"]=true,["Net white tape"]=true,["Net cord"]=true,RallyLights=true,
 }
 function Environments.valid(name) return name=="Rooftop" or name=="Moon" end
-function Environments.new(root)
- local self=setmetatable({root=root,active="Rooftop",colors={}},Environments)
+function Environments.new(root,height,preview)
+ height=height or 0
+ root:SetAttribute("CourtHeight",height)
+ local self=setmetatable({root=root,active="Rooftop",colors={},height=height,destroyed=false},Environments)
  local cache=Instance.new("Folder"); cache.Name="CourtEnvironmentCache"; cache.Parent=game:GetService("ServerStorage")
  self.cache=cache
  local rooftop=Instance.new("Model"); rooftop.Name="RooftopEnvironment"
@@ -17,31 +19,41 @@ function Environments.new(root)
   elseif item:IsA("BasePart") then self.colors[item]={color=item.Color,material=item.Material} end
  end
  rooftop.Parent=root; self.rooftop=rooftop
- -- This adjacent rooftop building lives outside the main court model.
- self.rooftopHall=workspace:FindFirstChild("SkylineLobby")
  root:SetAttribute("Environment","Rooftop"); root:SetAttribute("EnvironmentTitle","SKYLINE CLUB")
- workspace:SetAttribute("CourtEnvironment","Rooftop")
+
  -- Build once while players browse the lobby, before the first moon admission.
- task.defer(function()
-  if not self.moon then
-   self.moon=require(script.Parent:WaitForChild("MoonEnvironment")).build()
-   self.moon.Parent=self.cache
+ self.previewTask=task.defer(function()
+  if self.destroyed then return end
+  if preview then
+   self:moonModel()
+   require(script.Parent:WaitForChild("MapPreviews")).publish(self.root,self.rooftop,self.moon)
   end
-  require(script.Parent:WaitForChild("MapPreviews")).publish(self.root,self.rooftop,self.moon)
  end)
  return self
+end
+function Environments:moonModel()
+ if self.moon then return self.moon end
+ self.moon=require(script.Parent:WaitForChild("MoonEnvironment")).build()
+ for _,part in ipairs(self.moon:GetDescendants()) do
+  if part:IsA("BasePart") then part.CFrame=CFrame.new(0,self.height,0)*part.CFrame end
+ end
+ self.moon.Parent=self.cache
+ return self.moon
+end
+function Environments:destroy()
+ self.destroyed=true
+ if self.previewTask and coroutine.status(self.previewTask)~="dead" then pcall(task.cancel,self.previewTask) end
+ self.cache:Destroy()
 end
 function Environments:set(name)
  assert(Environments.valid(name),"Unknown court environment")
  if name==self.active then return end
  if name=="Moon" then
-  self.moon=self.moon or require(script.Parent:WaitForChild("MoonEnvironment")).build()
+  self:moonModel()
   self.rooftop.Parent=self.cache; self.moon.Parent=self.root
-  if self.rooftopHall then self.rooftopHall.Parent=self.cache end
  else
   if self.moon then self.moon.Parent=self.cache end
   self.rooftop.Parent=self.root
-  if self.rooftopHall then self.rooftopHall.Parent=workspace end
  end
  for part,original in pairs(self.colors) do
   if name=="Rooftop" then part.Color=original.color; part.Material=original.material
@@ -53,6 +65,6 @@ function Environments:set(name)
  self.active=name
  self.root:SetAttribute("Environment",name)
  self.root:SetAttribute("EnvironmentTitle",name=="Moon" and "SELENE LUNAR OUTPOST" or "SKYLINE CLUB")
- workspace:SetAttribute("CourtEnvironment",name)
+
 end
 return Environments

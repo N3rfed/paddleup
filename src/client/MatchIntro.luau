@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- Server-timed VS slate using the uploaded assets/figma/vs_screen artwork.
 local MatchIntro={}
 local Assets=require(script.Parent:WaitForChild("FigmaAssets"))
@@ -149,7 +150,7 @@ end
 function MatchIntro.updateScenes(scene)
  if not scene or not scene.root.Parent or os.clock()<scene.nextCheck then return end
  scene.nextCheck=os.clock()+0.1
- local court=workspace:FindFirstChild("PaddleUp")
+ local court=CourtView.root()
  local floor=court and court:FindFirstChild("Playing surface")
  for _,shot in ipairs(scene.portraits) do
   if floor and not shot.sceneryStarted then
@@ -278,7 +279,7 @@ function MatchIntro.createScreen(parent,data,userId)
  local scale=Instance.new("UIScale",canvas)
  image(canvas,"vsSplit",750,15,381,1075).Name="DiagonalSplit"
  image(canvas,"vsClub",655,35,610,205)
- local court=workspace:FindFirstChild("PaddleUp")
+ local court=CourtView.root()
  local title=data.environmentTitle or (court and court:GetAttribute("EnvironmentTitle")) or "SKYLINE CLUB"
  if title~="SKYLINE CLUB" then
   canvas.Figma_vsClub.Visible=false
@@ -350,7 +351,9 @@ function MatchIntro.start(player,network)
   clear(); lastId=data.id; endsAt=data.endsAt
   current,countdown,scale,scene=MatchIntro.createScreen(gui,data,player.UserId)
  end
+ local sessionConnection=player:GetAttributeChangedSignal("MatchSessionId"):Connect(function() clear(); lastId=nil end)
  local connection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
+  if state.matchSessionId~=nil and state.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   local data=state.matchIntro
   if not data then clear(); return end
   if data.loading then
@@ -363,11 +366,11 @@ function MatchIntro.start(player,network)
    local text=label(loading,"LoadingText","PREPARING LUNAR COURT",0,0,800,80,28)
    text.AnchorPoint=Vector2.new(0.5,0.5); text.Position=UDim2.fromScale(0.5,0.5)
    task.spawn(function()
-    task.spawn(function() pcall(function() player:RequestStreamAroundAsync(Vector3.new(0,185,0),20) end) end)
+    task.spawn(function() pcall(function() player:RequestStreamAroundAsync(Vector3.new(0,185+CourtView.height(),0),20) end) end)
     local deadline=os.clock()+30
     local moon
     while token==requestToken and os.clock()<deadline do
-     local court=workspace:FindFirstChild("PaddleUp")
+     local court=CourtView.root()
      moon=court and court:FindFirstChild("MoonEnvironment")
      local expected=moon and moon:GetAttribute("ExpectedDescendants")
      if expected and #moon:GetDescendants()>=expected then break end
@@ -394,6 +397,6 @@ function MatchIntro.start(player,network)
   local count=MatchIntro.countdown(remaining)
   countdown.Text=count and "STARTING IN "..count or "GET READY"
  end)
- gui.Destroying:Connect(function() connection:Disconnect(); frames:Disconnect(); clear() end)
+ gui.Destroying:Connect(function() connection:Disconnect(); sessionConnection:Disconnect(); frames:Disconnect(); clear() end)
 end
 return MatchIntro

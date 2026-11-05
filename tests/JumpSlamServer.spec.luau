@@ -3,7 +3,7 @@ return function(source,Rules,Powerups,Comeback)
  local launchFirst=assert(source:find("local function launch(",1,true))
  local launchLast=assert(source:find("local function point(",launchFirst,true))
  local returnFirst=assert(source:find("local function overheadStatus(",1,true))
- local returnLast=assert(source:find("arcadeRemote.OnServerEvent:Connect",returnFirst,true))
+ local returnLast=assert(source:find("connect(arcadeRemote.OnServerEvent,",returnFirst,true))
  local ball={}
  local faults,events={},{}
  local character={Humanoid={FloorMaterial=Enum.Material.Air,Health=100}}
@@ -13,7 +13,7 @@ return function(source,Rules,Powerups,Comeback)
  local player={UserId=42,Character=character}
  local root={Position=Vector3.new(0,188,16),AssemblyLinearVelocity=Vector3.zero}
  local data={}
- local env=setmetatable({
+ local env=setmetatable({HEIGHT=0,
   Rules=Rules,Powerups=Powerups,Comeback=Comeback,comeback=Comeback.new(),
   arcade={effect=function() return false end,reach=function() return 1 end,swingScale=function() return 1 end,gravity=function() return 1 end,heatTarget=function() return nil end},
   ball=ball,GRAVITY=45,FLOOR=181.7,BASE_SPEED=56,servingSide=1,lastHitter={},users={},
