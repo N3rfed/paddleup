@@ -1,5 +1,5 @@
 local Flow={}
-local Assets=require(script.Parent:WaitForChild("FigmaAssets"))
+local Art=require(script.Parent:WaitForChild("MenuArt"))
 local Thumbnail=require(script.Parent:WaitForChild("MapThumbnail"))
 function Flow.start(player,network,panel,status)
  local TweenService=game:GetService("TweenService")
@@ -71,17 +71,9 @@ function Flow.start(player,network,panel,status)
   local label=Instance.new("TextLabel",parent); label.Name=name
   label.Position=UDim2.fromOffset(16,y); label.Size=UDim2.new(1,-32,0,height)
   label.BackgroundTransparency=1; label.Text=value; label.TextColor3=color or white
-  label.TextXAlignment=Enum.TextXAlignment.Left; label.TextSize=size; label.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Bold)
+  label.TextXAlignment=Enum.TextXAlignment.Left; label.TextSize=size; label.Font=Enum.Font.GothamBold
   label.TextTruncate=Enum.TextTruncate.AtEnd
   return label
- end
- local function neon(parent,accent)
-  local key=accent==pink and "panelPink" or accent==Color3.fromRGB(169,151,255) and "panelPurple" or "panelCyan"
-  local skin=Assets.image(parent,key,-10,-10,1,1)
-  skin.Name="NeonFrame"; skin.Size=UDim2.new(1,20,1,20)
-  skin.ScaleType=Enum.ScaleType.Slice; skin.SliceCenter=Rect.new(48,48,208,208); skin.SliceScale=0.5
-  skin.ImageTransparency=0.12; skin.ZIndex=1
-  return skin
  end
  local function button(name,title,description,y,action,enabled,accent,height)
   local b=Instance.new("TextButton",panel); table.insert(controls,b); buttons[name]=b
@@ -90,17 +82,15 @@ function Flow.start(player,network,panel,status)
   b.AutoButtonColor=false; b.Active=enabled~=false
   local corner=Instance.new("UICorner",b); corner.CornerRadius=UDim.new(0,12)
   local stroke=Instance.new("UIStroke",b); stroke.Name="Accent"; stroke.Color=accent or cyan; stroke.Transparency=0.65; stroke.Thickness=1.5
-  b.BackgroundColor3=navy; b.BackgroundTransparency=0
-  stroke.Enabled=true; neon(b,accent or cyan).Visible=false
+  b.BackgroundColor3=Color3.fromRGB(36,36,77)
   local primary=text(b,"Title",title,9,22,17,white)
-  primary.Position=UDim2.fromOffset(58,9); primary.Size=UDim2.new(1,-96,0,22); primary.ZIndex=3
-  primary.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Heavy)
+  primary.Position=UDim2.fromOffset(72,9); primary.Size=UDim2.new(1,-108,0,22)
   local detail=text(b,"Detail",description,34,24,13,muted); detail.Font=Enum.Font.GothamBold
-  detail.Position=UDim2.fromOffset(58,33); detail.Size=UDim2.new(1,-76,0,18); detail.ZIndex=3
+  detail.Position=UDim2.fromOffset(72,33); detail.Size=UDim2.new(1,-88,0,18)
   detail.TextWrapped=true; detail.TextTruncate=Enum.TextTruncate.None
   local badge=Instance.new("Frame",b); badge.Name="ModeIcon"
   badge.Position=UDim2.fromOffset(14,13); badge.Size=UDim2.fromOffset(44,36)
-  badge.BackgroundColor3=accent or cyan; badge.BackgroundTransparency=1; badge.BorderSizePixel=0; badge.ZIndex=2
+  badge.BackgroundColor3=accent or cyan; badge.BackgroundTransparency=0.9; badge.BorderSizePixel=0
   local badgeCorner=Instance.new("UICorner",badge); badgeCorner.CornerRadius=UDim.new(0,8)
   local icons={Classic="",Arcade="",Chaos="",Practice="",["1V1"]="1v1",["1V2"]="1v2",["2V2"]="2v2",Spectate="",Back="<",CancelQueue="<",LowGravity="",Rooftop="",Moon=""}
   local icon=text(badge,"Symbol",icons[name] or "+",0,36,14,accent or cyan)
@@ -119,26 +109,16 @@ function Flow.start(player,network,panel,status)
    ball.BackgroundColor3=white; ball.BorderSizePixel=0
    local round=Instance.new("UICorner",ball); round.CornerRadius=UDim.new(1,0)
   end
-  local arrow=text(b,"Arrow",utf8.char(8250),9,24,24,accent or cyan)
-  arrow.ZIndex=3
+  local arrow=text(b,"Arrow",">",9,24,18,accent or cyan)
   arrow.Position=UDim2.new(1,-30,0,9); arrow.Size=UDim2.fromOffset(18,24)
   local pop=Instance.new("UIScale",b); pop.Name="HoverScale"
   b.Activated:Connect(function() if b.Active then action() end end)
   local function hover(on)
    local active=on and b.Active
-   TweenService:Create(pop,TweenInfo.new(0.16,Enum.EasingStyle.Quad),{Scale=active and not b:GetAttribute("MatchChoice") and 1.012 or 1}):Play()
-   TweenService:Create(b.NeonFrame,TweenInfo.new(0.16),{ImageTransparency=active and 0 or 0.12}):Play()
-   if b:GetAttribute("VoteCard") then
-    if not b.Active then return end
-    local selected=b:GetAttribute("Selected")
-    TweenService:Create(b,TweenInfo.new(0.16),{BackgroundColor3=selected and Color3.fromRGB(27,48,60) or active and Color3.fromRGB(38,48,69) or Color3.fromRGB(24,31,48)}):Play()
-    TweenService:Create(stroke,TweenInfo.new(0.16),{Transparency=selected and 0.1 or active and 0.35 or 0.85}):Play()
-    return
-   end
+   TweenService:Create(pop,TweenInfo.new(0.16,Enum.EasingStyle.Quad),{Scale=active and 1.012 or 1}):Play()
    if b:GetAttribute("GameTile") then
-    TweenService:Create(b,TweenInfo.new(0.16),{BackgroundColor3=active and Color3.fromRGB(38,48,69) or Color3.fromRGB(24,31,48)}):Play()
-    TweenService:Create(b.Accent,TweenInfo.new(0.16),{Transparency=active and 0.05 or (b:GetAttribute("MatchChoice") and 0.85 or 0.6)}):Play()
-    TweenService:Create(arrow,TweenInfo.new(0.16),{TextColor3=active and white or (accent or cyan)}):Play()
+    TweenService:Create(b,TweenInfo.new(0.16),{BackgroundColor3=active and Color3.fromRGB(45,45,88) or Color3.fromRGB(36,36,77)}):Play()
+    TweenService:Create(b.Accent,TweenInfo.new(0.16),{Transparency=active and 0.05 or 0.6}):Play()
     return
    end
    TweenService:Create(b,TweenInfo.new(0.14),{BackgroundColor3=active and Color3.fromRGB(65,66,111)
@@ -149,33 +129,17 @@ function Flow.start(player,network,panel,status)
   b.SelectionGained:Connect(function() hover(true) end); b.SelectionLost:Connect(function() hover(false) end)
   return b
  end
- local function textAction(name,title,y,action)
-  local b=Instance.new("TextButton",panel); b.Name=name
-  b.Position=UDim2.fromOffset(24,y); b.Size=UDim2.fromOffset(180,44)
-  b.BackgroundTransparency=1; b.BorderSizePixel=0; b.AutoButtonColor=false
-  b.Text=utf8.char(8592).."  "..title; b.TextColor3=muted
-  b.Font=Enum.Font.GothamMedium; b.TextSize=15; b.TextXAlignment=Enum.TextXAlignment.Left
-  table.insert(controls,b); buttons[name]=b
-  local function highlight(active)
-   TweenService:Create(b,TweenInfo.new(0.15),{TextColor3=active and white or muted}):Play()
-  end
-  b.MouseEnter:Connect(function() highlight(true) end); b.MouseLeave:Connect(function() highlight(false) end)
-  b.SelectionGained:Connect(function() highlight(true) end); b.SelectionLost:Connect(function() highlight(false) end)
-  b.Activated:Connect(action)
-  return b
- end
- local function modeCard(card,accent)
+ local function gameTile(card,kind,accent)
   card:SetAttribute("GameTile",true)
-  card.ModeIcon.Visible=false; card.Arrow.Visible=true
-  card.BackgroundColor3=Color3.fromRGB(24,31,48)
-  local rail=Instance.new("Frame",card); rail.Name="ColorRail"
-  rail.Position=UDim2.fromOffset(0,14); rail.Size=UDim2.new(0,3,1,-28)
-  rail.BackgroundColor3=accent; rail.BorderSizePixel=0; rail.ZIndex=2
-  local railCorner=Instance.new("UICorner",rail); railCorner.CornerRadius=UDim.new(1,0)
+  card.ModeIcon.Visible=false; card.Arrow.Visible=false
+  card.BackgroundColor3=Color3.fromRGB(36,36,77)
   card.Accent.Color=accent; card.Accent.Thickness=1.5; card.Accent.Transparency=0.6
-  card.Title.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Heavy); card.Title.TextColor3=white
+  card.Title.Font=Enum.Font.GothamBold; card.Title.TextColor3=white
   card.Title.Rotation=0; card.Title.ZIndex=3
-  card.Detail.TextColor3=muted; card.Detail.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Bold); card.Detail.ZIndex=3
+  card.Detail.TextColor3=muted; card.Detail.Font=Enum.Font.GothamBold; card.Detail.ZIndex=3
+  local art=Art.mount(card,kind,accent)
+  art.ZIndex=2
+  return art
  end
  local function ownVote()
   for _,entry in ipairs(group and group.roster or {}) do if entry.player==player then return entry end end
@@ -196,11 +160,9 @@ function Flow.start(player,network,panel,status)
    for _,map in ipairs({"Rooftop","Moon"}) do
     local card=buttons[map]
     if card then
-     card.Accent.Color=map==highlighted and cyan or Color3.fromRGB(113,146,171)
-     card.Accent.Thickness=map==highlighted and 2 or 1
-     card.Accent.Transparency=map==highlighted and 0.1 or 0.85
-     card.NeonFrame.ImageTransparency=map==highlighted and 0 or 0.45
-     card.BackgroundColor3=map==highlighted and Color3.fromRGB(27,48,60) or Color3.fromRGB(24,31,48)
+     card.Accent.Thickness=map==highlighted and 3 or 1
+     card.Accent.Transparency=map==highlighted and 0 or 0.7
+     card.BackgroundColor3=map==highlighted and Color3.fromRGB(48,48,99) or navy
     end
    end
    local title=progress>=1 and string.upper(group.map).." SELECTED" or (#candidates>1 and "TIE / RANDOM DRAW" or "MAP SELECTED")
@@ -218,12 +180,10 @@ function Flow.start(player,network,panel,status)
    if card:FindFirstChild("Selection") then card.Selection.Visible=own~=nil and own.map==map end
    updateHeads(card,map)
    card.Active=stage=="Setup"; card.Selectable=card.Active
-   card.Accent.Color=own and own.map==map and cyan or Color3.fromRGB(113,146,171)
-   card.Accent.Thickness=own and own.map==map and 2 or 1
-   card.Accent.Transparency=own and own.map==map and 0.1 or 0.85
+   card.Accent.Thickness=own and own.map==map and 3 or 1.5
+   card.Accent.Transparency=own and own.map==map and 0 or 0.65
    card:SetAttribute("Selected",own~=nil and own.map==map)
-   card.NeonFrame.ImageTransparency=own and own.map==map and 0 or 0.25
-   card.BackgroundColor3=own and own.map==map and Color3.fromRGB(27,48,60) or Color3.fromRGB(24,31,48)
+   card.BackgroundColor3=own and own.map==map and Color3.fromRGB(53,55,101) or navy
    card.Arrow.Text=own and own.map==map and utf8.char(10003) or ">"
   end
   for index,label in ipairs(rows) do
@@ -233,17 +193,12 @@ function Flow.start(player,network,panel,status)
   end
   if buttons.LowGravity then
    local modifier=stage=="Reveal" and group.modifier or (own and own.modifier or group.modifier)
-   buttons.LowGravity.Title.Text="Low gravity"
-   local setting=buttons.LowGravity:FindFirstChild("Setting")
-   if setting then
-    setting.Text=mode=="Chaos" and "ALWAYS ON" or modifier=="LowGravity" and "ON" or "OFF"
-    setting.TextColor3=modifier=="LowGravity" and cyan or muted
-   end
+   buttons.LowGravity.Title.Text="LOW GRAVITY  /  "..(modifier=="LowGravity" and "ON" or "OFF")
    buttons.LowGravity.Detail.Text=stage=="Reveal" and "Match setting" or (mode=="Chaos" and "Always on in Chaos" or "Toggle before choosing a map")
    buttons.LowGravity.Active=stage=="Setup" and mode=="Arcade"; buttons.LowGravity.Selectable=buttons.LowGravity.Active
   end
-  status.Text=mode=="Arcade" and "Gravity is decided by majority vote."
-   or "Starts when everyone votes. Ties are random."
+  status.Text=mode=="Arcade" and "Choose Low Gravity before picking your map."
+   or "Starts when everyone picks a map. Tied maps enter a random draw."
   timer()
  end
  render=function()
@@ -256,102 +211,63 @@ function Flow.start(player,network,panel,status)
    local marker=panel:FindFirstChild("Progress"..index)
    if marker then marker.BackgroundColor3=index<=current and cyan or Color3.fromRGB(60,61,96) end
   end
-  if heading then heading.Text=stage=="Modes" and "SELECT MODE" or stage=="Players" and "SELECT MATCH" or nextView=="Vote" and "SELECT COURT" or "FINDING PLAYERS" end
-  if step then step.Text=stage=="Players" and (string.upper(mode).."  /  Choose a format") or mode and (string.upper(mode)..(format and " / "..format or "")) or "Choose how you want to play." end
+  if heading then heading.Text=stage=="Modes" and "LET'S PLAY!" or stage=="Players" and "PICK YOUR MATCH!" or nextView=="Vote" and "PICK A COURT!" or "FINDING PLAYERS" end
+  if step then step.Text=mode and (string.upper(mode)..(format and " / "..format or "")) or "CHOOSE A MODE" end
   if stage=="Modes" then
    status.Text=""
-   for index,item in ipairs({{"Classic","Standard pickleball rules",cyan},{"Arcade","Choose 3 powerups",Color3.fromRGB(186,167,255)},{"Chaos","Stack upgrades for the whole match",Color3.fromRGB(255,134,109)}}) do
-    local card=button(item[1],string.upper(item[1]),item[2],132+(index-1)*100,function() mode=item[1]; stage="Players"; render() end,true,item[3],88)
-    modeCard(card,item[3])
-    card.Title.TextSize=25; card.Title.Position=UDim2.fromOffset(22,15); card.Title.Size=UDim2.new(1,-64,0,30)
-    card.Detail.Position=UDim2.fromOffset(22,51); card.Detail.Size=UDim2.new(1,-64,0,20); card.Detail.TextSize=13
-    card.Arrow.Position=UDim2.new(1,-30,0,31)
+   for index,item in ipairs({{"Classic","Standard rules",cyan},{"Arcade","Low Gravity option",Color3.fromRGB(169,151,255)},{"Chaos","Powerups on!",pink}}) do
+    local card=button(item[1],string.upper(item[1]),item[2],120+(index-1)*100,function() mode=item[1]; stage="Players"; render() end,true,item[3],88)
+    local art=gameTile(card,item[1],item[3])
+    art.Position=UDim2.fromOffset(214,0); art.Size=UDim2.fromOffset(150,88)
+    card.Title.TextSize=26; card.Title.Position=UDim2.fromOffset(18,13); card.Title.Size=UDim2.fromOffset(190,34)
+    card.Detail.Position=UDim2.fromOffset(18,50); card.Detail.Size=UDim2.fromOffset(190,24); card.Detail.TextSize=13
    end
-   local watch=button("Spectate","WATCH","Spectate a match",436,function() network.Session:FireServer("Spectate") end,true,cyan,58)
-   watch.BackgroundTransparency=1; watch.Accent.Transparency=0.85
+   button("Spectate","WATCH","Spectate a match",420,function() network.Session:FireServer("Spectate") end,true,cyan,58)
   elseif stage=="Players" then
    status.Text=""
-   local section=text(panel,"MatchSection","MULTIPLAYER",128,16,10,muted)
-   section.Position=UDim2.fromOffset(24,128); section.Font=Enum.Font.GothamMedium
-   table.insert(controls,section)
-   for index,item in ipairs({{"1V1","Singles","One player on each side","1 v 1"},{"1V2","One against two","Take on a team of two","1 v 2"},{"2V2","Doubles","Two players on each side","2 v 2"},{"Practice","Practice","Warm up against the practice partner","SOLO"}}) do
-    local solo=item[1]=="Practice"
-    local y=solo and 420 or 156+(index-1)*80
-    local card=button(item[1],item[2],item[3],y,function()
-     format=item[1]
-     stage="Joining"; render(); queue:FireServer("Join",mode,format)
-    end,true,cyan,solo and 64 or 68)
-    card:SetAttribute("GameTile",true); card:SetAttribute("MatchChoice",true)
-    card.ModeIcon.Visible=false; card.Arrow.Visible=true
-    card.BackgroundColor3=Color3.fromRGB(24,31,48)
-    card.Accent.Color=Color3.fromRGB(113,146,171); card.Accent.Thickness=1; card.Accent.Transparency=0.85
-    card:FindFirstChildOfClass("UICorner").CornerRadius=UDim.new(0,8)
-    card.Title.Position=UDim2.fromOffset(18,11); card.Title.Size=UDim2.fromOffset(218,25); card.Title.TextSize=20
-    card.Title.Font=Enum.Font.GothamBold
-    card.Detail.Position=UDim2.fromOffset(18,38); card.Detail.Size=UDim2.fromOffset(228,18); card.Detail.TextSize=12
-    card.Detail.Font=Enum.Font.GothamMedium; card.Detail.TextColor3=Color3.fromRGB(163,178,196)
-    card.Detail.TextWrapped=false; card.Detail.TextTruncate=Enum.TextTruncate.AtEnd
-    card.Arrow.Position=UDim2.new(1,-28,0,22); card.Arrow.TextColor3=Color3.fromRGB(163,178,196)
-    local mark=text(card,"MatchFormat",item[4],0,28,solo and 10 or 17,white)
-    mark.Position=UDim2.new(1,-114,0,20); mark.Size=UDim2.fromOffset(72,28)
-    mark.TextXAlignment=Enum.TextXAlignment.Center; mark.Font=Enum.Font.GothamMedium; mark.ZIndex=3
-    mark.BackgroundTransparency=0; mark.BackgroundColor3=Color3.fromRGB(33,44,61)
-    Instance.new("UICorner",mark).CornerRadius=UDim.new(0,5)
+   for index,item in ipairs({{"Practice","Warm up your shots"},{"1V1","Singles"},{"1V2","One against two"},{"2V2","Doubles"}}) do
+    local card=button(item[1],string.upper(item[1]),item[2],146+math.floor((index-1)/2)*164,function()
+     format=item[1]; stage="Joining"; render(); queue:FireServer("Join",mode,format)
+    end,true,index%2==0 and pink or cyan,150)
+    card.Position=UDim2.fromOffset(24+((index-1)%2)*192,120+math.floor((index-1)/2)*144)
+    card.Size=UDim2.fromOffset(180,132)
+    local art=gameTile(card,item[1],index%2==0 and pink or cyan)
+    art.Position=UDim2.fromOffset(0,0); art.Size=UDim2.fromOffset(180,84)
+    card.Title.Position=UDim2.fromOffset(10,76); card.Title.Size=UDim2.new(1,-20,0,28); card.Title.TextSize=item[1]=="Practice" and 21 or 26
+    card.Title.TextXAlignment=Enum.TextXAlignment.Center
+    card.Detail.Position=UDim2.fromOffset(10,105); card.Detail.Size=UDim2.new(1,-20,0,20); card.Detail.TextXAlignment=Enum.TextXAlignment.Center
    end
-   local practiceSection=text(panel,"PracticeSection","WARM UP",396,16,10,muted)
-   practiceSection.Position=UDim2.fromOffset(24,396); practiceSection.Font=Enum.Font.GothamMedium
-   table.insert(controls,practiceSection)
-   textAction("Back","Back",488,function() stage="Modes"; render() end)
+   button("Back","BACK","Choose another mode",408,function() stage="Modes"; render() end,true,cyan,58)
   elseif stage=="Queued" or stage=="Joining" then
    status.Text=stage=="Joining" and "Joining queue..." or mode.." / "..format.." / Waiting for players and an available court."
-   local queueCard=Instance.new("Frame",panel); queueCard.Name="QueueStatus"; queueCard.BackgroundTransparency=1
-   queueCard.Position=UDim2.fromOffset(24,156); queueCard.Size=UDim2.new(1,-48,0,128); neon(queueCard,cyan); table.insert(controls,queueCard)
-   local count=text(queueCard,"QueueCount",stage=="Joining" and "CONNECTING..." or group.count.." / "..group.required.." PLAYERS",32,64,30,cyan)
+   local count=text(panel,"QueueCount",stage=="Joining" and "CONNECTING..." or group.count.." / "..group.required.." PLAYERS",190,64,30,cyan)
    table.insert(controls,count)
-   textAction("CancelQueue","Leave queue",350,function() queue:FireServer("Cancel") end)
+   button("CancelQueue","LEAVE QUEUE","Return to game modes",350,function() queue:FireServer("Cancel") end,true,pink)
   elseif nextView=="Vote" then
    for index,map in ipairs({"Rooftop","Moon"}) do
-    local card=button(map,string.upper(map),"",136,function() queue:FireServer("Vote",map) end,stage=="Setup",cyan,248)
-    card.Position=UDim2.fromOffset(24+(index-1)*196,136); card.Size=UDim2.fromOffset(176,248)
-    card:SetAttribute("VoteCard",true); card:SetAttribute("MatchChoice",true)
-    card.BackgroundColor3=Color3.fromRGB(24,31,48)
-    card.Accent.Color=Color3.fromRGB(113,146,171); card.Accent.Transparency=0.85; card.Accent.Thickness=1
-    card:FindFirstChildOfClass("UICorner").CornerRadius=UDim.new(0,8)
+    local card=button(map,string.upper(map),"",136,function() queue:FireServer("Vote",map) end,stage=="Setup",index==1 and pink or cyan,260)
+    card.Position=UDim2.fromOffset(24+(index-1)*196,136); card.Size=UDim2.fromOffset(176,260)
     card.ModeIcon.Visible=false; card.Arrow.Visible=false
     Thumbnail.mount(card,map)
-    card.Title.Position=UDim2.fromOffset(14,156); card.Title.Size=UDim2.new(1,-28,0,24); card.Title.TextSize=17; card.Title.Font=Enum.Font.GothamBold
-    card.Detail.Position=UDim2.fromOffset(14,184); card.Detail.Size=UDim2.new(1,-28,0,18); card.Detail.TextSize=12; card.Detail.Font=Enum.Font.GothamMedium
+    card.Title.Position=UDim2.fromOffset(14,160); card.Title.Size=UDim2.new(1,-28,0,24); card.Title.TextSize=18
+    card.Detail.Position=UDim2.fromOffset(14,190); card.Detail.Size=UDim2.new(1,-28,0,18); card.Detail.TextSize=12
     local selected=text(card,"Selection","YOUR PICK",18,20,10,cyan)
     selected.Position=UDim2.fromOffset(20,20); selected.Size=UDim2.fromOffset(92,22)
-    selected.BackgroundTransparency=0; selected.BackgroundColor3=Color3.fromRGB(13,19,31); selected.TextXAlignment=Enum.TextXAlignment.Center
+    selected.BackgroundTransparency=0.05; selected.BackgroundColor3=navy; selected.TextXAlignment=Enum.TextXAlignment.Center
     local pill=Instance.new("UICorner",selected); pill.CornerRadius=UDim.new(0,6)
     selected.ZIndex=4; selected.Visible=false
     local heads=Instance.new("Frame",card); heads.Name="Voters"; heads.BackgroundTransparency=1
-    heads.Position=UDim2.fromOffset(14,208); heads.Size=UDim2.new(1,-28,0,30)
+    heads.Position=UDim2.fromOffset(14,216); heads.Size=UDim2.new(1,-28,0,30)
    end
-   local footerY=400
+   local footerY=416
    if mode~="Classic" then
-    local gravity=button("LowGravity","Low gravity","",footerY,function()
+    button("LowGravity","",mode=="Chaos" and "Required for Chaos" or "Your modifier vote / majority wins",footerY,function()
      local own=ownVote(); local modifier=own and own.modifier or "None"
      queue:FireServer("Vote",nil,modifier=="LowGravity" and "None" or "LowGravity")
-    end,stage=="Setup" and mode=="Arcade",cyan,64)
-    gravity:SetAttribute("GameTile",true); gravity:SetAttribute("MatchChoice",true)
-    gravity.BackgroundColor3=Color3.fromRGB(24,31,48)
-    gravity.Accent.Color=Color3.fromRGB(113,146,171); gravity.Accent.Transparency=0.85; gravity.Accent.Thickness=1
-    gravity:FindFirstChildOfClass("UICorner").CornerRadius=UDim.new(0,8)
-    gravity.ModeIcon.Visible=false; gravity.Arrow.Visible=false
-    gravity.Title.Position=UDim2.fromOffset(16,10); gravity.Title.Size=UDim2.fromOffset(220,24)
-    gravity.Title.Font=Enum.Font.GothamBold; gravity.Title.TextSize=16
-    gravity.Detail.Position=UDim2.fromOffset(16,36); gravity.Detail.Size=UDim2.fromOffset(244,18)
-    gravity.Detail.Font=Enum.Font.GothamMedium; gravity.Detail.TextSize=11
-    local setting=text(gravity,"Setting","",0,28,10,cyan)
-    setting.Position=UDim2.new(1,-104,0,18); setting.Size=UDim2.fromOffset(88,28)
-    setting.TextXAlignment=Enum.TextXAlignment.Center; setting.Font=Enum.Font.GothamBold
-    setting.BackgroundTransparency=0; setting.BackgroundColor3=Color3.fromRGB(33,44,61)
-    Instance.new("UICorner",setting).CornerRadius=UDim.new(0,5)
-    footerY+=76
+    end,stage=="Setup" and mode=="Arcade",cyan)
+    footerY+=78
    end
-   textAction("CancelQueue","Leave queue",footerY,function() queue:FireServer("Cancel") end)
+   button("CancelQueue","LEAVE QUEUE","Return to game modes",footerY,function() queue:FireServer("Cancel") end,true,pink)
    updateVote()
   end
   fitContent()

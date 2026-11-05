@@ -202,16 +202,7 @@ end
 function Rules.jumpSlam(position,side,grounded,diving)
  local depth=position.Z*side
  return side~=0 and not grounded and not diving and depth>=0
-  and depth<=Rules.BASELINE and math.abs(position.X)<=Rules.HALF_WIDTH
-end
-
--- Airborne spikes use a bounded strike volume above the player's shoulders.
-function Rules.spikeReach(ballPosition,rootFrame,maxY)
- local offset=ballPosition-rootFrame.Position
- return Rules.contactInFront(ballPosition,rootFrame)
-  and offset.Magnitude<=Rules.SLAM_RANGE
-  and Vector3.new(offset.X,0,offset.Z).Magnitude<=Rules.SLAM_HORIZONTAL
-  and offset.Y>=1 and ballPosition.Y<=maxY
+  and depth<=Rules.KITCHEN+Rules.SLAM_HORIZONTAL and math.abs(position.X)<=Rules.HALF_WIDTH
 end
 
 function Rules.slamTiming(ballPosition,ballVelocity,contactPosition,perfectVision)

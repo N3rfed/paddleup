@@ -940,11 +940,10 @@ local function slamQuality(p,d,r,now,overhead)
  local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
  local diving=now<(d.divePoseUntil or d.diveUntil or 0)
  local jumping=Rules.jumpSlam(r.Position,d.side,grounded,diving)
- local minY,maxY=Rules.slamBounds(p.Character,r)
- if jumping and Rules.spikeReach(ball.p,r.CFrame,maxY) then return "perfect" end
- if not overhead then return nil end
+ if not overhead and not jumping then return nil end
+ local minY=Rules.slamBounds(p.Character,r)
  local contact=r.Position+r.CFrame.LookVector*5
- contact=Vector3.new(contact.X,minY+1,contact.Z)
+ contact=Vector3.new(contact.X,jumping and r.Position.Y+1.5 or minY+1,contact.Z)
  return Rules.slamTiming(ball.p,ball.v,contact,Powerups.has(d.powerups,"perfectVision"))
 end
 local function slamReady(p,d,now)
@@ -1099,9 +1098,8 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
    sliceBoost=Powerups.has(d.powerups,"sliceDice"),atp=Powerups.has(d.powerups,"atpAssassin"),deadly=deadly})
 
   feedback:FireAllClients({userId=p.UserId,backhand=backhand,slam=slam or deceptive,hidePaddle=rhythm,contact=ball.p,direction=ball.v.Unit,charge=charge,soft=not deceptive and (soft or (softRequested and Rules.softShot(r.Position,d.side) or nil)) or nil},"swing")
-  local slamName=not grounded and "SPIKE!" or "SLAM!"
-  local message=restored and (slam and slamName.."  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
-   or (slam and slamName.."  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
+  local message=restored and (slam and "SLAM!  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
+   or (slam and "SLAM!  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
   if charged and clean then message="CHARGED RETURN!  +7%"
   elseif charged and quality~="net" then message="MISTIMED CHARGE  /  WIDE RETURN" end
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
