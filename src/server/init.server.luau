@@ -12,7 +12,7 @@ require(script:WaitForChild("DayNightCycle")).start()
 local template=root:Clone(); template.Parent=nil
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
-for _,name in ipairs({"Input","State","Feedback","Session","Queue","IntroReady","Powerup","Practice"}) do
+for _,name in ipairs({"Input","State","Feedback","Session","Queue","IntroReady","Powerup","Practice","Arcade","ArcadeLoadout"}) do
  if not folder:FindFirstChild(name) then
   local event=Instance.new("RemoteEvent"); event.Name=name; event.Parent=folder
  end

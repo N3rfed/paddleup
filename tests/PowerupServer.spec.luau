@@ -14,6 +14,7 @@ return function(source,A,Rules,Comeback)
  local ball={live=false,p=Vector3.new(0,184,40),v=Vector3.zero,speed=1,last=1,shots=0}
  local rotation={award=function() awards+=1; return "point" end}
  local environment=setmetatable({HEIGHT=0,
+  arcade={gravity=function() return 1 end,clearArmed=function() end,rally=function() return false end},
   Comeback=Comeback,comeback=Comeback.new(),Powerups=A,Rules=Rules,Vector3=Vector3,FLOOR=181.7,GRAVITY=45,BASE_SPEED=56,
   ball=ball,users=users,serverId=42,servingSide=1,score={0,0},rotation=rotation,
   courtVariant="Chaos",rallies=0,lastHitter={},

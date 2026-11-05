@@ -15,34 +15,35 @@ function PracticeUI.start(player,network)
  dismiss.Name="Dismiss"; dismiss.Size=UDim2.fromScale(1,1)
  dismiss.BackgroundTransparency=1; dismiss.Text=""; dismiss.Visible=false; dismiss.ZIndex=1
  local toolbar=Instance.new("Frame",gui)
- toolbar.Name="Toolbar"; toolbar.Size=UDim2.fromOffset(144,102)
+ toolbar.Name="Toolbar"; toolbar.Size=UDim2.fromOffset(214,50)
  toolbar.BackgroundTransparency=1; toolbar.ZIndex=2
  local scale=Instance.new("UIScale",toolbar)
  local function button(parent,name,text,position,size)
   local b=Instance.new("TextButton",parent)
   b.Name=name; b.Text=text; b.Position=position; b.Size=size
-  b.Font=Enum.Font.GothamBold; b.TextSize=14; b.TextColor3=white
+  b.Font=Enum.Font.GothamBold; b.TextSize=12; b.TextColor3=white
   b.BackgroundColor3=dark; b.BorderSizePixel=0; b.ZIndex=3
   Instance.new("UICorner",b).CornerRadius=UDim.new(0,7)
   local stroke=Instance.new("UIStroke",b); stroke.Color=cyan; stroke.Transparency=0.25
   return b
  end
- local mode=button(toolbar,"Mode","Mode: Normal",UDim2.fromOffset(0,0),UDim2.fromOffset(144,34))
- local pause=button(toolbar,"Pause","Pause",UDim2.fromOffset(0,42),UDim2.fromOffset(144,34))
+ local mode=button(toolbar,"Mode","NORMAL  v",UDim2.fromOffset(0,0),UDim2.fromOffset(126,34))
+ local pause=button(toolbar,"Pause","PAUSE",UDim2.fromOffset(134,0),UDim2.fromOffset(80,34))
  local help=Instance.new("TextLabel",toolbar)
  help.Name="Help"; help.Text="Alt to click · P to pause"
- help.Position=UDim2.fromOffset(0,82); help.Size=UDim2.fromOffset(144,18)
+ help.Position=UDim2.fromOffset(0,38); help.Size=UDim2.fromOffset(214,12)
+ help.TextXAlignment=Enum.TextXAlignment.Right; help.TextTransparency=0.25
  help.Font=Enum.Font.GothamMedium; help.TextSize=9; help.TextColor3=white
  help.BackgroundTransparency=1; help.ZIndex=3
  local menu=Instance.new("Frame",toolbar)
- menu.Name="Dropdown"; menu.Position=UDim2.fromOffset(0,40); menu.Size=UDim2.fromOffset(144,114)
+ menu.Name="Dropdown"; menu.Position=UDim2.fromOffset(0,-122); menu.Size=UDim2.fromOffset(126,114)
  menu.BackgroundColor3=dark; menu.BorderSizePixel=0; menu.Visible=false; menu.ZIndex=4
  Instance.new("UICorner",menu).CornerRadius=UDim.new(0,8)
  local border=Instance.new("UIStroke",menu); border.Color=cyan; border.Transparency=0.25
  local latest,pendingRevision,pendingDifficulty=nil,nil,nil
  local function setOpen(open)
   menu.Visible=open; dismiss.Visible=open; help.Visible=not open
-  pause.Position=UDim2.fromOffset(0,open and 162 or 42)
+  help.Visible=not open and UIS.KeyboardEnabled
   player:SetAttribute("PracticeMenuOpen",open)
  end
  local function request(action,value)
@@ -53,13 +54,13 @@ function PracticeUI.start(player,network)
  end
  local buttons={}
  for index,name in ipairs({"Easy","Normal","Hard"}) do
-  local b=button(menu,name,name,UDim2.fromOffset(6,6+(index-1)*34),UDim2.fromOffset(132,32))
+  local b=button(menu,name,name,UDim2.fromOffset(6,6+(index-1)*34),UDim2.fromOffset(114,32))
   b.ZIndex=5
   b:FindFirstChildOfClass("UIStroke").Enabled=false
   b.Activated:Connect(function()
    setOpen(false)
    if latest and latest.difficulty~=name and request("Difficulty",name) then
-    pendingDifficulty=name; mode.Text="Mode: "..name
+    pendingDifficulty=name; mode.Text=string.upper(name).."  v"
    end
   end)
   buttons[name]=b
@@ -113,8 +114,8 @@ function PracticeUI.start(player,network)
    pendingRevision=nil; pendingDifficulty=nil
   end
   local difficulty=pendingDifficulty or latest.difficulty
-  mode.Text="Mode: "..difficulty
-  pause.Text=latest.paused and "Continue" or "Pause"
+  mode.Text=string.upper(difficulty).."  v"
+  pause.Text=latest.paused and "CONTINUE" or "PAUSE"
   for name,b in pairs(buttons) do
    b.BackgroundColor3=name==difficulty and Color3.fromRGB(48,99,132) or dark
    b.TextColor3=name==difficulty and cyan or white
@@ -136,28 +137,10 @@ function PracticeUI.start(player,network)
   visibility(score)
   if not gui.Enabled then return end
   local viewport=camera.ViewportSize
-  scale.Scale=math.clamp(viewport.X/1500,0.8,1)
-  local width=144*scale.Scale
-  local origin=gui.AbsolutePosition
-  local x,y=viewport.X-width-16,20
-  if score then
-   local position,size=score.AbsolutePosition,score.AbsoluteSize
-   local right=position.X+size.X
-   x=right+12; y=math.max(position.Y+size.Y*0.33-17*scale.Scale,origin.Y+62)
-   -- Leave the top-right corner to Roblox player-list controls.
-   if x+width>viewport.X-170 then
-    x=12 -- Keep the compact stack clear of centered match announcements.
-    y=position.Y+size.Y+8
-   end
-  end
-  toolbar.Position=UDim2.fromOffset(x-origin.X,y-origin.Y)
-  -- Keep the countdown clear of the controls and popup on narrow viewports.
-  local indicatorY=viewport.Y*0.32
-  if x<viewport.X/2+170 and x+width>viewport.X/2-170 then
-   local controlsHeight=menu.Visible and 196 or 76
-   indicatorY=math.max(indicatorY,y-origin.Y+controlsHeight*scale.Scale+55)
-  end
-  indicator.Position=UDim2.fromOffset(viewport.X/2,indicatorY)
+  scale.Scale=math.min(1,(viewport.X-24)/214)
+  toolbar.AnchorPoint=Vector2.new(1,1)
+  toolbar.Position=UDim2.new(1,-18,1,-18)
+  indicator.Position=UDim2.fromOffset(viewport.X/2,viewport.Y*0.32)
  end)
  visibility()
 end

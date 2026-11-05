@@ -1,0 +1,76 @@
+{
+  "cleats": {
+    "source": "speedcleats.svg",
+    "png": "generated/cleats.png",
+    "width": 264,
+    "height": 258
+  },
+  "paddle": {
+    "source": "bigpaddle.svg",
+    "png": "generated/paddle.png",
+    "width": 232,
+    "height": 230
+  },
+  "pickles": {
+    "source": "dropspickles.svg",
+    "png": "generated/pickles.png",
+    "width": 236,
+    "height": 234
+  },
+  "heatseeker": {
+    "source": "heatseaker.svg",
+    "png": "generated/heatseeker.png",
+    "width": 240,
+    "height": 224
+  },
+  "slipstream": {
+    "source": "slipstream.svg",
+    "png": "generated/slipstream.png",
+    "width": 370,
+    "height": 366
+  },
+  "smallpaddle": {
+    "source": "smallpaddle.svg",
+    "png": "generated/smallpaddle.png",
+    "width": 242,
+    "height": 208
+  },
+  "glowball": {
+    "source": "glowball.svg",
+    "png": "generated/glowball.png",
+    "width": 214,
+    "height": 210
+  },
+  "zerog": {
+    "source": "zero g pulse.svg",
+    "png": "generated/zerog.png",
+    "width": 292,
+    "height": 262
+  },
+  "cardNotSelected": {
+    "source": "card_notselected.svg",
+    "png": "generated/cardNotSelected.png",
+    "width": 1138,
+    "height": 1244
+  },
+  "cardSelected": {
+    "source": "card_selected.svg",
+    "png": "generated/cardSelected.png",
+    "width": 1260,
+    "height": 1366
+  },
+  "cardFrame": {
+    "source": "card_notselected.svg",
+    "svg": "generated/cardFrame.svg",
+    "png": "generated/cardFrame.png",
+    "width": 1138,
+    "height": 1244
+  },
+  "cardFrameSelected": {
+    "source": "card_selected.svg",
+    "svg": "generated/cardFrameSelected.svg",
+    "png": "generated/cardFrameSelected.png",
+    "width": 1260,
+    "height": 1366
+  }
+}

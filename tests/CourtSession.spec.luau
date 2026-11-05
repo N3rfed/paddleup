@@ -25,7 +25,7 @@ return function(source,modules)
  local owners={}
  local delivered={}
  local network={}
- for _,name in ipairs({"Input","State","Feedback","Session","IntroReady","Powerup","Practice"}) do
+ for _,name in ipairs({"Input","State","Feedback","Session","IntroReady","Powerup","Practice","Arcade","ArcadeLoadout"}) do
   local event={OnServerEvent=signal()}
   function event:FireClient(player,data,kind)
    delivered[player]=delivered[player] or {}
@@ -41,7 +41,8 @@ return function(source,modules)
   new=function() return {active="Rooftop",set=function(self,name) self.active=name end,destroy=function() end} end}
  mocked.CourtPickups={new=function() return {slots={},bursts={},reset=function() end,update=function() end} end}
  local scriptMock={Parent={WaitForChild=function(_,name) return name end}}
- local services={Players=players,RunService={Heartbeat=heartbeat}}
+ local shared={WaitForChild=function(_,name) return name end}
+ local services={Players=players,RunService={Heartbeat=heartbeat},ReplicatedStorage={WaitForChild=function() return shared end}}
  local environment=setmetatable({script=scriptMock,require=function(name) return assert(mocked[name],name) end,
   game={GetService=function(_,name) return assert(services[name],name) end},
   workspace={Gravity=196.2,GetServerTimeNow=function() return now end},os={clock=function() return now end}}, {__index=getfenv()})
@@ -64,9 +65,9 @@ return function(source,modules)
  end
  local a,b,c,d,e=player(1),player(2),player(3),player(4),player(5)
  local first,second,practice=court(1),court(2),court(3)
- local function join(controller,id,p,mode)
+ local function join(controller,id,p,mode,variant)
   owners[p]=id; controller:add(p)
-  assert(controller:enter(p,mode,"Classic","Rooftop","None"))
+  assert(controller:enter(p,mode,variant or "Classic","Rooftop","None"))
  end
  local ok,err=pcall(function()
   join(first,1,a,"1V1"); join(first,1,b,"1V1")
@@ -94,6 +95,21 @@ return function(source,modules)
   assert(first:enter(a,"Practice","Classic","Rooftop","None"))
   heartbeat:Fire(0.1)
   assert(delivered[a].State.data.score[1]==0 and delivered[a].State.data.score[2]==0,"Reused court starts with a fresh score")
+  local f,g,h,i=player(6),player(7),player(8),player(9)
+  local arcadeA,arcadeB=court(4),court(5)
+  join(arcadeA,4,f,"1V1","Arcade"); join(arcadeA,4,g,"1V1","Arcade")
+  join(arcadeB,5,h,"1V1","Arcade"); join(arcadeB,5,i,"1V1","Arcade")
+  now+=12; heartbeat:Fire(0.1)
+  local firstOffer=delivered[f].ArcadeLoadout.data
+  local secondOffer=delivered[h].ArcadeLoadout.data
+  assert(firstOffer.kind=="open" and secondOffer.kind=="open","Each Arcade court opens its own picker")
+  local deck={"speedCleats","bigPaddle","heatseeker"}
+  network.ArcadeLoadout.OnServerEvent:Fire(f,firstOffer.id,deck)
+  network.ArcadeLoadout.OnServerEvent:Fire(g,firstOffer.id,deck)
+  heartbeat:Fire(0.1)
+  assert(delivered[f].ArcadeLoadout.data.kind=="close","Ready court finishes loadout selection")
+  assert(delivered[h].ArcadeLoadout.data.kind=="open" and h:GetAttribute("PowerupDraftOpen"),"One court's picks cannot complete another court")
+  assert(delivered[f].State.data.p.Y+4096==delivered[h].State.data.p.Y,"Arcade balls retain their court height")
   local before=delivered[c].State
   first:destroy(); first:destroy()
   now+=1; heartbeat:Fire(0.1)
