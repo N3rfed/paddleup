@@ -9,12 +9,12 @@ function Help.start(player,network)
  gui.Name="HowToPlay"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=90
  gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=player:WaitForChild("PlayerGui")
  local help=Instance.new("ImageButton",gui)
- help.Name="HelpButton"; help.Image=""; help.Size=UDim2.fromOffset(36,36)
- help.AnchorPoint=Vector2.new(1,0); help.Position=UDim2.new(1,-52,0,16)
+ help.Name="HelpButton"; help.Image=""; help.Size=UDim2.fromOffset(40,40)
+ help.AnchorPoint=Vector2.new(1,0); help.Position=UDim2.new(1,-60,0,16)
  help.BackgroundTransparency=1; help.AutoButtonColor=false; help.Visible=false
  local icon=Instance.new("ImageLabel",help)
  icon.Name="HelpIcon"; icon.Image=Assets.get("help"); icon.BackgroundTransparency=1
- icon.Position=UDim2.fromOffset(6,6); icon.Size=UDim2.fromOffset(24,24); icon.ZIndex=2
+ icon.Position=UDim2.fromOffset(6,6); icon.Size=UDim2.fromOffset(28,28); icon.ZIndex=2
  icon.ScaleType=Enum.ScaleType.Fit
  -- Expand the alpha silhouette, outlining the circle and question mark rather than the button box.
  for index,offset in ipairs({{-1,-1},{0,-1},{1,-1},{-1,0},{1,0},{-1,1},{0,1},{1,1}}) do
@@ -23,12 +23,12 @@ function Help.start(player,network)
   outline.Position=UDim2.fromOffset(6+offset[1],6+offset[2]); outline.Parent=help
  end
  local hint=Instance.new("TextLabel",help)
- hint.Name="KeyHint"; hint.Text="H"; hint.Font=Enum.Font.GothamBlack; hint.TextSize=14
+ hint.Name="KeyHint"; hint.Text="H"; hint.Font=Enum.Font.GothamBlack; hint.TextSize=18
  hint.TextColor3=Color3.fromRGB(246,246,255); hint.BackgroundTransparency=1
- hint.AnchorPoint=Vector2.new(0.5,0); hint.Position=UDim2.new(0.5,0,1,2)
- hint.Size=UDim2.fromOffset(22,20); hint.Visible=UIS.KeyboardEnabled
+ hint.AnchorPoint=Vector2.new(0.5,0); hint.Position=UDim2.new(0.5,0,1,4)
+ hint.Size=UDim2.fromOffset(26,22); hint.Visible=UIS.KeyboardEnabled
  local keyStroke=Instance.new("UIStroke",hint); keyStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
- keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=1.5
+ keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=2
  local overlay=Instance.new("TextButton",gui)
  overlay.Name="Overlay"; overlay.Size=UDim2.fromScale(1,1); overlay.BackgroundColor3=Color3.fromRGB(4,7,18)
  overlay.BackgroundTransparency=0.3; overlay.Text=""; overlay.AutoButtonColor=false

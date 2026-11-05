@@ -101,20 +101,20 @@ function MainMenu.start(player,network)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
  exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-12,0,16)
- exit.Size=UDim2.fromOffset(44,44); exit.BackgroundColor3=Color3.fromRGB(27,27,64)
+ exit.Size=UDim2.fromOffset(40,40); exit.BackgroundColor3=Color3.fromRGB(27,27,64)
  exit.BackgroundTransparency=1; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
  local exitKey=Instance.new("TextLabel",exit)
  exitKey.Name="LeaveKeybind"; exitKey.AnchorPoint=Vector2.new(0.5,0)
- exitKey.Position=UDim2.new(0.5,0,1,6); exitKey.Size=UDim2.fromOffset(28,24)
+ exitKey.Position=UDim2.new(0.5,0,1,4); exitKey.Size=UDim2.fromOffset(26,22)
  exitKey.BackgroundTransparency=1; exitKey.BorderSizePixel=0; exitKey.Text="M"; exitKey.Font=Enum.Font.GothamBlack
- exitKey.TextSize=20; exitKey.TextColor3=Color3.fromRGB(246,246,255); exitKey.Visible=UIS.KeyboardEnabled
+ exitKey.TextSize=18; exitKey.TextColor3=Color3.fromRGB(246,246,255); exitKey.Visible=UIS.KeyboardEnabled
  local keyStroke=Instance.new("UIStroke",exitKey); keyStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
  keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=2; keyStroke.Transparency=0
  -- Outline the symbol itself for contrast against both bright rocks and dark sky.
  local icon=Instance.new("Frame",exit)
  icon.Name="ExitIcon"; icon.AnchorPoint=Vector2.new(0.5,0.5); icon.Position=UDim2.fromScale(0.5,0.5)
  icon.Size=UDim2.fromOffset(24,24); icon.BackgroundTransparency=1
- local iconScale=Instance.new("UIScale",icon); iconScale.Scale=1.4
+ local iconScale=Instance.new("UIScale",icon); iconScale.Scale=1.2
  local function iconLine(name,from,to)
   local delta=to-from
   local line=Instance.new("Frame",icon); line.Name=name; line.AnchorPoint=Vector2.new(0.5,0.5)
