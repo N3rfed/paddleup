@@ -29,20 +29,19 @@ return function(source,Rules,Powerups,Comeback)
  setfenv(chunk,env)
  local tryReturn,slamReady=chunk()
  for _,side in ipairs({-1,1}) do
-  for _,depth in ipairs({16,35}) do
-  for _,case in ipairs({{0.1,"perfect"},{0,"perfect"},{-0.1,"perfect"}}) do
+  for _,case in ipairs({{0.1,"net"},{0,"perfect"},{-0.1,"out"}}) do
    table.clear(events); table.clear(faults); table.clear(ball); table.clear(data)
-   root.Position=Vector3.new(0,188,side*depth)
+   root.Position=Vector3.new(0,188,side*16)
    root.CFrame=CFrame.lookAt(root.Position,Vector3.new(0,188,0))
    local contact=root.Position+root.CFrame.LookVector*5+Vector3.new(0,1.5,0)
-   ball.v=Vector3.new(0,-4,side*20); ball.p=contact-ball.v*case[1]
+   ball.v=Vector3.new(0,-12,side*40); ball.p=contact-ball.v*case[1]
    ball.live=true; ball.last=-side; ball.shots=2; ball.bounces=0; ball.bounceAt=-100
    ball.speed=1; ball.perfects=0
    data.side=side; data.powerups={}; data.powerupMatch={}; data.powerupRally=Powerups.newRally()
    data.diveUntil=0; data.divePoseUntil=0; data.lastSwing=0; data.powerUntil=0
    assert(slamReady(player,data,10)==(case[2]=="perfect"),"Slam readiness must match actual timing")
    assert(tryReturn(player,data,root,10,false,false,0),"In-range airborne swing must connect")
-   assert(#faults==0 and ball.slam and not ball.lob,"In-range airborne contact produces a spike without a timing penalty")
+   assert(#faults==0 and ball.slam and not ball.lob,"Every timing grade keeps the slam trajectory")
    local crossing=-ball.p.Z/ball.v.Z
    local net=Rules.advanceBall(ball.p,ball.v,ball.flightGravity,crossing,false,false)
    if case[2]=="net" then
@@ -58,7 +57,6 @@ return function(source,Rules,Powerups,Comeback)
    if case[2]=="net" then assert(message.text=="EARLY SLAM / NET" and message.tone=="bad")
    elseif case[2]=="out" then assert(message.text=="LATE SLAM / OUT" and message.tone=="bad") end
   end
-  end
  end
- return "Actual server spikes: in-range airborne contacts, net clearance, in-bounds landings, readiness and credit passed on both sides"
+ return "Actual server jump slams: early net collision, perfect in-bounds landing, late out landing, timing UI and credit passed on both sides"
 end

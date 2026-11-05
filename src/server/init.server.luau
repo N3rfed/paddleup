@@ -940,11 +940,10 @@ local function slamQuality(p,d,r,now,overhead)
  local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
  local diving=now<(d.divePoseUntil or d.diveUntil or 0)
  local jumping=Rules.jumpSlam(r.Position,d.side,grounded,diving)
- local minY,maxY=Rules.slamBounds(p.Character,r)
- if jumping and Rules.spikeReach(ball.p,r.CFrame,maxY) then return "perfect" end
- if not overhead then return nil end
+ if not overhead and not jumping then return nil end
+ local minY=Rules.slamBounds(p.Character,r)
  local contact=r.Position+r.CFrame.LookVector*5
- contact=Vector3.new(contact.X,minY+1,contact.Z)
+ contact=Vector3.new(contact.X,jumping and r.Position.Y+1.5 or minY+1,contact.Z)
  return Rules.slamTiming(ball.p,ball.v,contact,Powerups.has(d.powerups,"perfectVision"))
 end
 local function slamReady(p,d,now)

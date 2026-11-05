@@ -228,7 +228,7 @@ sub.TextXAlignment=Enum.TextXAlignment.Center; sub.TextStrokeTransparency=0.6
 local controls=panel(Vector2.new(28,659),Vector2.new(300,112))
 text(controls,"MAKE YOUR MOVE",Vector2.new(16,10),Vector2.new(270,22),12,mint)
 text(controls,"WASD / Arrows    Move",Vector2.new(16,38),Vector2.new(270,22),15)
-text(controls,"SPACE Jump + Swing: Spike | SHIFT Dive",Vector2.new(16,69),Vector2.new(275,22),12)
+text(controls,"SPACE    Jump     SHIFT    Dive",Vector2.new(16,69),Vector2.new(275,22),14)
 local hitPanel=panel(Vector2.new(350,644),Vector2.new(530,127))
 local timingText=text(hitPanel,"WATCH THE LANDING RING",Vector2.new(16,10),Vector2.new(498,26),15,mint)
 timingText.TextXAlignment=Enum.TextXAlignment.Center
@@ -296,9 +296,7 @@ local function animateSwing(softRequested,charge)
  local backhand=snapshot and root.CFrame:PointToObjectSpace(snapshot.p).X<0 or false
  local side=player:GetAttribute("CourtSide") or 1
  local soft=softRequested and (Rules and Rules.softShot(root.Position,side) or "drop") or nil
- local humanoid=character:FindFirstChildOfClass("Humanoid")
- local spike=not softRequested and snapshot and snapshot.slamReady and humanoid and humanoid.FloorMaterial==Enum.Material.Air
- DiveController.swing(player.UserId,backhand,spike==true,nil,nil,charge or 0,soft,true)
+ DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
 local function setDiveHeld(held)
@@ -793,7 +791,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
  timingText.Text=not snapshot.live and (canServe(snapshot) and "CLICK / TAP TO SERVE DIAGONALLY" or (snapshot.bot and snapshot.servingSide==-1 and "BOT SERVE STARTS AUTOMATICALLY" or snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
- if snapshot.slamReady then timingText.Text="SPIKE  /  SWING NOW!" end
+ if snapshot.slamReady then timingText.Text="SLAM WINDOW  /  SWING NOW!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)
