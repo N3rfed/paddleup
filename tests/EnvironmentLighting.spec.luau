@@ -11,6 +11,7 @@ return function(EnvironmentLighting)
  workspace:SetAttribute("CourtEnvironment","Moon")
  local stop=EnvironmentLighting.start(player)
  local ok,err=pcall(function()
+  assert(math.abs(Lighting.ExposureCompensation+0.25)<0.01,"Lobby uses a balanced evening exposure")
   mode="Practice"; signal:Fire(); task.wait()
   assert(Lighting.ClockTime==14,"Moon uses a fixed sun position")
   assert(Lighting:FindFirstChild("LunarSky"),"Moon uses its own sky")
@@ -19,13 +20,17 @@ return function(EnvironmentLighting)
   Lighting.ClockTime=5; task.wait()
   assert(Lighting.ClockTime==14,"Server day/night replication cannot change moon lighting")
   mode="Lobby"; signal:Fire(); task.wait()
+  assert(math.abs(Lighting.ExposureCompensation+0.25)<0.01,"Returning from Moon restores the balanced lobby profile")
   assert(not Lighting:FindFirstChild("LunarSky"),"Lobby restores the city sky")
   if grade then assert(grade.Enabled==gradeEnabled,"Lobby restores city grading") end
   if roof then assert(roof.LocalTransparencyModifier==roofTransparency,"Lobby restores city geometry") end
   local profile=Lighting:FindFirstChild("RooftopProfile")
   if profile then assert(math.abs(Lighting.ClockTime-profile:GetAttribute("ClockTime"))<0.01,"Lobby restores the current city time") end
+  workspace:SetAttribute("CourtEnvironment","Rooftop")
+  mode="Practice"; signal:Fire(); task.wait()
+  if profile then assert(math.abs(Lighting.ExposureCompensation-profile:GetAttribute("ExposureCompensation"))<0.01,"Leaving lobby restores rooftop court exposure") end
  end)
  stop(); signal:Destroy(); workspace:SetAttribute("CourtEnvironment",originalEnvironment)
  assert(ok,err)
- return "Moon lighting isolation, city roof hiding, and lobby restoration passed"
+ return "Darker lobby exposure, Moon isolation, city roof hiding and court lighting restoration passed"
 end

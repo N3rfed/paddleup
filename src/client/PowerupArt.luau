@@ -1,4 +1,4 @@
--- Small vector illustrations drawn with native UI primitives: no external assets.
+-- Uploaded powerup art, with native motifs for the separate Chaos upgrade catalog.
 local Art={}
 local FigmaAssets=require(script.Parent:WaitForChild("FigmaAssets"))
 local motifs={
@@ -8,6 +8,9 @@ local motifs={
  airTime="APEX",
 }
 local badges={
+ speedCleats="+40% SPEED / 8s",bigPaddle="1.75x PADDLE / 10s",dropPickles="TRIP HAZARDS",
+ heatseeker="NEXT HIT / HOMING",slipStream="1s SLIDE",smallPaddle="0.5x OPPONENT PADDLE",
+ glowBall="NIGHT VISION",zeroG="-60% GRAVITY / 8s",
  kitchenCamper="+15% MOVE",dinkSpecialist="3 DINKS / +20%",carbonFiber="+15% SWEET SPOT",secondServe="1 FREE RETRY",sliceDice="10% LOWER BOUNCE",
  thirdShot="+40% ACCURACY",serveVolley="3 SECOND BURST",vampiricReach="UP TO +10% REACH",atpAssassin="30% STAMINA DAMAGE",baitSwitch="1 SECOND STUN",
  erne="300% POWER",phantom="+8 INCHES",lava="2x STAMINA DRAIN",overcharge="16 SHOTS / ON FIRE",deflector="2x RETURN VELOCITY",
@@ -20,7 +23,9 @@ function Art.badge(card)
  return badges[card.id] or string.format("+%d%% %s",math.floor((card.amount or 0)*100+0.5),(card.stat or "UPGRADE"):upper())
 end
 function Art.draw(parent,card,color)
- local asset=card.stat=="speed" and "cleats" or (card.stat=="reach" or card.id=="carbonFiber" or card.id=="vampiricReach") and "paddle" or nil
+ local uploaded={speedCleats="cleats",bigPaddle="paddle",dropPickles="pickles",heatseeker="heatseeker",
+  slipStream="slipstream",smallPaddle="smallpaddle",glowBall="glowball",zeroG="zerog"}
+ local asset=card.art or uploaded[card.id] or (card.stat=="speed" and "cleats" or (card.stat=="reach" or card.id=="carbonFiber" or card.id=="vampiricReach") and "paddle" or nil)
  if asset then
   local image=FigmaAssets.image(parent,asset,0,0,126,126)
   if image then image.ScaleType=Enum.ScaleType.Fit; return end

@@ -6,6 +6,49 @@ local VERSION=6
 local O=Vector3.new(0,181,600)
 -- Keep the established arrival point and its view of reception.
 Lobby.Spawn=CFrame.lookAt(Vector3.new(0,185,650),Vector3.new(0,185,608))
+-- Saved lobbies predate the rooftop palette. Recolor in place on every build.
+function Lobby.applyPalette(root)
+ local legacy={
+  ["248,240,220"]=P.ivory,["235,232,241"]=P.ivory,
+  ["216,200,175"]=P.linen,["202,199,216"]=P.linen,
+  ["194,174,146"]=P.beige,["177,170,191"]=P.beige,
+  ["55,34,31"]=P.walnut,["62,49,65"]=P.walnut,
+  ["16,110,88"]=P.forest,["32,143,139"]=P.teal,["77,144,157"]=P.teal,
+  ["231,181,67"]=P.brass,["196,180,155"]=P.brass,
+  ["28,37,61"]=P.ink,["57,103,92"]=P.upholstery,
+  ["40,105,255"]=P.blue,["241,70,160"]=P.pink,
+  ["231,223,202"]=P.ivory,
+  ["202,194,221"]=P.linen,["169,151,193"]=P.beige,["136,128,163"]=P.upholstery,
+  ["151,130,194"]=P.rose,["62,49,83"]=P.walnut,["175,168,199"]=P.brass,["39,42,78"]=P.forest,
+ }
+ local function mapped(color)
+  return legacy[string.format("%d,%d,%d",math.round(color.R*255),math.round(color.G*255),math.round(color.B*255))]
+ end
+ for _,item in ipairs(root:GetDescendants()) do
+  if item:IsA("BasePart") then
+   local name=string.lower(item.Name)
+   local foliage=string.find(name,"leaf",1,true) or string.find(name,"stem",1,true)
+   if not foliage and item.Material~=Enum.Material.Glass then
+    item.Color=mapped(item.Color) or item.Color
+    if item.Material==Enum.Material.Wood then item.Color=P.walnut end
+    if item.Material==Enum.Material.Fabric and (string.find(name,"cushion",1,true)
+     or string.find(name,"armrest",1,true) or string.find(name,"seat",1,true)
+     or string.find(name,"blanket",1,true) or string.find(name,"drape",1,true)) then
+     item.Color=(string.find(name,"seat",1,true) or item.Name=="Sofa cushion") and P.rose or P.ivory
+    end
+   end
+   if item.Name=="Cream marble floor" then
+    item.Color=P.ivory; item.Material=Enum.Material.SmoothPlastic
+   elseif item.Name=="Warm neutral woven rug" then item.Color=P.upholstery
+   elseif item.Name=="Ivory ceiling" then item.Color=P.ivory
+   elseif item.Name=="Cafe canopy" or item.Name=="Boutique canopy" then item.Color=P.forest end
+  elseif item:IsA("TextLabel") then
+   item.TextColor3=mapped(item.TextColor3) or item.TextColor3
+  elseif item:IsA("Light") then item.Color=P.warm end
+ end
+ root:SetAttribute("PurplePaletteVersion",2)
+ return root
+end
 -- Refresh lighting on saved lobbies without rebuilding their furniture.
 function Lobby.lightInterior(root)
  for _,item in ipairs(root:GetDescendants()) do
@@ -13,8 +56,8 @@ function Lobby.lightInterior(root)
   if item:IsA("BasePart") and item.Name=="Recessed warm diffuser" then
    local light=item:FindFirstChildOfClass("SurfaceLight")
    if light then
-    light.Enabled=true; light.Brightness=1.8; light.Range=55
-    light.Color=Color3.fromRGB(255,244,230); light.Shadows=false
+    light.Enabled=true; light.Brightness=0.9; light.Range=45
+    light.Color=P.warm; light.Shadows=false
    end
   elseif item:IsA("BasePart") and (item.Name=="Cafe canopy" or item.Name=="Boutique canopy") then
    local light=item:FindFirstChild("Interior task light")
@@ -22,7 +65,7 @@ function Lobby.lightInterior(root)
     light=Instance.new("SurfaceLight"); light.Name="Interior task light"; light.Parent=item
    end
    light.Enabled=true; light.Face=Enum.NormalId.Bottom; light.Angle=120
-   light.Range=28; light.Brightness=0.9; light.Color=Color3.fromRGB(255,244,230); light.Shadows=false
+   light.Range=26; light.Brightness=0.55; light.Color=P.warm; light.Shadows=false
   end
  end
  return root
@@ -262,6 +305,7 @@ function Lobby.integrateCity(root)
 end
 -- Publish readiness only after the existing lobby and city setup has finished.
 local function configureLoading(root)
+ Lobby.applyPalette(root)
  root.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
  root:SetAttribute("ExpectedDescendants",#root:GetDescendants())
  local city=workspace:FindFirstChild("LobbyCity")
@@ -373,7 +417,7 @@ function Lobby.build()
  for _,x in ipairs({-57,0,57}) do
   for _,z in ipairs({-29,29,74}) do
    local lamp=decor(shell,"Recessed warm diffuser",Vector3.new(5,0.1,1.4),Vector3.new(x,26.42,z),P.warm,Enum.Material.Neon)
-   wash(lamp,55,1.8)
+   wash(lamp,45,0.9)
   end
  end
  -- Check-in desk retains its original central position and arrival view.

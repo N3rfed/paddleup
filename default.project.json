@@ -16,6 +16,9 @@
       "Shared": {
         "$className": "Folder",
         "$ignoreUnknownInstances": true,
+        "ArcadeDeck": {
+          "$path": "src/shared/ArcadeDeck.luau"
+        },
         "Hello": {
           "$path": "src/shared/Hello.luau",
           "$ignoreUnknownInstances": true,

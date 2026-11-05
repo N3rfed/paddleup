@@ -24,11 +24,14 @@ end
 local network=ReplicatedStorage:WaitForChild("PaddleUp")
 local input,state,feedback=network:WaitForChild("Input"),network:WaitForChild("State"),network:WaitForChild("Feedback")
 require(script:WaitForChild("MainMenu")).start(player,network)
+require(script:WaitForChild("ArcadeLoadout")).start(player,network)
 local MatchSetup=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MatchSetup"))
 require(script:WaitForChild("PowerupDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)
 require(script:WaitForChild("PracticeUI")).start(player,network)
-local function playing() return not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") end
+require(script:WaitForChild("HowToPlay")).start(player,network)
+require(script:WaitForChild("ArcadeSlots")).start(player,network)
+local function playing() return not player:GetAttribute("HowToPlayOpen") and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -225,7 +228,7 @@ sub.TextXAlignment=Enum.TextXAlignment.Center; sub.TextStrokeTransparency=0.6
 local controls=panel(Vector2.new(28,659),Vector2.new(300,112))
 text(controls,"MAKE YOUR MOVE",Vector2.new(16,10),Vector2.new(270,22),12,mint)
 text(controls,"WASD / Arrows    Move",Vector2.new(16,38),Vector2.new(270,22),15)
-text(controls,"SPACE    Jump     SHIFT    Dive",Vector2.new(16,69),Vector2.new(275,22),14)
+text(controls,"SPACE Jump + Swing: Spike | SHIFT Dive",Vector2.new(16,69),Vector2.new(275,22),12)
 local hitPanel=panel(Vector2.new(350,644),Vector2.new(530,127))
 local timingText=text(hitPanel,"WATCH THE LANDING RING",Vector2.new(16,10),Vector2.new(498,26),15,mint)
 timingText.TextXAlignment=Enum.TextXAlignment.Center
@@ -293,7 +296,9 @@ local function animateSwing(softRequested,charge)
  local backhand=snapshot and root.CFrame:PointToObjectSpace(snapshot.p).X<0 or false
  local side=player:GetAttribute("CourtSide") or 1
  local soft=softRequested and (Rules and Rules.softShot(root.Position,side) or "drop") or nil
- DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
+ local humanoid=character:FindFirstChildOfClass("Humanoid")
+ local spike=not softRequested and snapshot and snapshot.slamReady and humanoid and humanoid.FloorMaterial==Enum.Material.Air
+ DiveController.swing(player.UserId,backhand,spike==true,nil,nil,charge or 0,soft,true)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
 local function setDiveHeld(held)
@@ -389,8 +394,8 @@ UIS.InputBegan:Connect(function(key,processed)
  elseif key.KeyCode==Enum.KeyCode.R then specialShot("Lob")
  elseif key.KeyCode==Enum.KeyCode.X then specialShot("Slice")
  elseif key.KeyCode==Enum.KeyCode.LeftShift then setDiveHeld(true); dive()
- elseif key.KeyCode==Enum.KeyCode.Q then input:FireServer("Power")
- elseif key.KeyCode==Enum.KeyCode.E then input:FireServer("Slow") end
+ elseif key.KeyCode==Enum.KeyCode.Q and player:GetAttribute("MatchVariant")~="Arcade" and player:GetAttribute("MatchVariant")~="Chaos" then input:FireServer("Power")
+ elseif key.KeyCode==Enum.KeyCode.E and player:GetAttribute("MatchVariant")~="Arcade" and player:GetAttribute("MatchVariant")~="Chaos" then input:FireServer("Slow") end
 end)
 UIS.InputEnded:Connect(releaseCharge)
 UIS.InputEnded:Connect(function(key) if key.KeyCode==Enum.KeyCode.LeftShift then setDiveHeld(false) end end)
@@ -643,6 +648,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  if snapshot then
   if Rules then predicted=Rules.advanceFlight(snapshot.p,snapshot.v,(snapshot.flightGravity or 45)*(snapshot.visualRate or 1)^2,age,snapshot.lob,(snapshot.bounces or 0)>0,snapshot.offensive,snapshot.last)
   else predicted=snapshot.p+snapshot.v*age+Vector3.new(0,-0.5*(snapshot.g or 45)*age*age,0) end
+  predicted+=Vector3.new(0.5*(snapshot.curveX or 0)*age*age,0,0)
   predicted=Vector3.new(predicted.X,math.max(181.7,predicted.Y),predicted.Z)
   if snapshot.serveReady and not snapshot.practicePaused and Rules then
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
@@ -691,7 +697,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0 and not player:GetAttribute("PracticePaused")
-  local aiming=locked and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("HowToPlayOpen") and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   crosshair.Visible=developerMode and aiming==true and not (snapshot and canServe(snapshot))
@@ -730,11 +736,11 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   meterFeedback.Position=UDim2.fromOffset(feedbackAt.X,feedbackAt.Y)
   meterFeedback.Visible=meterFeedback.Visible and feedbackOnScreen
   if h then
-   if player:GetAttribute("PowerupStunned") then h:Move(Vector3.zero,false) end
+   if player:GetAttribute("PowerupStunned") or player:GetAttribute("HowToPlayOpen") then h:Move(Vector3.zero,false) end
    local ax=(arrows[Enum.KeyCode.Right] and 1 or 0)-(arrows[Enum.KeyCode.Left] and 1 or 0)
    local az=(arrows[Enum.KeyCode.Down] and 1 or 0)-(arrows[Enum.KeyCode.Up] and 1 or 0)
-   if not player:GetAttribute("PowerupStunned") and (ax~=0 or az~=0) then h:Move(Vector3.new(ax,0,az).Unit,true) end
-   if player:GetAttribute("BaselineSentinelActive") and not player:GetAttribute("PowerupStunned") and not c:GetAttribute("Diving") then
+   if not player:GetAttribute("HowToPlayOpen") and not player:GetAttribute("PowerupStunned") and (ax~=0 or az~=0) then h:Move(Vector3.new(ax,0,az).Unit,true) end
+   if player:GetAttribute("BaselineSentinelActive") and not player:GetAttribute("HowToPlayOpen") and not player:GetAttribute("PowerupStunned") and not c:GetAttribute("Diving") then
     local movement=h.MoveDirection
     local lateral=Vector3.new(movement.X*1.15,0,movement.Z)
     if lateral.Magnitude>0.01 then h:Move(lateral.Unit,false) end
@@ -787,7 +793,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  timingFill.Size=UDim2.fromScale(snapshot.live and math.clamp(1-eta/1.5,0.03,1) or 0,1)
  timingFill.BackgroundColor3=color
  timingText.Text=not snapshot.live and (canServe(snapshot) and "CLICK / TAP TO SERVE DIAGONALLY" or (snapshot.bot and snapshot.servingSide==-1 and "BOT SERVE STARTS AUTOMATICALLY" or snapshot.serveReady and "WAITING FOR SERVER" or "PREPARING NEXT SERVE")) or (snapshot.mustBounce and "TWO-BOUNCE RULE  /  LET IT BOUNCE" or snapshot.last==side and "YOUR RETURN  /  GET READY" or (snapshot.green and "GREEN WINDOW  /  SWING!" or "TRACK THE RING  /  GET INTO RANGE"))
- if snapshot.slamReady then timingText.Text="SLAM WINDOW  /  SWING NOW!" end
+ if snapshot.slamReady then timingText.Text="SPIKE  /  SWING NOW!" end
  timingText.TextColor3=snapshot.slamReady and Color3.fromRGB(55,155,255) or color
  sub.Text=snapshot.side==0 and "FLY: WASD / Q E UP-DOWN / RMB LOOK / SHIFT FAST" or (snapshot.slowed>0 and "SLOWED!  Keep the rally alive" or "FIRST TO 11, WIN BY 2")
 end)

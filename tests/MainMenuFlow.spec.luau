@@ -39,13 +39,13 @@ return function(Flow)
   assert(panel.LowGravity.Selectable,"Every Arcade player can toggle their modifier vote")
   data.mode="Chaos"; data.modifier="LowGravity"; data.roster[2].modifier="LowGravity"
   receive({stage="Cancelled"}); receive(data)
-  assert(not panel.LowGravity.Selectable and panel.LowGravity.Title.Text:find("ON",1,true),"Chaos modifier stays required")
+  assert(not panel.LowGravity.Selectable and panel.LowGravity.Setting.Text=="ALWAYS ON","Chaos modifier stays required")
   data.stage="Reveal"; data.candidates={"Rooftop","Moon"}; data.map="Moon"; data.revealAt=now; data.revealEndsAt=now+4
   receive(data)
   assert(not panel.Moon.Selectable and not panel.Rooftop.Selectable,"Reveal locks map inputs")
   assert(step.Text=="TIE / RANDOM DRAW","Ties show a roulette reveal")
   data.revealAt=now-4; data.revealEndsAt=now; receive(data)
-  assert(step.Text=="MOON SELECTED" and panel.Moon.Accent.Thickness==3,"Reveal lands on the server's chosen map")
+  assert(step.Text=="MOON SELECTED" and panel.Moon.Accent.Thickness==2,"Reveal lands on the server's chosen map")
   receive({stage="Cancelled"})
   assert(panel:FindFirstChild("Classic") and not panel:FindFirstChild("Moon"),"Cancellation returns to modes")
   return "Mode-first menu, live opponent picks, persistent cards, countdown, modifiers, roulette, and cancellation passed"

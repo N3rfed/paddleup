@@ -1,5 +1,18 @@
 -- Rooftop environment, shared by the edit-time builder and game startup.
 local World = {}
+-- Gameplay physics uses a fixed court origin. Restore saved courts moved in Studio.
+function World.alignCourt(root)
+ local surface=root:FindFirstChild("Playing surface")
+ if not surface or not surface:IsA("BasePart") then return root end
+ local target=CFrame.new(0,181.16,0)
+ if (surface.Position-target.Position).Magnitude>0.01
+  or surface.CFrame.LookVector:Dot(target.LookVector)<0.9999
+  or surface.CFrame.UpVector:Dot(target.UpVector)<0.9999 then
+  local delta=target*surface.CFrame:Inverse()
+  root:PivotTo(delta*root:GetPivot())
+ end
+ return root
+end
 -- A versioned rig also installs on saved courts without rebuilding the scenery.
 function World.addCourtLights(root)
  local existing=root:FindFirstChild("RallyLights")
@@ -44,6 +57,7 @@ function World.addCourtLights(root)
 end
 -- Update saved/edit-time courts too, without rebuilding their scenery.
 function World.updateLayout(root)
+ World.alignCourt(root)
  for _,p in ipairs(root:GetChildren()) do
   if p.Name=="Club sign" or p.Name=="Court glass fence" or p.Name=="Court end glass"
    or p.Name=="Fence upright" or p.Name=="Fence top rail" then p:Destroy()

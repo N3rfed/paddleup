@@ -14,25 +14,25 @@ function MainMenu.start(player,network)
  -- Current court sessions share the Classic/Arcade soundtrack.
  local musicModes={Practice=true,["1V1"]=true,["1V2"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
  local cream=Color3.fromRGB(246,246,255)
- local dark=Color3.fromRGB(27,27,64)
+ local dark=Color3.fromRGB(13,19,31)
  local gold=Color3.fromRGB(80,232,255)
  local panel=Instance.new("Frame",gui)
- panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,0)
+ panel.AnchorPoint=Vector2.new(0,0.5); panel.Position=UDim2.new(0,24,0.5,36)
  panel.Name="MatchMenu"; panel.Size=UDim2.fromOffset(420,502); panel.BackgroundColor3=dark; panel.BackgroundTransparency=0.02; panel.BorderSizePixel=0
- local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,20)
- local stroke=Instance.new("UIStroke",panel); stroke.Color=Color3.fromRGB(85,88,139); stroke.Thickness=1; stroke.Transparency=0.5
+ local corner=Instance.new("UICorner",panel); corner.CornerRadius=UDim.new(0,18)
+ local stroke=Instance.new("UIStroke",panel); stroke.Color=Color3.fromRGB(113,146,171); stroke.Thickness=1; stroke.Transparency=0.7
  local scale=Instance.new("UIScale",panel)
  local function label(value,y,height,size,color)
   local t=Instance.new("TextLabel",panel)
   t.Position=UDim2.fromOffset(24,y); t.Size=UDim2.new(1,-48,0,height)
-  t.BackgroundTransparency=1; t.Font=Enum.Font.GothamBold; t.TextSize=size
+  t.BackgroundTransparency=1; t.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Bold); t.TextSize=size
   t.TextColor3=color or cream; t.TextXAlignment=Enum.TextXAlignment.Left
   t.Text=value; t.TextWrapped=true
   return t
  end
- label("P A D D L E U P",22,24,12,gold)
- local heading=label("LET'S PLAY!",52,44,30); heading.Name="Heading"; heading.Font=Enum.Font.GothamBold
- label("01  /  GAME MODE",99,22,12,gold).Name="Step"
+ label("P A D D L E U P   /   SKYLINE CLUB",22,20,10,gold)
+ local heading=label("SELECT MODE",55,40,30); heading.Name="Heading"; heading.FontFace=Font.new(Font.fromEnum(Enum.Font.Nunito).Family,Enum.FontWeight.Heavy)
+ label("Choose how you want to play.",99,18,13,Color3.fromRGB(151,170,188)).Name="Step"
  for index=1,3 do
   local marker=Instance.new("Frame",panel); marker.Name="Progress"..index
   marker.Position=UDim2.fromOffset(24+(index-1)*126,128); marker.Size=UDim2.fromOffset(120,3)
@@ -53,32 +53,28 @@ function MainMenu.start(player,network)
  local slide
  local hide=Instance.new("TextButton",panel)
  hide.Name="HideMenu"; hide.Text="HIDE  <"; hide.Font=Enum.Font.GothamBold; hide.TextSize=11
- hide.Position=UDim2.new(1,-94,0,22); hide.Size=UDim2.fromOffset(70,26)
+ hide.Position=UDim2.new(1,-84,0,20); hide.Size=UDim2.fromOffset(60,26)
  hide.TextColor3=gold; hide.BackgroundColor3=dark; hide.BorderSizePixel=0; hide.AutoButtonColor=false
  local hideCorner=Instance.new("UICorner",hide); hideCorner.CornerRadius=UDim.new(0,7)
  local reopen=Instance.new("TextButton",gui)
  reopen.Name="ShowMenu"; reopen.Text=""; reopen.Font=Enum.Font.GothamBold; reopen.TextSize=24
  reopen.AnchorPoint=Vector2.new(0,0.5); reopen.Position=UDim2.new(0,16,0.5,0)
- reopen.Size=UDim2.fromOffset(164,76); reopen.BackgroundColor3=gold; reopen.TextColor3=dark
+ reopen.Size=UDim2.fromOffset(148,48); reopen.BackgroundColor3=dark; reopen.TextColor3=cream
  reopen.BorderSizePixel=0; reopen.Visible=false; reopen.AutoButtonColor=false
- local tabCorner=Instance.new("UICorner",reopen); tabCorner.CornerRadius=UDim.new(0,14)
- local tabStroke=Instance.new("UIStroke",reopen); tabStroke.Color=dark; tabStroke.Thickness=2
+ local tabCorner=Instance.new("UICorner",reopen); tabCorner.CornerRadius=UDim.new(0,8)
+ local tabStroke=Instance.new("UIStroke",reopen); tabStroke.Color=Color3.fromRGB(113,146,171); tabStroke.Thickness=1; tabStroke.Transparency=0.7
  local playLabel=Instance.new("TextLabel",reopen)
  playLabel.Name="PlayLabel"; playLabel.BackgroundTransparency=1; playLabel.Text="PLAY"
- playLabel.Position=UDim2.fromOffset(18,11); playLabel.Size=UDim2.fromOffset(104,30)
- playLabel.Font=Enum.Font.GothamBold; playLabel.TextSize=26; playLabel.TextColor3=dark
+ playLabel.Position=UDim2.fromOffset(18,0); playLabel.Size=UDim2.fromOffset(88,48)
+ playLabel.Font=Enum.Font.GothamBold; playLabel.TextSize=18; playLabel.TextColor3=cream
  playLabel.TextXAlignment=Enum.TextXAlignment.Left
- local menuHint=Instance.new("TextLabel",reopen)
- menuHint.Name="MenuHint"; menuHint.BackgroundTransparency=1; menuHint.Text="Open game menu"
- menuHint.Position=UDim2.fromOffset(18,43); menuHint.Size=UDim2.fromOffset(130,20)
- menuHint.Font=Enum.Font.GothamBold; menuHint.TextSize=12; menuHint.TextColor3=dark
- menuHint.TextXAlignment=Enum.TextXAlignment.Left
  local expand=Instance.new("TextLabel",reopen)
  expand.Name="ExpandArrow"; expand.BackgroundTransparency=1; expand.Text=utf8.char(8250)
- expand.Position=UDim2.fromOffset(124,10); expand.Size=UDim2.fromOffset(24,32)
- expand.Font=Enum.Font.GothamBold; expand.TextSize=32; expand.TextColor3=dark
+ expand.Position=UDim2.fromOffset(110,0); expand.Size=UDim2.fromOffset(24,48)
+ expand.Font=Enum.Font.GothamBold; expand.TextSize=24; expand.TextColor3=gold
  local function highlightTab(active)
-  TweenService:Create(reopen,TweenInfo.new(0.15),{BackgroundColor3=active and Color3.fromRGB(156,243,255) or gold}):Play()
+  TweenService:Create(reopen,TweenInfo.new(0.15),{BackgroundColor3=active and Color3.fromRGB(38,48,69) or dark}):Play()
+  TweenService:Create(tabStroke,TweenInfo.new(0.15),{Transparency=active and 0.2 or 0.7}):Play()
  end
  reopen.MouseEnter:Connect(function() highlightTab(true) end)
  reopen.MouseLeave:Connect(function() highlightTab(false) end)
@@ -90,7 +86,7 @@ function MainMenu.start(player,network)
   local inLobby=player:GetAttribute("SessionMode")==nil or player:GetAttribute("SessionMode")=="Lobby"
   panel.Visible=inLobby; reopen.Visible=inLobby and collapsed
   slide=TweenService:Create(panel,TweenInfo.new(0.25,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),
-   {Position=UDim2.new(0,collapsed and -(420*scale.Scale+8) or 24,0.5,0)})
+   {Position=UDim2.new(0,collapsed and -(420*scale.Scale+8) or 24,0.5,36)})
   slide.Completed:Once(function(playback)
    if playback==Enum.PlaybackState.Completed and collapsed then panel.Visible=false end
   end)
@@ -101,20 +97,20 @@ function MainMenu.start(player,network)
  local UIS=game:GetService("UserInputService")
  local exit=Instance.new("ImageButton",gui)
  exit.Name="ExitMatch"; exit.AnchorPoint=Vector2.new(1,0); exit.Position=UDim2.new(1,-12,0,16)
- exit.Size=UDim2.fromOffset(44,44); exit.BackgroundColor3=Color3.fromRGB(27,27,64)
+ exit.Size=UDim2.fromOffset(36,36); exit.BackgroundColor3=Color3.fromRGB(27,27,64)
  exit.BackgroundTransparency=1; exit.BorderSizePixel=0; exit.Image=""; exit.AutoButtonColor=false
  local exitKey=Instance.new("TextLabel",exit)
  exitKey.Name="LeaveKeybind"; exitKey.AnchorPoint=Vector2.new(0.5,0)
- exitKey.Position=UDim2.new(0.5,0,1,6); exitKey.Size=UDim2.fromOffset(28,24)
+ exitKey.Position=UDim2.new(0.5,0,1,2); exitKey.Size=UDim2.fromOffset(22,20)
  exitKey.BackgroundTransparency=1; exitKey.BorderSizePixel=0; exitKey.Text="M"; exitKey.Font=Enum.Font.GothamBlack
- exitKey.TextSize=20; exitKey.TextColor3=Color3.fromRGB(246,246,255); exitKey.Visible=UIS.KeyboardEnabled
+ exitKey.TextSize=14; exitKey.TextColor3=Color3.fromRGB(246,246,255); exitKey.Visible=UIS.KeyboardEnabled
  local keyStroke=Instance.new("UIStroke",exitKey); keyStroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Contextual
- keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=2; keyStroke.Transparency=0
+ keyStroke.Color=Color3.fromRGB(12,12,30); keyStroke.Thickness=1.5; keyStroke.Transparency=0
  -- Outline the symbol itself for contrast against both bright rocks and dark sky.
  local icon=Instance.new("Frame",exit)
  icon.Name="ExitIcon"; icon.AnchorPoint=Vector2.new(0.5,0.5); icon.Position=UDim2.fromScale(0.5,0.5)
  icon.Size=UDim2.fromOffset(24,24); icon.BackgroundTransparency=1
- local iconScale=Instance.new("UIScale",icon); iconScale.Scale=1.4
+ local iconScale=Instance.new("UIScale",icon); iconScale.Scale=1
  local function iconLine(name,from,to)
   local delta=to-from
   local line=Instance.new("Frame",icon); line.Name=name; line.AnchorPoint=Vector2.new(0.5,0.5)
@@ -222,11 +218,11 @@ function MainMenu.start(player,network)
  local function resize()
   local camera=workspace.CurrentCamera
   if camera then
-   local nextScale=math.max(0.1,math.min(1,(camera.ViewportSize.Y-40)/panel.Size.Y.Offset,(camera.ViewportSize.X-48)/panel.Size.X.Offset))
+   local nextScale=math.max(0.1,math.min(1,(camera.ViewportSize.Y-112)/panel.Size.Y.Offset,(camera.ViewportSize.X-48)/panel.Size.X.Offset))
    if scale.Scale~=nextScale then
     scale.Scale=nextScale
     if slide then slide:Cancel() end
-    panel.Position=UDim2.new(0,collapsed and -(420*nextScale+8) or 24,0.5,0)
+    panel.Position=UDim2.new(0,collapsed and -(420*nextScale+8) or 24,0.5,36)
     if collapsed then panel.Visible=false end
    end
    dialogScale.Scale=math.min(1,(camera.ViewportSize.X-32)/420,(camera.ViewportSize.Y-32)/238)

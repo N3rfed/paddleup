@@ -1,7 +1,7 @@
 -- Permanent arcade sunset. Keep the module name for existing server startup calls.
 local Lighting = game:GetService("Lighting")
 local DayNightCycle = {}
-DayNightCycle.START_HOUR = 17.8
+DayNightCycle.START_HOUR = 18
 
 local function effect(className, name)
  local existing = Lighting:FindFirstChild(name)
@@ -19,17 +19,17 @@ function DayNightCycle.start()
  Lighting.GlobalShadows = true
  Lighting.Brightness = 2.2
  Lighting.ExposureCompensation = 0.05
- Lighting.Ambient = Color3.fromRGB(124, 120, 150)
- Lighting.OutdoorAmbient = Color3.fromRGB(161, 157, 177)
- Lighting.ColorShift_Top = Color3.fromRGB(239, 199, 180)
- Lighting.ColorShift_Bottom = Color3.fromRGB(52, 51, 76)
+ Lighting.Ambient = Color3.fromRGB(145, 143, 155)
+ Lighting.OutdoorAmbient = Color3.fromRGB(168, 164, 175)
+ Lighting.ColorShift_Top = Color3.fromRGB(255, 211, 166)
+ Lighting.ColorShift_Bottom = Color3.fromRGB(20, 20, 25)
  Lighting.EnvironmentDiffuseScale = 0.45
  Lighting.EnvironmentSpecularScale = 0.75
 
  local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or effect("Atmosphere", "ArcadeSunsetAtmosphere")
- atmosphere.Color = Color3.fromRGB(225, 193, 204)
- atmosphere.Decay = Color3.fromRGB(118, 119, 161)
- atmosphere.Density = 0.29
+ atmosphere.Color = Color3.fromRGB(255, 205, 171)
+ atmosphere.Decay = Color3.fromRGB(130, 137, 172)
+ atmosphere.Density = 0.24
  atmosphere.Offset = 0.1
  atmosphere.Haze = 1.4
  atmosphere.Glare = 0.2
@@ -45,10 +45,10 @@ function DayNightCycle.start()
 
  local grade = effect("ColorCorrectionEffect", "ArcadeSunsetGrade")
  grade.Enabled = true
- grade.TintColor = Color3.fromRGB(255, 245, 250)
+ grade.TintColor = Color3.fromRGB(255, 248, 239)
  grade.Brightness = 0.01
- grade.Contrast = 0.05
- grade.Saturation = 0.04
+ grade.Contrast = 0.02
+ grade.Saturation = -0.02
 
  -- Reuse the map's bloom so the base lighting does not stack two glow effects.
  local bloom = Lighting:FindFirstChild("ArcadeSunsetBloom") or Lighting:FindFirstChildOfClass("BloomEffect") or effect("BloomEffect", "ArcadeSunsetBloom")

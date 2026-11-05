@@ -26,6 +26,14 @@ local courtModifier="None"
 local introReadyRemote=remote("IntroReady")
 local powerupRemote=remote("Powerup")
 local Powerups=require(script:WaitForChild("Powerups"))
+local ArcadeDeck=require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ArcadeDeck"))
+local arcade=require(script:WaitForChild("ArcadePowers")).new()
+arcade:reset()
+local arcadeRemote=remote("Arcade")
+local loadoutRemote=remote("ArcadeLoadout")
+local loadoutPending=false
+local loadoutSerial=0
+local loadoutDeadline
 local courtVariant=nil
 local draft=nil
 local draftSerial=0
@@ -85,14 +93,15 @@ local function clearEnvironmentGravity(player)
  end
 end
 local function applyEnvironmentGravity(player,root)
- if courtModifier~="LowGravity" or users[player].side==0 then clearEnvironmentGravity(player); return end
+ local factor=(courtModifier=="LowGravity" and 0.5 or 1)*arcade:gravity(os.clock())
+ if factor==1 or users[player].side==0 then clearEnvironmentGravity(player); return end
  local force=root:FindFirstChild("EnvironmentGravity")
  if not force then
   local attachment=Instance.new("Attachment"); attachment.Name="EnvironmentGravityAttachment"; attachment.Parent=root
   force=Instance.new("VectorForce"); force.Name="EnvironmentGravity"; force.Attachment0=attachment
   force.RelativeTo=Enum.ActuatorRelativeTo.World; force.ApplyAtCenterOfMass=true; force.Parent=root
  end
- force.Force=Vector3.new(0,root.AssemblyMass*workspace.Gravity*0.5,0)
+ force.Force=Vector3.new(0,root.AssemblyMass*workspace.Gravity*(1-factor),0)
 end
 local rotation=require(script:WaitForChild("ServeRotation")).new()
 local score=rotation.score
@@ -114,29 +123,72 @@ ball.shots=0
 local banner="Welcome!"
 local function resetPowerups()
  draft=nil; draftDue=courtVariant=="Chaos"; rallies=0
+ loadoutSerial+=1; loadoutDeadline=nil; loadoutPending=false
+ arcade:reset()
  for p,d in pairs(users) do
+  loadoutRemote:FireClient(p,{kind="close"})
+  if courtVariant=="Arcade" and d.side~=0 and not ArcadeDeck.validate(d.arcadeDeck) then loadoutPending=true end
   d.powerups={}; d.powerupNames={}; d.powerupPulses={}; d.powerupActive={}; d.powerupMatch={}; d.powerupRally=Powerups.newRally()
   p:SetAttribute("PowerupDraftOpen",false)
   p:SetAttribute("SlowFallEnabled",false)
   powerupRemote:FireClient(p,{kind="reset"})
  end
 end
+loadoutRemote.OnServerEvent:Connect(function(p,serial,ids)
+ local d=users[p]
+ if not loadoutPending or not loadoutDeadline or serial~=loadoutSerial or os.clock()>=loadoutDeadline
+  or courtVariant~="Arcade" or not d or d.side==0 or d.arcadeDeck then return end
+ local deck=ArcadeDeck.validate(ids)
+ if not deck then return end
+ d.arcadeDeck=deck
+ loadoutRemote:FireClient(p,{kind="chosen"})
+end)
 local function choosePowerup(p,id)
  if practicePaused() then return end
  local offer=draft and draft.offers[p]
  local d=users[p]
  if not d or d.side==0 then return end
- local card=Powerups.choose(offer,id,d.powerups)
+ local card,slot
+ if courtVariant=="Chaos" then
+  card=arcade:chooseChaos(p,offer,id)
+ else
+  card,slot=arcade:choose(p,offer,id,os.clock())
+ end
  if not card then return end
  draft.offers[p]=nil
- table.insert(d.powerupNames,card.name)
- p:SetAttribute("SlowFallEnabled",Powerups.slowFall(d.powerups,d.side,d.variant))
- powerupRemote:FireClient(p,{kind="chosen",name=card.name,count=#d.powerupNames,stats=d.powerups,names=d.powerupNames,card=card})
+ powerupRemote:FireClient(p,{kind="chosen",mode=courtVariant,sharedPowers=courtVariant=="Arcade",name=card.name,card=card,slot=slot,stats=courtVariant=="Chaos" and table.clone(arcade:data(p).levels) or d.powerups})
 end
 powerupRemote.OnServerEvent:Connect(function(p,serial,id)
  if draft and serial==draft.id then choosePowerup(p,id) end
 end)
 local function updateDraft(now)
+ if loadoutPending then
+  if now<introUntil then return end
+  if not loadoutDeadline then
+   loadoutDeadline=now+45
+   for p,d in pairs(users) do
+    if d.side~=0 then
+     p:SetAttribute("PowerupDraftOpen",true)
+     if not d.arcadeDeck then loadoutRemote:FireClient(p,{kind="open",id=loadoutSerial,endsAt=workspace:GetServerTimeNow()+45}) end
+    end
+   end
+  end
+  local waiting=false
+  for p,d in pairs(users) do
+   if d.side~=0 and not d.arcadeDeck then
+    if now>=loadoutDeadline then
+     local defaults={}
+     for index=1,ArcadeDeck.SIZE do defaults[index]=ArcadeDeck.cards[index].id end
+     d.arcadeDeck=ArcadeDeck.validate(defaults)
+    else waiting=true end
+   end
+  end
+  if waiting then return end
+  loadoutPending=false; loadoutDeadline=nil; nextServe=now+1
+  for p,d in pairs(users) do
+   if d.side~=0 then p:SetAttribute("PowerupDraftOpen",false); loadoutRemote:FireClient(p,{kind="close"}) end
+  end
+ end
  if draftDue and not draft and not ball.live and now>=introUntil and now>=nextServe then
   if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
   local roster={}
@@ -146,18 +198,22 @@ local function updateDraft(now)
   end
   if not home or (not away and courtMode~="Practice") then return end
   table.sort(roster,function(a,b) return a.UserId<b.UserId end)
-  local builds={}
-  for index,p in ipairs(roster) do builds[index]=users[p].powerups end
-  local tier,offers=Powerups.deal(powerupRandom,#roster,builds)
+  local offers,tier={}
+  if courtVariant=="Chaos" then
+   for index,p in ipairs(roster) do offers[index]=arcade:chaosUpgradeOffer(p) end
+  else
+   for index,p in ipairs(roster) do offers[index]=arcade:offer(p,users[p].arcadeDeck,now) end
+  end
   draftSerial+=1
   draft={id=draftSerial,endsAt=now+Powerups.DURATION,offers={}}
   draftDue=false; serveReady=false; serveDeadline=nil
   for index,p in ipairs(roster) do
+   if not offers[index] then continue end
    draft.offers[p]=offers[index]
    users[p].chargeAt=nil; users[p].diveUntil=0
    if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
    p:SetAttribute("PowerupDraftOpen",true)
-   powerupRemote:FireClient(p,{kind="offer",id=draft.id,tier=tier,cards=offers[index],endsAt=workspace:GetServerTimeNow()+Powerups.DURATION})
+   powerupRemote:FireClient(p,{kind="offer",mode=courtVariant,id=draft.id,sharedPowers=courtVariant=="Arcade",tier=tier,cards=offers[index],endsAt=workspace:GetServerTimeNow()+Powerups.DURATION})
   end
  end
  if draft then
@@ -256,7 +312,7 @@ local function rosterChanged()
  introUntil=0; matchIntro=nil; introReady={}; introLoadDeadline=0
  if #home>0 and #away>0 then
   introSerial+=1
-  introUntil=os.clock()+9.5
+  introUntil=os.clock()+3
   nextServe=introUntil
   local function portraits(side)
    local result={}
@@ -268,7 +324,8 @@ local function rosterChanged()
    end
    return result
   end
-  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+9.5,home=portraits(1),away=portraits(-1)}
+  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+3,home=portraits(1),away=portraits(-1),
+   variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
   if environments.active=="Moon" then
    matchIntro.loading=true
    introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
@@ -295,8 +352,8 @@ introReadyRemote.OnServerEvent:Connect(function(player,id)
  for participant,data in pairs(users) do
   if data.side~=0 and not introReady[participant] then return end
  end
- matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+9.5
- introUntil=os.clock()+9.5; nextServe=introUntil; introLoadDeadline=0
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+3
+ introUntil=os.clock()+3; nextServe=introUntil; introLoadDeadline=0
 end)
 local function rootOf(p)
  local c=p.Character
@@ -337,7 +394,7 @@ local function landing()
    end
   end
  end
- return ball.p+Vector3.new(ball.v.X*t,-h,ball.v.Z*t),t
+ return ball.p+Vector3.new(ball.v.X*t+0.5*(ball.curveX or 0)*t*t,-h,ball.v.Z*t),t
 end
 local function perfect(now,d)
  local _,t=landing()
@@ -357,14 +414,16 @@ local function lobCrossesSlamZone(from,velocity,gravity,duration)
  end
  return false
 end
+local activateArmedPowers
 local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,contact)
+ local startingRally=not ball.live
  local rallyScale=contact and contact.uncapped and 1 or ball.speed
  local speedScale=(slam and Rules.slamSpeedScale(rallyScale) or rallyScale)*(boost and 1.22 or 1)*(1+0.12*(momentum or 0))
  if not slam and not soft then speedScale*=1+0.22*(charge or 0) end
  -- Speed changes flight time; lobs use heavier gravity after their apex.
  if soft then speedScale*=0.65 end
  local distance=(Vector3.new(target.X,0,target.Z)-Vector3.new(from.X,0,from.Z)).Magnitude
- local gravity=GRAVITY
+ local gravity=GRAVITY*arcade:gravity(os.clock())
  local duration=slam and math.max(0.12,math.min(distance/(BASE_SPEED*1.8),math.sqrt(2*math.max(0.1,from.Y-FLOOR)/gravity)*0.75)) or math.max(0.7,distance/BASE_SPEED)
  if lob then duration=math.max(duration*1.35,1.5) end
  duration=duration/math.max(0.1,speedScale)
@@ -382,13 +441,13 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
   end
  end
  if lob then
-  vy=Rules.lobLaunchY(from.Y-FLOOR,duration,GRAVITY)
+  vy=Rules.lobLaunchY(from.Y-FLOOR,duration,gravity)
   if not mishit and crossing>0 and crossing<1 then
    for _=1,100 do
-    local sample=Rules.advanceBall(from,Vector3.new(0,vy,0),GRAVITY,duration*crossing,true,false)
+    local sample=Rules.advanceBall(from,Vector3.new(0,vy,0),gravity,duration*crossing,true,false)
     if sample.Y>=185.2 then break end
     duration*=1.03
-    vy=Rules.lobLaunchY(from.Y-FLOOR,duration,GRAVITY)
+    vy=Rules.lobLaunchY(from.Y-FLOOR,duration,gravity)
    end
   end
  end
@@ -447,6 +506,9 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  ball.g=ball.flightGravity*(ball.lob and ball.v.Y<=0 and Rules.LOB_GRAVITY_SCALE or 1)
  ball.shotMultiplier=shotMultiplier
  ball.peakSpeed=math.max(ball.peakSpeed or 1,ball.speed*shotMultiplier)
+ ball.curveX=contact and contact.heatseeker and math.sign(target.X-from.X)*18 or 0
+ ball.v-=Vector3.new(0.5*ball.curveX*duration/multiplier,0,0)
+ ball.arcadeGravity=arcade:gravity(os.clock())
  ball.launchPosition=from; ball.launchVelocity=ball.v; ball.launchedAt=os.clock()
  ball.shotId=(ball.shotId or 0)+1
  ball.slamLob=ball.lob and lobCrossesSlamZone(from,ball.v,ball.flightGravity,duration/multiplier)
@@ -456,10 +518,12 @@ local function launch(from,target,boost,lob,slam,momentum,soft,mishit,charge,con
  contact.position=from; contact.direction=ball.v.Unit; contact.speed=ball.speed*shotMultiplier
  contact.slam=slam==true; contact.powered=boost==true; contact.charge=charge or 0; contact.soft=soft
  feedback:FireAllClients(contact,"ballHit")
+ if startingRally and activateArmedPowers then activateArmedPowers(os.clock()) end
 end
 local function point(winner,reason)
  if practicePaused() then return end
  if not ball.live then return end
+ arcade:clearArmed()
  -- A return is only missed once the incoming ball double-bounces.
  -- Swing attempts can still be followed by a successful return or dive.
  if reason=="Double bounce" then
@@ -525,6 +589,8 @@ local function point(winner,reason)
   rallies+=1
   if ball.resetScore then resetPowerups()
   elseif rallies%3==0 then draftDue=true end
+ elseif courtVariant=="Arcade" then
+  if ball.resetScore then resetPowerups() elseif arcade:rally() then draftDue=true end
  end
 end
 local function paddle(character)
@@ -602,6 +668,10 @@ local function leaveCourt(p)
  advanceMatchSession(p)
  d.side=0; d.slot=0
  d.variant=nil; p:SetAttribute("MatchVariant",nil)
+ d.arcadeDeck=nil
+ arcade:clearArmed(p)
+ p:SetAttribute("PowerupDraftOpen",false)
+ loadoutRemote:FireClient(p,{kind="close"})
  p:SetAttribute("SlowFallEnabled",false)
  d.diveUntil=0; d.divePoseUntil=0; d.volleyPending=false; d.serveChargeAt=nil; d.chargeAt=nil; d.chargeCooldownBlocked=nil
  d.powerUntil=0; d.slowUntil=0
@@ -693,7 +763,7 @@ local function updateQueue()
   connectSession(member,group.format,group.mode,group.map,group.modifier)
  end
 end
-queueRemote.OnServerEvent:Connect(function(p,action,a,b)
+queueRemote.OnServerEvent:Connect(function(p,action,a,b,c)
  local d=users[p]
  if not d then return end
  if action=="Cancel" then
@@ -701,7 +771,7 @@ queueRemote.OnServerEvent:Connect(function(p,action,a,b)
  elseif action=="Join" then
   if d.mode~="Lobby" or not matchmaking:join(p,a,b) then
    queueRemote:FireClient(p,{stage="Error",message="Return to the lobby and choose a valid mode and player count."})
-  end
+  else d.arcadeDeck=nil end
  elseif action=="Vote" then
   if not matchmaking:configure(p,a,b) then
    queueRemote:FireClient(p,{stage="Error",message="Voting has closed, or this choice is unavailable."})
@@ -716,6 +786,7 @@ Players.PlayerRemoving:Connect(function(p)
  users[p]=nil
 end)
 local function prepareServe()
+ if loadoutPending then return end
  if ball.resetScore then rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
  syncServing()
  if not occupant(1) or (courtMode~="Practice" and not occupant(-1)) then return end
@@ -830,6 +901,7 @@ practiceRemote.OnServerEvent:Connect(function(p,action,value,revision)
 end)
 -- Keep all practice deadlines at their remaining duration while paused.
 local function suspendPracticeTimers(dt)
+ arcade:pause(dt)
  nextServe+=dt
  if introUntil>0 then introUntil+=dt end
  if matchIntro then matchIntro.endsAt+=dt end
@@ -868,10 +940,11 @@ local function slamQuality(p,d,r,now,overhead)
  local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
  local diving=now<(d.divePoseUntil or d.diveUntil or 0)
  local jumping=Rules.jumpSlam(r.Position,d.side,grounded,diving)
- if not overhead and not jumping then return nil end
- local minY=Rules.slamBounds(p.Character,r)
+ local minY,maxY=Rules.slamBounds(p.Character,r)
+ if jumping and Rules.spikeReach(ball.p,r.CFrame,maxY) then return "perfect" end
+ if not overhead then return nil end
  local contact=r.Position+r.CFrame.LookVector*5
- contact=Vector3.new(contact.X,jumping and r.Position.Y+1.5 or minY+1,contact.Z)
+ contact=Vector3.new(contact.X,minY+1,contact.Z)
  return Rules.slamTiming(ball.p,ball.v,contact,Powerups.has(d.powerups,"perfectVision"))
 end
 local function slamReady(p,d,now)
@@ -880,16 +953,16 @@ local function slamReady(p,d,now)
  if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
  if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,h.FloorMaterial~=Enum.Material.Air,d.kitchenTouched)) then return false end
- local distance,overhead=overheadStatus(p,r)
- return Rules.contactInFront(ball.p,r.CFrame) and (overhead or distance<=Rules.HIT_RANGE)
-  and slamQuality(p,d,r,now,overhead)=="perfect"
+ local _,overhead=overheadStatus(p,r)
+ return slamQuality(p,d,r,now,overhead)=="perfect"
 end
 local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
+  if arcade:effect(p,"slide",now) then return false end
   charge=charge or 0
   local distance,overhead=overheadStatus(p,r)
   local backhand=r.CFrame:PointToObjectSpace(ball.p).X<0
   local bonus,extension=Powerups.extraReach(d.powerups,d.powerupMatch,backhand)
-  local reach=(1+((d.powerups and d.powerups.reach) or 0)+bonus)*(Comeback.active(comeback,d.side) and Comeback.HIT or 1)
+  local reach=(1+((d.powerups and d.powerups.reach) or 0)+bonus)*(Comeback.active(comeback,d.side) and Comeback.HIT or 1)*arcade:reach(p,now)
   local fire=Powerups.onFire(d.powerups,d.powerupRally,ball.shots+1)
   local guided=Powerups.has(d.powerups,"thirdShot") and ball.shots==1 and d.side==servingSide
   local feint=shotKind=="Lob" and d.chargeAt~=nil and overhead and Powerups.has(d.powerups,"baitSwitch")
@@ -906,11 +979,11 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
    -- Union with the normal sphere: only the forward intercept volume is added.
    distance=math.min(distance,(ball.p-center).Magnitude)
   end
-  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach+extension or overhead)
-  local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
-  if automatic and not valid then return false end
   local slamTiming=not softRequested and shotKind~="Lob" and shotKind~="Slice" and not shield
    and not guided and not feint and not deceptive and slamQuality(p,d,r,now,overhead) or nil
+  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach+extension or overhead or slamTiming~=nil)
+  local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
+  if automatic and not valid then return false end
   local clean=valid and (distance<=Rules.PERFECT_RANGE*reach*(Powerups.has(d.powerups,"carbonFiber") and 1.15 or 1)+extension or overhead) and perfect(now,d)
   if guided or feint or deceptive or shield then clean=valid end
   if ball.spin and not fire and not guided and not feint and not deceptive and not shield then
@@ -918,8 +991,9 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   end
   if slamTiming then clean=valid and slamTiming=="perfect" end
   if not Rules.hitReady(now,d.lastSwing,clean) then return false end
-  d.lastSwing=clean and now or now+Rules.HIT_COOLDOWN
-  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or Rules.HIT_COOLDOWN))
+  local cooldown=Rules.HIT_COOLDOWN*arcade:swingScale(p,now)
+  d.lastSwing=clean and now or now+cooldown
+  p.Character:SetAttribute("HitReadyAt",workspace:GetServerTimeNow()+(clean and 0 or cooldown))
   if not valid then
    feedback:FireAllClients({userId=p.UserId,backhand=backhand,soft=softRequested and Rules.softShot(r.Position,d.side) or nil},"swing")
    -- An out-of-range swing does not end the return opportunity; report faults only when the rally resolves.
@@ -1013,15 +1087,21 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local powered=clean and not soft and now<d.powerUntil
   d.powerUntil=0
   ball.last=d.side; lastHitter[d.side]=p
-  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net",charged and charge or 0,{userId=p.UserId,clean=clean,
+  local positions={}
+  for _,opponent in ipairs(teamPlayers(-d.side)) do local root=rootOf(opponent); if root then table.insert(positions,root.Position) end end
+  if courtMode=="Practice" then table.insert(positions,Vector3.new(botX,184,botZ)) end
+  local heatTarget=arcade:heatTarget(p,now,positions,d.side)
+  if heatTarget then target=heatTarget; quality="perfect"; soft=nil; slam=false end
+  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net",charged and charge or 0,{userId=p.UserId,clean=clean,heatseeker=heatTarget~=nil,
    reflectedSpeed=shield and incomingSpeed*2 or calculated and incomingSpeed*0.8 or nil,
    offensive=offensive,heavy=heavy,deceptive=deceptive,afterimage=afterimage,
    uncapped=Powerups.has(d.powerups,"terminalVelocity") and not shield and not calculated,speedMultiplier=multiplier,spin=(guided or offensive) and "topspin" or shotKind=="Slice" and "slice" or nil,
    sliceBoost=Powerups.has(d.powerups,"sliceDice"),atp=Powerups.has(d.powerups,"atpAssassin"),deadly=deadly})
 
   feedback:FireAllClients({userId=p.UserId,backhand=backhand,slam=slam or deceptive,hidePaddle=rhythm,contact=ball.p,direction=ball.v.Unit,charge=charge,soft=not deceptive and (soft or (softRequested and Rules.softShot(r.Position,d.side) or nil)) or nil},"swing")
-  local message=restored and (slam and "SLAM!  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
-   or (slam and "SLAM!  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
+  local slamName=not grounded and "SPIKE!" or "SLAM!"
+  local message=restored and (slam and slamName.."  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
+   or (slam and slamName.."  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
   if charged and clean then message="CHARGED RETURN!  +7%"
   elseif charged and quality~="net" then message="MISTIMED CHARGE  /  WIDE RETURN" end
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
@@ -1033,13 +1113,40 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   d.diveUntil=0
   return true
 end
+arcadeRemote.OnServerEvent:Connect(function(p,index)
+ local d=users[p]; local now=os.clock()
+ if not d or d.side==0 or d.variant~="Arcade" or courtVariant~="Arcade" or practicePaused()
+  or now<introUntil or loadoutPending or draft or draftDue or p:GetAttribute("LeaveConfirmationOpen") then return end
+ local root,humanoid=rootOf(p)
+ if not root or not humanoid or humanoid.Health<=0 then return end
+ if not ball.live then
+  if serveReady then arcade:arm(p,index,now) end
+  return
+ end
+ local opponents=teamPlayers(-d.side)
+ if courtMode=="Practice" then table.insert(opponents,"PracticeBot") end
+ local card=arcade:activate(p,index,now,d.side,opponents,root,world,courtVariant=="Chaos")
+ if card then tell(p,card.name:upper(),"perfect") end
+end)
+activateArmedPowers=function(now)
+ for p,d in pairs(users) do
+  if d.side==0 then continue end
+  local root,humanoid=rootOf(p)
+  if not root or not humanoid or humanoid.Health<=0 then arcade:clearArmed(p); continue end
+  local opponents=teamPlayers(-d.side)
+  if courtMode=="Practice" then table.insert(opponents,"PracticeBot") end
+  for _,card in ipairs(arcade:activateArmed(p,now,d.side,opponents,root,world,courtVariant=="Chaos")) do
+   tell(p,card.name:upper(),"perfect")
+  end
+ end
+end
 input.OnServerEvent:Connect(function(p,action,moveIntent)
  local d=users[p]
  if not d or d.side==0 or type(action)~="string" or practicePaused() then return end
  local now=os.clock()
  if action=="DiveHeld" then d.diveHeld=moveIntent==true; return end
  if now<d.powerupRally.stunUntil and action=="Dive" then return end
- if now<introUntil or draft or draftDue then return end
+ if now<introUntil or loadoutPending or draft or draftDue then return end
  -- Release/cancel must survive the flood gate, even for a very quick tap.
  if action=="ChargeCancel" then d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end; return end
  local releasedCharge
@@ -1128,7 +1235,20 @@ RunService.Heartbeat:Connect(function(dt)
   end
  end
  local paused=practicePaused()
- if paused then suspendPracticeTimers(dt) else updateDraft(now) end
+ if paused then suspendPracticeTimers(dt) else updateDraft(now); arcade:update(now) end
+ if not paused and courtVariant=="Chaos" then
+  local participants={}
+  for p,d in pairs(users) do if d.side~=0 then table.insert(participants,{player=p,side=d.side}) end end
+  if courtMode=="Practice" then table.insert(participants,{player="PracticeBot",side=-1}) end
+  local live=ball.live and now>=introUntil and not draft and not draftDue
+  arcade:chaosUpdate(math.min(dt,0.1),now,participants,world,live)
+  if live then arcade:chaosStep(math.min(dt,0.1),now,participants,world) end
+ end
+ local gravityFactor=arcade:gravity(now)
+ if ball.live and gravityFactor~=(ball.arcadeGravity or 1) then
+  ball.flightGravity=(ball.flightGravity or GRAVITY)*gravityFactor/(ball.arcadeGravity or 1)
+  ball.arcadeGravity=gravityFactor
+ end
  local pickupParticipants={}
  for player,data in pairs(users) do
   if data.side~=0 then table.insert(pickupParticipants,{player=player,side=data.side}) end
@@ -1154,13 +1274,17 @@ RunService.Heartbeat:Connect(function(dt)
    local original=Vector3.new(baseline and move.X/1.15 or move.X,0,move.Z)
    local lateral=original.Magnitude>0.01 and original.Unit.X or 0
    local movement=(1+(d.powerups.speed or 0)+(d.powerupMatch.speedWins or 0)*0.05)*Powerups.lateralScale(d.powerups,r.Position.Z*d.side,r.Position.X,lateral)*(camper and 1.15 or 1)*(now<effect.burstUntil and 1.75 or 1)*(Comeback.active(comeback,d.side) and Comeback.MOVE or 1)
-   local stunned=now<effect.stunUntil
-   h.WalkSpeed=(stunned or d.mode=="Spectate" or (d.side~=0 and (now<introUntil or draft~=nil))) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)*movement
+   movement*=arcade:speed(p,now)
+   local sliding,slideDirection=false,nil
+   if d.side~=0 then sliding,slideDirection=arcade:touch(p,d.side,r.Position,now) end
+   local stunned=now<effect.stunUntil or sliding
+   h.WalkSpeed=(stunned or d.mode=="Spectate" or (d.side~=0 and (now<introUntil or loadoutPending or draft~=nil))) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)*movement
    p:SetAttribute("PowerupStunned",stunned)
-   if stunned then r.AssemblyLinearVelocity=Vector3.new(0,r.AssemblyLinearVelocity.Y,0) end
+   if stunned then r.AssemblyLinearVelocity=Vector3.new(0,r.AssemblyLinearVelocity.Y,0)+(sliding and slideDirection*16 or Vector3.zero) end
    local face=p.Character:FindFirstChild("PaddleFace")
    local fire=ball.live and Powerups.onFire(d.powerups,effect,ball.shots+1)
    if face then
+    face.Size=Vector3.new(1.65,2,0.3)*arcade:reach(p,now)
     face.Material=fire and Enum.Material.Neon or Enum.Material.SmoothPlastic
     face.Color=fire and Color3.fromRGB(255,115,25) or Color3.fromRGB(31,193,180)
    end
@@ -1196,7 +1320,12 @@ RunService.Heartbeat:Connect(function(dt)
      z=d.side*math.max(r.Position.Z*d.side,2.5)
     end
     if math.abs(x-r.Position.X)>0.1 or math.abs(z-r.Position.Z)>0.1 or r.Position.Y<178 then
+     local recovering=r.Position.Y<178
      r.CFrame=CFrame.new(x,math.max(r.Position.Y,184),z)*r.CFrame.Rotation
+     if recovering then
+      local velocity=r.AssemblyLinearVelocity
+      r.AssemblyLinearVelocity=Vector3.new(velocity.X,0,velocity.Z); h.Jump=false
+     end
     end
    end
   end
@@ -1255,10 +1384,14 @@ RunService.Heartbeat:Connect(function(dt)
    end
    if not ball.live then break end
    local previous=ball.p
+   local curve=ball.curveX or 0
+   ball.p+=Vector3.new(0.5*curve*step*step,0,0)
    ball.p,ball.v,ball.g=Rules.advanceFlight(ball.p,ball.v,ball.flightGravity or GRAVITY,step,ball.lob,ball.bounces>0,ball.offensive,ball.last)
+   ball.v+=Vector3.new(curve*step,0,0)
    if previous.Z*ball.p.Z<=0 and math.abs(ball.p.X)<21 and ball.p.Y<184.65 then
     point(-ball.last,"Net")
    elseif ball.p.Y<=FLOOR then
+    ball.curveX=0
     local fraction=math.clamp((previous.Y-FLOOR)/math.max(0.0001,previous.Y-ball.p.Y),0,1)
     local impact=previous:Lerp(ball.p,fraction)
     feedback:FireAllClients({position=impact,speed=ball.speed,onCourt=math.abs(impact.X)<=20.09 and math.abs(impact.Z)<=40.09},"ballBounce")
@@ -1332,8 +1465,9 @@ RunService.Heartbeat:Connect(function(dt)
    else botTarget=Vector3.new(0,0,-28) end
   end
   local delta=botTarget-Vector3.new(botX,0,botZ)
-  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or config.move)*(Comeback.active(comeback,-1) and Comeback.MOVE or 1))
-  if now<botStunUntil then move=0 end
+  local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or config.move)*(Comeback.active(comeback,-1) and Comeback.MOVE or 1)*arcade:speed("PracticeBot",now))
+  local botSliding=arcade:touch("PracticeBot",-1,Vector3.new(botX,184,botZ),now)
+  if now<botStunUntil or botSliding then move=0 end
   botMoving=move>0.01
   botStride+=move*0.65
   if delta.Magnitude>0.01 then botX+=delta.Unit.X*move; botZ+=delta.Unit.Z*move end
@@ -1342,7 +1476,7 @@ RunService.Heartbeat:Connect(function(dt)
   local center=Vector3.new(botX,184.5,botZ+1)
   local distance=(ball.p-center).Magnitude
   if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
-   and ball.p.Z< -2 and distance<6.5*(Comeback.active(comeback,-1) and Comeback.HIT or 1) and Rules.contactInFront(ball.p,rootFrame)
+   and ball.p.Z< -2 and distance<6.5*(Comeback.active(comeback,-1) and Comeback.HIT or 1)*arcade:reach("PracticeBot",now) and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<188 and (ball.v.Y<0 or ball.bounces>0)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,true,false)) then
    -- One attempt per incoming shot: a whiff cannot be retried on the next frame.
@@ -1373,6 +1507,7 @@ RunService.Heartbeat:Connect(function(dt)
  end
  botBody.Position=Vector3.new(botX,184.2,botZ)
  botHead.Position=Vector3.new(botX,186.3,botZ)
+ botPaddle.Size=Vector3.new(1.5,2.2,0.3)*arcade:reach("PracticeBot",now)
  botPaddle.CFrame=CFrame.new(botX-1.8,184.4,botZ+1)*CFrame.Angles(0,0,0.2)
  for i,p in ipairs(botLegs) do
   local stride=botMoving and math.sin(botStride)*(i==1 and 1 or -1) or 0
@@ -1412,6 +1547,9 @@ RunService.Heartbeat:Connect(function(dt)
    end
    for _,id in ipairs({"carbonFiber","perfectVision","phantom"}) do if ball.live and Powerups.has(d.powerups,id) then activeEffects[id]=true end end
    local auraTier=0
+   if courtVariant=="Chaos" and d.side~=0 and ball.live then
+    for id,level in pairs(arcade:data(p).levels) do activeEffects[id]=true; auraTier=math.max(auraTier,math.ceil(level/2)) end
+   end
    for _,card in ipairs(Powerups.catalog) do if activeEffects[card.id] then auraTier=math.max(auraTier,card.tier) end end
    if ball.live and d.side~=0 then
     for _,stat in ipairs({"speed","regen","reach","dive"}) do if (d.powerups[stat] or 0)>0 then auraTier=math.max(auraTier,1) end end
@@ -1420,6 +1558,7 @@ RunService.Heartbeat:Connect(function(dt)
    p:SetAttribute("ComebackBoost",Comeback.active(comeback,d.side))
    state:FireClient(p,{
     practice=practiceState,practicePaused=paused,
+    arcade=d.side~=0 and (courtVariant=="Arcade" or courtVariant=="Chaos") and arcade:snapshot(p,now) or nil,curveX=ball.curveX,
     comeback=Comeback.active(comeback,d.side),
     powerupEffects=activeEffects,powerupProgress={tension=d.powerupRally.tension,perfectChain=d.powerupRally.perfectChain,
      reachStacks=d.powerupMatch.reachStacks or 0,speedWins=d.powerupMatch.speedWins or 0,secondServeUsed=d.powerupMatch.secondServeUsed==true},

@@ -1,0 +1,1 @@
+const fs=require('fs');const {Resvg}=require('./vs-tools/node_modules/@resvg/resvg-js');for(const key of ['slotActive','slotCooldown','slotReady'])fs.writeFileSync(`assets/figma/pu_slots/generated/${key}.png`,new Resvg(fs.readFileSync(`assets/figma/pu_slots/generated/${key}.svg`),{fitTo:{mode:'zoom',value:2}}).render().asPng());
