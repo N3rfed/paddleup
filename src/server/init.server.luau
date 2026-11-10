@@ -7,7 +7,7 @@ if game:GetAttribute("PaddleUpServerInitialized") then return end
 game:SetAttribute("PaddleUpServerInitialized",true)
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 local root=require(script:WaitForChild("World")).build()
-require(script:WaitForChild("Lobby")).build()
+local lobbyRoot=require(script:WaitForChild("Lobby")).build()
 require(script:WaitForChild("DayNightCycle")).start()
 local template=root:Clone(); template.Parent=nil
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
@@ -23,6 +23,7 @@ for _,name in ipairs({"MatchRules","MatchSetup"}) do
  if not shared:FindFirstChild(name) then script:WaitForChild(name):Clone().Parent=shared end
 end
 local CourtSession=require(script:WaitForChild("CourtSession"))
+local progression=require(script:WaitForChild("ProgressionService")).start(folder,lobbyRoot)
 local queueRemote,session=folder.Queue,folder.Session
 local closing=false
 local dispatching=false
@@ -45,7 +46,7 @@ local function runtime(id)
  end
  roots[id]=court
  local cleanup={}
- local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,
+ local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,progression=progression,
   track=function(callback) table.insert(cleanup,callback) end})
  if not ok then
   for index=#cleanup,1,-1 do pcall(cleanup[index]) end

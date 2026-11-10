@@ -34,7 +34,19 @@ return function(source,modules)
   network[name]=event
  end
  function network:WaitForChild(name) return assert(self[name],name) end
+ local rewardRuns={}
+ local progression={}
  local mocked=table.clone(modules)
+ mocked.MatchRewards={new=function(service)
+  assert(service==progression,"Courts share the profile service")
+  local run={begins=0}
+  function run:begin(users,mode) self.begins+=1; self.users=users; self.mode=mode end
+  function run:rally() end
+  function run:contact() end
+  function run:complete() end
+  table.insert(rewardRuns,run)
+  return run
+ end}
  mocked.Lobby={Spawn=CFrame.new()}
  mocked.Spectator={leave=function() end,enter=function() end}
  mocked.CourtEnvironments={valid=function(name) return name=="Rooftop" or name=="Moon" end,
@@ -51,7 +63,7 @@ return function(source,modules)
  local roots,controllers={},{}
  local function court(id)
   local root=Instance.new("Model"); table.insert(roots,root)
-  local controller=Court.new({id=id,height=id*4096,root=root,network=network,owner=function(p) return owners[p] end})
+  local controller=Court.new({id=id,height=id*4096,root=root,network=network,progression=progression,owner=function(p) return owners[p] end})
   table.insert(controllers,controller)
   return controller
  end
@@ -73,6 +85,9 @@ return function(source,modules)
   join(first,1,a,"1V1"); join(first,1,b,"1V1")
   join(second,2,c,"1V1"); join(second,2,d,"1V1")
   join(practice,3,e,"Practice")
+  assert(#rewardRuns==3 and rewardRuns[1]~=rewardRuns[2],"Every court owns an independent XP run")
+  assert(rewardRuns[1].users[a] and not rewardRuns[1].users[c] and rewardRuns[2].users[c],"XP rosters stay inside their court")
+  assert(rewardRuns[3].mode=="Practice","Practice uses its own reward mode")
   heartbeat:Fire(0.1)
   local firstState,secondState=delivered[a].State.data,delivered[c].State.data
   assert(firstState.homeName~=secondState.homeName and firstState.score~=secondState.score,"Rosters and score tables are isolated")
@@ -85,7 +100,10 @@ return function(source,modules)
   assert(not delivered[a].State.data.practicePaused and not delivered[c].State.data.practicePaused,"Practice pause cannot freeze either match")
   assert(delivered[a].State.data.serveReady and delivered[c].State.data.serveReady,"Both multiplayer matches advance concurrently")
   local otherState=delivered[c].State
+  local otherRewardBegins=rewardRuns[2].begins
+  local firstRewardBegins=rewardRuns[1].begins
   first:remove(a); owners[a]=nil
+  assert(rewardRuns[1].begins>firstRewardBegins and rewardRuns[2].begins==otherRewardBegins,"Departure invalidates only its court reward run")
   assert(a.CharacterAdded:count()==0 and a.CharacterRemoving:count()==0,"Departure disconnects avatar handlers")
   assert(delivered[c].State==otherState,"A departure sends nothing to an unrelated court")
   first:remove(b); owners[b]=nil
