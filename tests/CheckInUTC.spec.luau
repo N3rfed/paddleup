@@ -62,7 +62,7 @@ return function(Rules,Config,Repository,serviceSource)
  local players={}
  local player={Parent=players,SetAttribute=function() end}
  local packet,calls=nil,0
- local environment=setmetatable({Rules=Rules,Config=Config,Players=players,
+ local environment=setmetatable({Rules=Rules,Config=Config,Players=players,api={subscribers={}},
   now=function() calls+=1; return calls==1 and friday-0.001 or friday end,
   remote={FireClient=function(_,_,value) packet=value end}},{__index=getfenv()})
  local chunk=assert(loadstring(serviceSource:sub(first,last-1).."\nreturn publish")); setfenv(chunk,environment)
