@@ -77,7 +77,10 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local introducing=false
  local function visibility()
   local mode=player:GetAttribute("SessionMode")
-  gui.Enabled=mode~=nil and mode~="Lobby" and not introducing and not player:GetAttribute("PowerupDraftOpen")
+  local draft=player:GetAttribute("PowerupDraftOpen")==true
+  local chaosDraft=draft and player:GetAttribute("MatchVariant")=="Chaos"
+  gui.DisplayOrder=chaosDraft and 72 or 2
+  gui.Enabled=mode~=nil and mode~="Lobby" and not introducing and (not draft or chaosDraft)
   legacyScore.Visible=false; legacyStamina.Visible=false
  end
  player:GetAttributeChangedSignal("SessionMode"):Connect(visibility)
@@ -135,6 +138,7 @@ function HUD.start(player, network, legacyScore, legacyStamina)
  local readyAt=0
  local serveState
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   serveState=data
   local introVisible=data.matchIntro~=nil
   if introducing~=introVisible then introducing=introVisible; visibility() end

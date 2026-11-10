@@ -28,48 +28,44 @@ Visual Studio Code
 12. In a different command prompt window, type the command `codex` in the repository destination
 13. Sign in with ChatGPT using the credentials provided in the pinned messages
 14. Use default configuration when setting up
+See [server scaling and live verification](SERVER_SCALING.md) for place settings, lifecycle behavior, and the multi-client test checklist.
+
 ## Modes and queue flow
-Choose **Classic**, **Arcade**, or **Chaos**, then Practice, 1V1 (2 players), 1V2 (3 players), or 2V2 (4 players). This joins a queue for that mode and format. Complete groups wait for the shared court to empty. Every player gets a map vote; leaving setup returns the remaining players to the queue until a replacement joins. Spectate skips the queue.
+Choose **Classic**, **Arcade**, or **Chaos**, then Practice, 1V1 (2 players), 1V2 (3 players), or 2V2 (4 players). This joins a queue for that mode and format. Complete groups enter an independent court session; other matches and solo practice sessions can continue at the same time. Every player gets a map vote; leaving setup returns the remaining players to the queue until a replacement joins. Spectate skips the queue.
+
+Arcade players choose their three powerups on the court after the match intro, rather than before joining the queue. The first serve waits for every player to confirm. Selection lasts up to 45 seconds; unfinished selections receive a default loadout. Players can leave the match from the selection screen.
+
+Press Q/E or click a ready power slot during the serve countdown to arm it. Armed powers show **ARMED** and activate when the serve actually launches, for servers and receivers alike. Press or click again to cancel. Arming consumes no charges or duration until launch; live-rally presses still activate immediately.
+
+Chaos upgrades the original eight powers for the whole match. Choose after the intro and every three rallies; repeated picks increase each power through level 5. Chaos uses the build inventory instead of consumable Q/E slots. During live play, a shared court event triggers after four seconds, then every 10–14 seconds of rally time: Speed Frenzy, Giant Paddles, Gravity Surge, Lights Out, or Pickle Storm. Events last eight seconds, affect both teams, never repeat consecutively, and appear in a countdown banner. Practice pauses freeze active effects; changing the roster or resetting the match clears the build, events, and hazards.
 
 - **Classic:** queue -> map selection -> game.
 - **Arcade:** queue -> map selection and optional Low Gravity on the same screen -> game. Arcade gameplay features will be added later; it currently uses standard rules.
 - **Chaos:** queue -> map selection and exactly one required environmental modifier (Low Gravity) on the same screen -> game, with powerup drafts.
 
-Each player picks Rooftop or Moon during a shared 15-second countdown. All players see the live vote counts and each other's picks, and can change their selection until voting closes. The map with the most votes wins; tied maps enter a short roulette reveal with a server-selected random winner. If everyone abstains, both maps enter the draw. The group enters the match automatically after the reveal. Arcade players also vote on Low Gravity; it needs a majority and stays off on a tie. Chaos always requires Low Gravity. Low Gravity halves ball and player gravity on the court. Lobby players and spectators retain normal gravity. Standard gravity returns when the court empties. Classic has no pickups, Power Shot, Slow, or drafts; Arcade's abilities and test pickups remain disabled pending its later implementation.
+Each player picks Rooftop or Moon during a shared 15-second countdown. All players see the live vote counts and each other's picks, and can change their selection until voting closes. The map with the most votes wins; tied maps enter a short roulette reveal with a server-selected random winner. If everyone abstains, both maps enter the draw. The group enters the match automatically after the reveal. Arcade players also vote on Low Gravity; it needs a majority and stays off on a tie. Chaos always requires Low Gravity. Low Gravity halves ball and player gravity on the court. Lobby players and spectators retain normal gravity. Gravity settings belong to each court. Classic has no pickups, Power Shot, Slow, or drafts; Arcade's abilities and test pickups remain disabled pending its later implementation.
 
 `src/server/MatchQueue.luau` owns queue membership, voting deadlines, and random tie resolution; `MatchSetup.luau` validates shared mode/map/modifier rules. `tests/MatchQueue.spec.luau` covers queue isolation, capacity, live picks, voting deadlines, departures, majority results, randomized ties, admission, and modifier constraints.
 
 ## Chaos matches
-Chaos grants match-long powerup upgrades. After the intro and every three rallies, play pauses for a three-card draft. Everyone shares one rarity roll: **Silver 60%, Gold 30%, Prismatic 10%**. Offers are disjoint across players. The twelve original stat upgrades remain available at each tier alongside nine Silver, ten Gold, and nine Prismatic named effects, keeping four-player drafts possible. Named effects are unique and are excluded from your future offers once acquired; original stat upgrades still stack to their existing caps.
+Chaos uses the original eight powerups as permanent, automatic upgrades. Choose from three cards after the intro and every three rallies. A first pick unlocks level 1; repeated picks strengthen that power through level 5. Maxed powers leave the offer pool. Cards show the current-to-next level and the exact new effect. No Q/E activation is required in Chaos.
 
-Click/tap a card, press 1–3, or select with a controller. After 20 seconds, the server chooses the first card for anyone still waiting. The bottom-left HUD shows acquired powerup icons; active effects pulse with a green status dot. Click an icon or the Powerups button, press B, or press controller Select to inspect descriptions, rarity, selection counts, and live progress. The match continues while details are open. Active effects produce a character-attached silver, gold, or prismatic particle aura and glow; triggered bursts also follow the character. Effects disappear when inactive or the character leaves the court. The stamina HUD displays tension, stun, lava, and overcharge status. Builds, reach stacks, and the consumed mulligan reset on a new match or roster change. Rally effects reset before each serve.
-
-| Silver | Gold | Prismatic |
+| Power | Level 1 | Level 5 |
 | --- | --- | --- |
-| Kitchen Camper: +15% movement within 2 feet of the kitchen line; baseline retreat disables it for that rally. | The Third-Shot Drop: guided third shot with 40% less lateral error and heavy topspin. | Erne Executioner: legal airborne sideline volley at 300% power, winning on opponent paddle contact. |
-| Dink Specialist: three consecutive landed dinks arm a +20% baseline drive. | Serve and Volley: +75% movement for 3 seconds after serving. | Phantom Paddle: 8 inches of backhand-only reach. |
-| Carbon Fiber Core: +15% sweet spot radius. | Vampiric Reach: net wins grant +1% reach, capped at +10%. | Kitchen is Lava: touching the kitchen line doubles stamina spending for the rally. |
-| Second Serve: one fault retry per match, preserving service rotation and refilling stamina. | ATP Assassin: a successful around-post landing drains 30% max stamina from the opposing team. | Rally Overcharge: after 15 total shots, a glowing paddle ignores spin and grants one unreturnable smash. |
-| Slice and Dice: slice bounce height is 10% lower. | Bait and Switch: lob during an overhead windup produces a perfect drop and stuns retreating opponents for 1 second. | Deflector Shield: legal torso-drive contacts automatically return at twice the incoming speed. |
+| Speed Cleats | +15% movement, 4% shorter swing cooldown | +75% movement, 20% shorter swing cooldown |
+| Big Paddle | +20% paddle size and reach | +100% paddle size and reach |
+| Drop Pickles | 1 automatic hazard every 12.5s | 3 automatic hazards every 6.5s |
+| Heatseeker | Homing return recharges in 12.5s | Homing return recharges in 6.5s |
+| Slip Stream | 8-stud slick every 14s | 16-stud slick every 6s |
+| Small Paddle | Opponents lose 6% paddle size/reach | Opponents lose 30% paddle size/reach |
+| Glow Ball | 19-stud light range, brightness 4 | 39-stud light range, brightness 8 |
+| Zero-G Pulse | 20% less court gravity | 40% less court gravity |
 
-**Controls:** hold/release LMB or F to wind up/hit, RMB for dink/drop, **R for lob**, **X for slice**. Lob and slice also have touch buttons and controller Y/X bindings. Hold Left Shift, touch Dive, or controller B while swinging to use Deceptive Drop. For Bait and Switch, hold hit while an overhead is in reach, then press lob. Ordinary kitchen and two-bounce rules still apply to automatic returns and Ernes, including kitchen takeoff and landing faults.
+Hazard timers advance only during live rallies. Hazards expire after six seconds; Heatseeker recharges automatically, with practice pauses preserving its timer. The strongest Small Paddle on the opposing team applies, and the strongest Zero-G upgrade affects the shared court. Random Chaos events still run alongside permanent upgrades.
 
-Additional powerups:
+Click/tap a card, press 1-3, or use a controller. After 20 seconds the first card is selected automatically. The build inventory displays each original icon and its level; B or controller Select opens descriptions. Levels survive rallies and drafts, and reset with a new match or roster change. Arcade retains its consumable Q/E powers and pre-serve arming.
 
-| Silver | Gold | Prismatic |
-| --- | --- | --- |
-| Perfect Vision: 20% wider pre/post-bounce perfect timing. | Momentum Shift: three personal perfect hits prime a +15% fourth return. | Apex Predator: contact within 60ms of a bounce apex hides accelerated flight from opponents until net crossing. |
-| Quick Recovery: half-length dive movement and pose locks. | Offensive Dive: dive contacts apply maximum topspin; gravity increases by 80% after net crossing. | Rhythm Master: perfect hits after 10 total rally hits hide the paddle throughout the swing. |
-| Baseline Sentinel: +15% lateral movement inside the two-foot baseline band. | Kitchen Warden: a planted player at the kitchen line gains a forward-shifted hit sphere, extending reach by 25% of normal radius. | Afterimage: a two-second visual dive clone; hitting within one second adds a decoy reticle for 0.65 seconds. |
-| Calculated Return: standard serve returns use 80% of incoming velocity. | Deceptive Drop: hold dive while swinging for a smash feint, soft drop, and 0.5-second opponent reticle delay. | Terminal Velocity: uncapped +8% perfect acceleration; winning a rally whose peak exceeded 1.5x adds permanent +5% movement. |
-
-Momentum Shift takes precedence over Terminal Velocity on the primed fourth hit. Permanent speed stacks reset with the match. Tracking deception affects opponents only; teammates and spectators retain normal tracking. Crosshairs, landing reticles, bounce countdowns, and out-landing markers are developer-only; normal play keeps these indicators hidden. Reticle-related powerup effects apply when developer indicators are enabled. Clones are solid-looking, noncolliding local visuals and are removed on rally end or character removal. The old generic cooldown card is now called **Fast Reset**, reserving **Afterimage** for the Prismatic effect.
-
-Cards use native vector illustrations, numeric effect badges, silver/gold/prismatic accents, orbiting frames, pulsing halos, and hover elevation. `src/client/PowerupArt.luau` owns the illustrations; `src/client/PowerupVisuals.luau` handles temporary clones and paddle visibility.
-
-Balance distances use the court width scale of two studs per foot: the camper band is four studs, Phantom adds 1⅓ studs, net wins count within four studs of the kitchen line, and baseline drives within four studs of the baseline. Lava doubles dive costs and ATP stamina damage; it does not create a new passive stamina drain. Practice partners can be stunned and lose to unreturnable shots, but do not draft powerups or spend stamina on dives.
-
-`src/server/Powerups.luau` owns the catalog, draft validation, and reusable effect rules. `tests/Powerups.spec.luau` covers multiplayer drafts, ownership, rarity, and caps. `tests/PowerupEffects.spec.luau` covers rally reset boundaries, tension, mulligans, reach, spin, overcharge, and exact-speed reflection. `tests/AdvancedPowerups.spec.luau` takes Powerups and MatchRules and checks the additional effects, thresholds, recipient filtering, and split-gravity topspin. `tests/PowerupServer.spec.luau` executes the actual launch and point-resolution functions in an isolated fixture; pass the server source, Powerups, MatchRules, and Comeback to its returned function. Run the two pure suites with the Powerups module in Studio or the standalone Luau CLI.
+ArcadeDeck.luau defines level tuning and card descriptions; ArcadePowers.luau runs permanent effects, automatic hazards, and court events. 	ests/ChaosLevels.spec.luau checks all eight upgrades, caps, timing, persistence, and reset. 	ests/ChaosBuildServer.spec.luau checks the actual draft and selection flow.
 
 ## Power-Up pickup behavior
 Pickups descend over 2.4 seconds with a gentle spiral and orbiting gold sparks, then pulse and bob while available. Collection plays a short shrinking burst; the six-second pickup lifetime starts after the descent.

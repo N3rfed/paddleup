@@ -1,3 +1,4 @@
+local CourtView=require(script.Parent:WaitForChild("CourtView"))
 -- Moon presentation is local so lobby players retain the city lighting and scenery.
 local EnvironmentLighting={}
 function EnvironmentLighting.start(player)
@@ -7,6 +8,24 @@ function EnvironmentLighting.start(player)
  local hidden={}
  local skies={}
  local connections={}
+ local lobbySaved={}
+ local lobbyActive=false
+ local lobbyProfile={Brightness=1.7,ExposureCompensation=-0.25,
+  Ambient=Color3.fromRGB(110,116,130),OutdoorAmbient=Color3.fromRGB(125,130,145),
+  EnvironmentDiffuseScale=0.4,EnvironmentSpecularScale=0.5}
+ local function setLobby(enabled)
+  if enabled==lobbyActive then return end
+  lobbyActive=enabled
+  local rooftop=Lighting:FindFirstChild("RooftopProfile")
+  if enabled then
+   for property,value in pairs(lobbyProfile) do
+    lobbySaved[property]=Lighting[property]; Lighting[property]=value
+   end
+  else
+   for property,value in pairs(lobbySaved) do Lighting[property]=(rooftop and rooftop:GetAttribute(property)) or value end
+   table.clear(lobbySaved)
+  end
+ end
  local moonSky=Instance.new("Sky")
  moonSky.Name="LunarSky"; moonSky.CelestialBodiesShown=false; moonSky.StarCount=0
  -- Plain black backdrop; small world-space stars provide the only star imagery.
@@ -56,10 +75,12 @@ function EnvironmentLighting.start(player)
  end
  local function update()
   local mode=player:GetAttribute("SessionMode")
-  local active=mode~=nil and mode~="Lobby" and workspace:GetAttribute("CourtEnvironment")=="Moon"
+  local inLobby=mode==nil or mode=="Lobby"
+  setLobby(inLobby and not moon)
+  local active=mode~=nil and mode~="Lobby" and player:GetAttribute("CourtEnvironment")=="Moon"
   if active==moon then return end
   moon=active
-  if not moon then restore(); return end
+  if not moon then restore(); setLobby(inLobby); return end
   for property,value in pairs(lightProfile) do watch(Lighting,property,value) end
   for _,item in ipairs(Lighting:GetChildren()) do effect(item) end
   table.insert(connections,Lighting.ChildAdded:Connect(effect))
@@ -70,7 +91,7 @@ function EnvironmentLighting.start(player)
    elapsed+=dt; pending+=dt
    if pending<0.08 then return end
    pending=0
-   local court=workspace:FindFirstChild("PaddleUp")
+   local court=CourtView.root()
    local environment=court and court:FindFirstChild("MoonEnvironment")
    local sky=environment and environment:FindFirstChild("Lunar sky")
    if sky~=starfield then
@@ -93,10 +114,11 @@ function EnvironmentLighting.start(player)
   end))
  end
  local modeConnection=player:GetAttributeChangedSignal("SessionMode"):Connect(update)
- local environmentConnection=workspace:GetAttributeChangedSignal("CourtEnvironment"):Connect(update)
+ local environmentConnection=player:GetAttributeChangedSignal("CourtEnvironment"):Connect(update)
  update()
  return function()
   modeConnection:Disconnect(); environmentConnection:Disconnect()
+  setLobby(false)
   moon=false; restore(); moonSky:Destroy()
  end
 end

@@ -2,12 +2,12 @@
 -- No animation loops, scripts, external assets, or gameplay dependencies.
 local Furniture={}
 Furniture.Palette={
- ivory=Color3.fromRGB(235,232,241), linen=Color3.fromRGB(202,199,216), beige=Color3.fromRGB(177,170,191), upholstery=Color3.fromRGB(136,128,163),
- forest=Color3.fromRGB(39,42,78), teal=Color3.fromRGB(77,144,157),
- walnut=Color3.fromRGB(62,49,65), brass=Color3.fromRGB(196,180,155),
+ ivory=Color3.fromRGB(217,216,227), linen=Color3.fromRGB(202,199,216), beige=Color3.fromRGB(188,181,203), upholstery=Color3.fromRGB(166,157,190),
+ forest=Color3.fromRGB(39,42,65), teal=Color3.fromRGB(43,123,134),
+ walnut=Color3.fromRGB(82,67,83), brass=Color3.fromRGB(181,179,194),
  sage=Color3.fromRGB(130,157,131), ink=Color3.fromRGB(29,31,57),
- warm=Color3.fromRGB(255,241,229), blue=Color3.fromRGB(80,232,255),
- pink=Color3.fromRGB(255,85,200), purple=Color3.fromRGB(151,130,194), orange=Color3.fromRGB(255,145,55), rose=Color3.fromRGB(207,154,184),
+ warm=Color3.fromRGB(255,246,235), blue=Color3.fromRGB(80,232,255),
+ pink=Color3.fromRGB(255,85,200), purple=Color3.fromRGB(166,157,190), orange=Color3.fromRGB(255,145,55), rose=Color3.fromRGB(193,145,170),
 }
 function Furniture.new()
  local P=Furniture.Palette

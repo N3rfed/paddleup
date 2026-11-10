@@ -8,19 +8,11 @@ function PowerupDraft.start(player,network)
  local UIS=game:GetService("UserInputService")
  local GuiService=game:GetService("GuiService")
  local remote=network:WaitForChild("Powerup")
- local colors={Color3.fromRGB(198,213,230),Color3.fromRGB(255,211,93),Color3.fromRGB(197,137,255)}
- local names={"SILVER","GOLD","PRISMATIC"}
  local gui=Instance.new("ScreenGui",player:WaitForChild("PlayerGui"))
- gui.Name="PowerupDraft"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=15
+ gui.Name="PowerupDraft"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=70
  local function frame(parent,size,position,color)
   local f=Instance.new("Frame",parent); f.Size=size; f.Position=position
   f.BackgroundColor3=color; f.BorderSizePixel=0; return f
- end
- local function round(parent,radius)
-  local c=Instance.new("UICorner",parent); c.CornerRadius=UDim.new(0,radius)
- end
- local function stroke(parent,color,width,transparency)
-  local s=Instance.new("UIStroke",parent); s.Color=color; s.Thickness=width; s.Transparency=transparency or 0; return s
  end
  local function text(parent,value,y,height,size,color)
   local t=Instance.new("TextLabel",parent); t.BackgroundTransparency=1
@@ -29,22 +21,21 @@ function PowerupDraft.start(player,network)
   t.Text=value; t.TextWrapped=true; return t
  end
  local overlay=Instance.new("TextButton",gui)
- overlay.Size=UDim2.fromScale(1,1); overlay.BackgroundColor3=Color3.fromRGB(4,9,17)
- overlay.BackgroundTransparency=0.12; overlay.Text=""; overlay.AutoButtonColor=false
+ overlay.Size=UDim2.fromScale(1,1); overlay.BackgroundColor3=Color3.fromRGB(16,19,46)
+ overlay.BackgroundTransparency=0.03; overlay.Text=""; overlay.AutoButtonColor=false
  overlay.Modal=true; overlay.Selectable=false; overlay.Visible=false
  local panel=frame(overlay,UDim2.fromOffset(940,560),UDim2.fromScale(0.5,0.5),Color3.new())
  panel.AnchorPoint=Vector2.new(0.5,0.5); panel.BackgroundTransparency=1
  local scale=Instance.new("UIScale",panel)
- text(panel,"A U G M E N T   D R A F T",0,25,12,Color3.fromRGB(170,186,210))
- local title=text(panel,"CHOOSE YOUR EDGE",32,48,34,Color3.fromRGB(246,247,255))
- local subtitle=text(panel,"One upgrade. Yours for the match.",83,30,14,Color3.fromRGB(170,186,210))
+ local eyebrow=text(panel,"C H A O S   P O W E R U P S",0,25,12,Color3.fromRGB(170,186,210))
+ local title=text(panel,"CHOOSE A POWERUP",32,48,34,Color3.fromRGB(246,247,255))
+ local subtitle=text(panel,"Choose an upgrade for your build.",83,30,14,Color3.fromRGB(170,186,210))
  local cards=frame(panel,UDim2.fromOffset(908,362),UDim2.fromOffset(16,132),Color3.new())
  cards.BackgroundTransparency=1
  local footer=text(panel,"",508,24,14,Color3.fromRGB(226,232,245))
- text(panel,"SHARED RARITY  /  PERSONAL OFFERS  /  MATCH-LONG EFFECTS",540,18,10,Color3.fromRGB(126,145,173))
+ local hint=text(panel,"COLLECT POWERUPS  /  ACTIVATE WITH Q OR E",540,18,10,Color3.fromRGB(126,145,173))
  local active=nil
  local selected=false
- local animations={}
  local buttons={}
  local previousSelection=nil
  local function choose(index)
@@ -60,78 +51,71 @@ function PowerupDraft.start(player,network)
   end
  end
  local function show(data)
-  close(); cards:ClearAllChildren(); table.clear(animations); table.clear(buttons)
+  close(); cards:ClearAllChildren(); table.clear(buttons)
   active=data; overlay.Visible=true
   previousSelection=GuiService.SelectedObject
-  local color=colors[data.tier]
-  title.Text="CHOOSE YOUR EDGE"; title.TextColor3=Color3.fromRGB(246,247,255)
-  subtitle.Text=names[data.tier].."  /  Choose one upgrade to keep this match"
+  local color=Color3.fromRGB(80,232,255)
+  title.Text="CHOOSE A POWERUP"; title.TextColor3=Color3.fromRGB(246,247,255)
+  subtitle.Text="CHOOSE A POWERUP"
   subtitle.TextColor3=color
+  local arcade=data.mode=="Arcade"
+  overlay.BackgroundTransparency=arcade and 0.03 or 0
+  eyebrow.Visible=true; title.Visible=true; hint.Visible=true
+  cards.Position=UDim2.fromOffset(16,132)
+  subtitle.Position=UDim2.new(0,16,0,83); subtitle.Size=UDim2.new(1,-32,0,30); subtitle.TextSize=14
+  footer.TextSize=14
+  panel.Size=UDim2.fromOffset(arcade and 1100 or 940,arcade and 620 or 560)
+  cards.Size=UDim2.fromOffset(arcade and 1060 or 908,arcade and 410 or 362)
+  footer.Position=UDim2.new(0,16,0,arcade and 552 or 508)
+  hint.Position=UDim2.new(0,16,0,arcade and 590 or 540)
+  eyebrow.Text=arcade and "Y O U R   D E C K" or "C H A O S   P O W E R U P S"
+  hint.Text=arcade and "CHOOSE A CARD  /  EQUIP A FREE SLOT  /  ACTIVATE WITH Q OR E" or "COLLECT POWERUPS  /  ACTIVATE WITH Q OR E"
+  if arcade then
+   title.Text="CHOOSE A POWERUP"
+   subtitle.Text="Choose one card for your Q / E slots"; subtitle.TextColor3=Color3.fromRGB(181,187,225)
+   for index,card in ipairs(data.cards) do
+    local b=Instance.new("TextButton",cards); buttons[index]=b; b.Name="Powerup"..index
+    b.Position=UDim2.fromOffset((index-1)*360,0); b.Size=UDim2.fromOffset(340,340*622/569)
+    b.BackgroundTransparency=1; b.Text=""; b.AutoButtonColor=false
+    local content=Instance.new("Frame",b); content.Name="Content"; content.Size=UDim2.fromOffset(569,622); content.BackgroundTransparency=1
+    local contentScale=Instance.new("UIScale",content); contentScale.Scale=340/569
+    FigmaAssets.card(content,569)
+    local icon=FigmaAssets.image(content,card.art,144,55,280,280); if icon then icon.ScaleType=Enum.ScaleType.Fit end
+    local name=text(content,card.name:upper(),350,84,46,Color3.fromRGB(246,246,255)); name.Font=Enum.Font.GothamBlack
+    local description=text(content,card.blurb,445,46,34,Color3.fromRGB(202,215,232)); description.TextWrapped=false
+    local action=text(content,"SELECT",510,74,30,Color3.fromRGB(246,246,255)); action.Name="CardAction"
+    b.Activated:Connect(function() choose(index) end)
+   end
+   if UIS.GamepadEnabled then GuiService.SelectedObject=buttons[1] end
+   return
+  end
+  -- Chaos drafts permanent upgrades into a match-long build.
+  panel.Size=UDim2.fromOffset(1920,1080)
+  cards.Position=UDim2.fromOffset(80,235); cards.Size=UDim2.fromOffset(1760,620)
+  eyebrow.Visible=false; title.Visible=false; hint.Visible=false
+  subtitle.Position=UDim2.fromOffset(16,175); subtitle.Size=UDim2.new(1,-32,0,34)
+  local tierColor=Color3.fromRGB(80,232,255)
+  subtitle.Text="CHAOS  /  UPGRADE YOUR POWERUPS  /  LASTS ALL MATCH"; subtitle.TextSize=24
+  subtitle.TextColor3=tierColor
+  footer.Position=UDim2.fromOffset(16,850); footer.TextSize=22
   for index,card in ipairs(data.cards) do
-   local b=Instance.new("TextButton",cards); buttons[index]=b
-   b.Name="Powerup"..index; b.Position=UDim2.fromOffset((index-1)*308,0)
-   b.Size=UDim2.fromOffset(292,362); b.BackgroundColor3=Color3.fromRGB(20,29,44)
-   b.Text=""; b.AutoButtonColor=false; round(b,16)
-   local trim=frame(b,UDim2.new(1,-32,0,3),UDim2.fromOffset(16,0),color)
-   local trimGradient=Instance.new("UIGradient",trim)
-   trimGradient.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.5,0),NumberSequenceKeypoint.new(1,1)})
-   if data.tier==3 then
-    trimGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(99,237,255)),ColorSequenceKeypoint.new(0.5,color),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,161,220))})
-   end
-   local cardScale=Instance.new("UIScale",b)
-   local badge=frame(b,UDim2.fromOffset(28,4),UDim2.fromOffset(132,352),color)
-   badge.BackgroundTransparency=0.35
-   local border=stroke(b,color,data.tier==3 and 2.5 or 1.5,0.25)
-   local gradient=Instance.new("UIGradient",b)
-   gradient.Color=ColorSequence.new(Color3.fromRGB(36,48,64):Lerp(color,0.16),Color3.fromRGB(10,15,25)); gradient.Rotation=65
-   if FigmaAssets.get("card") then
-    b.BackgroundTransparency=1; gradient.Enabled=false; border.Transparency=1; trim.Visible=false; badge.Visible=false
-    local cardArt=FigmaAssets.image(b,"card",0,0,292,362)
-    cardArt.ScaleType=Enum.ScaleType.Fit
-   end
-   text(b,string.format("0%d   /   %s",index,names[data.tier]),15,22,10,color)
-   local art=frame(b,UDim2.fromOffset(126,126),UDim2.fromOffset(83,55),color)
-   art.BackgroundTransparency=1
-   local halo=frame(art,UDim2.fromOffset(104,104),UDim2.fromOffset(11,11),color)
-   round(halo,52); halo.BackgroundTransparency=0.95
-   table.insert(animations,{object=halo,pulse=true})
-   -- Rarity adds concentric seals, facets, corner inlays and orbiting gems.
-   for layer=1,data.tier do
-    local ring=frame(art,UDim2.fromOffset(66+layer*17,66+layer*17),UDim2.fromScale(0.5,0.5),color)
-    ring.AnchorPoint=Vector2.new(0.5,0.5); ring.BackgroundTransparency=1
-    ring.Rotation=45; round(ring,layer==1 and 16 or 4)
-    stroke(ring,color,layer==1 and 2 or 1,0.15+layer*0.16)
-    table.insert(animations,{object=ring,speed=(layer%2==0 and -1 or 1)*(data.tier==3 and 12 or 4)})
-   end
-   Art.draw(art,card,color)
-   for gem=1,data.tier*4 do
-    local angle=gem/(data.tier*4)*math.pi*2
-    local dot=frame(art,UDim2.fromOffset(data.tier+2,data.tier+2),UDim2.fromOffset(63+math.cos(angle)*62,63+math.sin(angle)*62),color)
-    dot.AnchorPoint=Vector2.new(0.5,0.5); dot.Rotation=45
-   end
-   if data.tier>=2 then
-    for _,x in ipairs({12,272}) do
-     for _,y in ipairs({45,277}) do
-      local jewel=frame(b,UDim2.fromOffset(7,7),UDim2.fromOffset(x,y),color); jewel.Rotation=45
-      if data.tier==3 then
-       local inlay=frame(b,UDim2.fromOffset(2,45),UDim2.fromOffset(x+2,y==45 and 61 or 218),color)
-       inlay.BackgroundTransparency=0.45
-      end
-     end
-    end
-   end
-   text(b,Art.badge(card),169,20,10,color)
-   text(b,card.name:upper(),189,49,18,Color3.fromRGB(246,247,255))
-   local desc=text(b,card.description,240,56,13,Color3.fromRGB(202,215,232)); desc.Font=Enum.Font.GothamMedium
-   local pill=frame(b,UDim2.new(1,-36,0,42),UDim2.fromOffset(18,300),color); round(pill,9)
-   local selectArt=FigmaAssets.image(pill,"select",0,0,256,42)
-   if selectArt then selectArt.ScaleType=Enum.ScaleType.Fit end
-   if selectArt then pill.BackgroundTransparency=1 end
-   local selectLabel=text(pill,"["..index.."]  SELECT POWERUP",0,42,12,selectArt and Color3.fromRGB(246,246,255) or Color3.fromRGB(15,22,31))
-   selectLabel.ZIndex=2
+   local b=Instance.new("TextButton",cards); buttons[index]=b; b.Name="Powerup"..index
+   b.Position=UDim2.fromOffset((index-1)*610,0); b.Size=UDim2.fromOffset(540,540*622/569)
+   b.BackgroundTransparency=1; b.Text=""; b.AutoButtonColor=false
+   local hoverScale=Instance.new("UIScale",b)
+   local content=Instance.new("Frame",b); content.Name="Content"; content.Size=UDim2.fromOffset(569,622); content.BackgroundTransparency=1
+   local contentScale=Instance.new("UIScale",content); contentScale.Scale=540/569
+   FigmaAssets.card(content,569)
+   local art=frame(content,UDim2.fromOffset(126,126),UDim2.fromOffset(144,40),color)
+   art.Name="PowerupArt"; art.BackgroundTransparency=1
+   local artScale=Instance.new("UIScale",art); artScale.Scale=280/126
+   Art.draw(art,card,tierColor)
+   local name=text(content,card.name:upper(),330,84,44,Color3.fromRGB(246,247,255)); name.Name="Title"; name.Font=Enum.Font.GothamBlack
+   local level=text(content,card.levelLabel or "",404,25,18,tierColor); level.Name="Level"
+   local description=text(content,card.description or card.blurb,438,66,20,Color3.fromRGB(202,215,232)); description.Name="Description"; description.Font=Enum.Font.GothamMedium
+   local action=text(content,"ADD TO BUILD",510,74,30,Color3.fromRGB(246,246,255)); action.Name="CardAction"
    local function hover(on)
-    TweenService:Create(cardScale,TweenInfo.new(0.15),{Scale=on and 1.025 or 1}):Play()
-    TweenService:Create(border,TweenInfo.new(0.15),{Transparency=on and 0 or 0.25,Thickness=on and 3 or (data.tier==3 and 2.5 or 1.5)}):Play()
+    TweenService:Create(hoverScale,TweenInfo.new(0.15),{Scale=on and not selected and 1.015 or 1}):Play()
    end
    b.MouseEnter:Connect(function() hover(true) end); b.MouseLeave:Connect(function() hover(false) end)
    b.SelectionGained:Connect(function() hover(true) end); b.SelectionLost:Connect(function() hover(false) end)
@@ -140,6 +124,7 @@ function PowerupDraft.start(player,network)
   if UIS.GamepadEnabled then GuiService.SelectedObject=buttons[1] end
  end
  network:WaitForChild("State").OnClientEvent:Connect(function(data)
+ if data.matchSessionId~=nil and data.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   if active and data.practice and data.practice.draftRemaining then
    active.endsAt=workspace:GetServerTimeNow()+data.practice.draftRemaining
   end
@@ -148,12 +133,20 @@ function PowerupDraft.start(player,network)
   if data.kind=="offer" then show(data)
   elseif data.kind=="chosen" then
    selected=true; title.Text=data.name:upper().." ACQUIRED"
-   footer.Text="Upgrade locked in. Waiting for the other players..."
+   footer.Text=data.slot and ("Equipped in "..(data.slot==1 and "Q" or "E")..". Waiting for the other players...") or "Added to your build for this match. Waiting for the other players..."
    for index,b in ipairs(buttons) do
     b.Active=false
-    if active and active.cards[index].name~=data.name then b.BackgroundTransparency=0.6 end
+    local chosen=active and active.cards[index].name==data.name
+    local selectedArt=b:FindFirstChild("SelectedArt",true)
+    if selectedArt then selectedArt.Visible=chosen==true end
+    local action=b:FindFirstChild("CardAction",true)
+    if action and chosen then action.Text=data.mode=="Chaos" and "ADDED TO BUILD" or "EQUIPPED" end
    end
-  elseif data.kind=="close" then close()
+  elseif data.kind=="close" then
+   if selected and active then
+    local offer=active
+    task.delay(0.5,function() if active==offer then close() end end)
+   else close() end
   elseif data.kind=="reset" then close() end
  end)
  UIS.InputBegan:Connect(function(input,processed)
@@ -161,16 +154,12 @@ function PowerupDraft.start(player,network)
   local index=({[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3})[input.KeyCode]
   if index then choose(index) end
  end)
- RunService.RenderStepped:Connect(function(dt)
+ RunService.RenderStepped:Connect(function()
   local camera=workspace.CurrentCamera
   if camera then
-   scale.Scale=math.max(0.1,math.min(1,(camera.ViewportSize.X-24)/940,(camera.ViewportSize.Y-32)/560))
+   scale.Scale=math.max(0.1,math.min(1,(camera.ViewportSize.X-24)/panel.Size.X.Offset,(camera.ViewportSize.Y-32)/panel.Size.Y.Offset))
   end
   if not overlay.Visible then return end
-  for _,animation in ipairs(animations) do
-   if animation.pulse then animation.object.BackgroundTransparency=0.94+math.sin(os.clock()*2)*0.025
-   else animation.object.Rotation+=dt*animation.speed end
-  end
   if active and not selected then
    footer.Text=player:GetAttribute("PracticePaused") and "PAUSED / Continue to choose" or string.format("%ds TO CHOOSE  /  First card auto-selects on timeout",math.max(0,math.ceil(active.endsAt-workspace:GetServerTimeNow())))
   end
