@@ -1,3 +1,4 @@
+local Maps=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("MapCatalog"))
 -- Edit assignments here; identifiers are stable across saved lobby migrations.
 return {
  Elevators={
@@ -11,8 +12,6 @@ return {
  PollSeconds=0.15,DoorSeconds=0.65,DoorHoldSeconds=1.5,
  CabinDepth=9,DoorPanelDepth=0.23,DoorStackX=4.65,
  ApproachForward=4.5,ApproachSize=Vector3.new(14,14,18),InteriorSize=Vector3.new(9.7,11,8.4),
- InvitationSeconds=10,VoteSeconds=15,DepartureSeconds=6,TerminationSeconds=5,
- -- Replace with experience-owned audio if these built-in sounds are unsuitable.
- MovementSound="rbxasset://sounds/action_swim.mp3",
- ArrivalSound="rbxasset://sounds/electronicpingshort.wav",
+ MapIds=Maps.ids(),
+ InvitationSeconds=10,VoteSeconds=15,MapVoteSeconds=15,RevealSeconds=1.2,OverviewSeconds=4,TerminationSeconds=5,
 }

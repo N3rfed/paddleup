@@ -145,6 +145,7 @@ local introSerial=0
 local introUntil=0
 local introReady={}
 local introLoadDeadline=0
+local entryOverviewSeconds
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -356,7 +357,15 @@ local function rosterChanged()
   end
   matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+3,home=portraits(1),away=portraits(-1),
    variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
-  if environments.active=="Moon" then
+  if entryOverviewSeconds and #home+#away==MatchSetup.players[courtMode] then
+   local environment=courtRoot:FindFirstChild(environments.active.."Environment")
+   matchIntro.overview=true; matchIntro.overviewSeconds=entryOverviewSeconds
+   matchIntro.environment=environments.active; matchIntro.format=courtMode
+   matchIntro.environmentModel=environments.active.."Environment"
+   matchIntro.environmentExpected=environment and #environment:GetDescendants() or 0
+   entryOverviewSeconds=nil
+  end
+  if environments.active=="Moon" or matchIntro.overview then
    matchIntro.loading=true
    introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
   end
@@ -382,8 +391,9 @@ connect(introReadyRemote.OnServerEvent,function(player,id)
  for participant,data in pairs(users) do
   if data.side~=0 and not introReady[participant] then return end
  end
- matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+3
- introUntil=os.clock()+3; nextServe=introUntil; introLoadDeadline=0
+ local duration=matchIntro.overviewSeconds or 3
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+duration
+ introUntil=os.clock()+duration; nextServe=introUntil; introLoadDeadline=0
 end)
 local function rootOf(p)
  local c=p.Character
@@ -1224,6 +1234,10 @@ connect(RunService.Heartbeat,function(dt)
  if stopped or not next(users) then return end
  local now=os.clock()
  if not replacementPaused and matchIntro and matchIntro.loading and now>=introLoadDeadline then
+  if matchIntro.overview and context.onOverviewFailure then
+   context.onOverviewFailure()
+   return
+  end
   local waiting={}
   for player,data in pairs(users) do
    if data.side~=0 and not introReady[player] then table.insert(waiting,player) end
@@ -1591,6 +1605,10 @@ connect(RunService.Heartbeat,function(dt)
 end)
 
 local api={}
+function api:prepareOverview(seconds)
+ assert(seconds==nil or (type(seconds)=="number" and seconds>=3 and seconds<=5),"Invalid overview duration")
+ entryOverviewSeconds=seconds
+end
 function api:pauseReplacement(paused)
  if replacementPaused==paused then return end
  replacementPaused=paused

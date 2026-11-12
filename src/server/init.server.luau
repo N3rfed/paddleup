@@ -19,7 +19,7 @@ for _,name in ipairs({"Input","State","Feedback","Session","Queue","IntroReady",
 end
 local shared=ReplicatedStorage:FindFirstChild("Shared") or Instance.new("Folder")
 shared.Name="Shared"; shared.Parent=ReplicatedStorage
-for _,name in ipairs({"MatchRules","MatchSetup"}) do
+for _,name in ipairs({"MatchRules","MatchSetup","MapCatalog"}) do
  if not shared:FindFirstChild(name) then script:WaitForChild(name):Clone().Parent=shared end
 end
 local CourtSession=require(script:WaitForChild("CourtSession"))
@@ -29,10 +29,12 @@ local elevatorService
 local closing=false
 local dispatching=false
 local owners,runtimes,roots={},{},{}
+local reservedSlots={}
 local lastSessionRequest={}
 -- A slot per allowed visitor supports the worst case: everyone practicing alone.
 -- Start with MaxPlayers=8 and measure before raising it (each slot contains scenery).
 local capacity=Players.MaxPlayers
+local failOverview
 local function owner(player) return owners[player] end
 local function runtime(id)
  if runtimes[id] then return runtimes[id] end
@@ -48,6 +50,7 @@ local function runtime(id)
  roots[id]=court
  local cleanup={}
  local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,progression=progression,
+  onOverviewFailure=function() if failOverview then failOverview(id) end end,
   track=function(callback) table.insert(cleanup,callback) end})
  if not ok then
   for index=#cleanup,1,-1 do pcall(cleanup[index]) end
@@ -72,9 +75,18 @@ local function lobby(player,message)
  runtimes[0]:enter(player,"Lobby")
  if message then session:FireClient(player,false,message) end
 end
+-- Failed map preparation returns the whole party through normal lobby ownership.
+failOverview=function(id)
+ local match=elevatorService and elevatorService.matches[id]
+ if match then elevatorService:cancelTarget(match); elevatorService.matches[id]=nil end
+ local roster={}
+ for player,courtId in pairs(owners) do if courtId==id then table.insert(roster,player) end end
+ if runtimes[id] then runtimes[id]:pauseReplacement(false); runtimes[id]:prepareOverview(nil) end
+ for _,player in ipairs(roster) do lobby(player,"The selected map could not finish loading. Please try again.") end
+end
 local function freeSlot()
  for id=1,capacity do
-  if not runtimes[id] or runtimes[id]:empty() then return id end
+  if not reservedSlots[id] and (not runtimes[id] or runtimes[id]:empty()) then return id end
  end
 end
 local function dispatchQueue()
@@ -82,9 +94,11 @@ local function dispatchQueue()
  local id=freeSlot()
  local group=queue:update(id~=nil)
  if not group then return end
+ reservedSlots[id]=true
  -- Prepare the destination before moving any players. Failure leaves the group in the lobby.
  local ok,err=pcall(runtime,id)
  if not ok then
+  reservedSlots[id]=nil
   warn("Court initialization failed: "..tostring(err))
   if roots[id] then roots[id]:Destroy(); roots[id]=nil end
   for _,player in ipairs(group.players) do
@@ -103,6 +117,7 @@ local function dispatchQueue()
    assert(runtimes[id]:enter(player,group.format,group.mode,group.map,group.modifier),"Admission rejected")
   end
  end)
+ reservedSlots[id]=nil
  if success and elevatorService and (group.format=="1V1" or group.format=="2V2") then elevatorService:track(id,group) end
  if not success then
   warn("Match admission failed: "..tostring(reason))
@@ -184,18 +199,24 @@ end)
 local function startElevatorMatch(group)
  local id=freeSlot()
  if not id or #group.players~=require(script.MatchSetup).players[group.format] then return false end
+ reservedSlots[id]=true
  local ok,err=pcall(function()
-  runtime(id)
+  runtime(id):prepareOverview(group.overviewSeconds)
   for _,p in ipairs(group.players) do
    assert(p.Parent==Players and owners[p]==0 and p.Character,"Party changed before arrival")
   end
   for _,p in ipairs(group.players) do
+   assert(not group.valid or group.valid(),"Party changed while the map was preparing")
+   assert(p.Parent==Players and owners[p]==0,"Party member left")
    queue:remove(p); move(p,id)
    assert(runtimes[id]:enter(p,group.format,group.mode,group.map,group.modifier),"Admission rejected")
+   assert(not group.valid or group.valid(),"Party changed during admission")
   end
  end)
+ reservedSlots[id]=nil
  if not ok then
   warn("Elevator admission failed: "..tostring(err))
+  if runtimes[id] then runtimes[id]:prepareOverview(nil) end
   for _,p in ipairs(group.players) do if owners[p]==id then lobby(p,"The transition failed. Please try again.") end end
   return false
  end

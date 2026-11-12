@@ -1,6 +1,5 @@
 local UI={}
 function UI.start(player,network)
- local Players=game:GetService("Players")
  local RunService=game:GetService("RunService")
  local TweenService=game:GetService("TweenService")
  local UIS=game:GetService("UserInputService")
@@ -8,7 +7,7 @@ function UI.start(player,network)
  local gui=Instance.new("ScreenGui"); gui.Name="ElevatorParty"; gui.ResetOnSpawn=false
  gui.DisplayOrder=90; gui.IgnoreGuiInset=true; gui.Parent=player:WaitForChild("PlayerGui")
  local dark=Color3.fromRGB(27,27,64); local cream=Color3.fromRGB(246,246,255); local cyan=Color3.fromRGB(80,232,255)
- local party,offer,notice,travel,viewport,travelCamera,travelStarted,arrivalPlayed,motor
+ local party,offer,notice
  local function box(name,size,position)
   local f=Instance.new("Frame"); f.Name=name; f.Size=size; f.Position=position; f.AnchorPoint=Vector2.new(0.5,0.5)
   f.BackgroundColor3=dark; f.BorderSizePixel=0; f.Visible=false; f.Parent=gui
@@ -45,69 +44,70 @@ function UI.start(player,network)
  button(invitation,"Accept","Accept",20,144,194,function() respond(true) end)
  button(invitation,"Decline","Decline",226,144,194,function() respond(false) end)
  local messageText=label(message,"Message",8,84,"",17)
- local overlay=Instance.new("CanvasGroup"); overlay.Name="ElevatorRide"; overlay.Size=UDim2.fromScale(1,1)
- overlay.BackgroundColor3=dark; overlay.Visible=false; overlay.GroupTransparency=1; overlay.Parent=gui
- local rideTitle=label(overlay,"Title",24,48,"GOING UP / ROOFTOP",26)
- local rideNames=label(overlay,"Travelers",82,50,"",18)
- local rideStatus=label(overlay,"Arrival",138,32,"",20)
- local stripes={}
- for i=1,8 do
-  local strip=Instance.new("Frame"); strip.BorderSizePixel=0; strip.BackgroundColor3=cyan; strip.BackgroundTransparency=0.8
-  strip.Size=UDim2.new(0,2,0.13,0); strip.Position=UDim2.fromScale(i/9,0); strip.Parent=overlay; stripes[i]=strip
- end
- local rideLeave=button(overlay,"LeaveElevator","Leave Elevator",20,24,170,function() remote:FireServer("Leave") end)
- rideLeave.ZIndex=5
- local function stopRide()
-  travel=nil
-  if motor then motor:Destroy(); motor=nil end
-  local fade=TweenService:Create(overlay,TweenInfo.new(0.3),{GroupTransparency=1}); fade:Play()
-  fade.Completed:Once(function() if not travel then overlay.Visible=false; if viewport then viewport:Destroy(); viewport=nil end end end)
- end
- local function startRide(data)
-  travel=data; travelStarted=workspace:GetServerTimeNow(); arrivalPlayed=false
-  if viewport then viewport:Destroy() end
-  viewport=Instance.new("ViewportFrame"); viewport.Name="TravelingParty"; viewport.BackgroundTransparency=1
-  viewport.Size=UDim2.new(1,0,1,-190); viewport.Position=UDim2.fromOffset(0,190); viewport.Parent=overlay
-  viewport.Ambient=Color3.fromRGB(180,175,195); viewport.LightColor=cream
-  local world=Instance.new("WorldModel"); world.Parent=viewport
-  travelCamera=Instance.new("Camera"); travelCamera.CFrame=CFrame.lookAt(Vector3.new(0,5,15),Vector3.new(0,3,0))
-  travelCamera.FieldOfView=55; travelCamera.Parent=viewport; viewport.CurrentCamera=travelCamera
-  local function part(size,position,color)
-   local p=Instance.new("Part"); p.Anchored=true; p.Size=size; p.Position=position; p.Color=color; p.Parent=world
-  end
-  part(Vector3.new(16,0.4,9),Vector3.new(0,-0.2,0),Color3.fromRGB(90,90,105))
-  part(Vector3.new(16,10,0.4),Vector3.new(0,5,-4),Color3.fromRGB(164,164,183))
-  local names={}
-  for i,entry in ipairs(data.roster) do
-   table.insert(names,entry.name)
-   local p=Players:GetPlayerByUserId(entry.userId); local c=p and p.Character
-   if c then
-    local old=c.Archivable; c.Archivable=true; local clone=c:Clone(); c.Archivable=old
-    if clone then
-     for _,item in ipairs(clone:GetDescendants()) do
-      if item:IsA("LuaSourceContainer") or item:IsA("Tool") then item:Destroy()
-      elseif item:IsA("BasePart") then item.Anchored=true; item.CanCollide=false end
-     end
-     clone.Parent=world
-     clone:PivotTo(CFrame.new((i-(#data.roster+1)/2)*3.2,3,0)*CFrame.Angles(0,math.pi,0))
-    end
-   end
-  end
-  rideNames.Text=table.concat(names,"  /  "); rideTitle.Text=(data.mode=="Chaos" and "CHAOTIC" or "CLASSIC").." / ROOFTOP"
-  overlay.Visible=true; overlay.GroupTransparency=1
-  -- Door closure completes before the ride fills the screen and movement audio begins.
-  task.delay(data.doorSeconds or 0.65,function()
-   if travel~=data then return end
-   TweenService:Create(overlay,TweenInfo.new(0.25),{GroupTransparency=0}):Play()
-   motor=Instance.new("Sound"); motor.Name="Elevator movement"; motor.SoundId=data.movementSound
-   motor.Volume=0.22; motor.PlaybackSpeed=0.45; motor.Looped=true; motor.Parent=gui
-   local rumble=Instance.new("EqualizerSoundEffect"); rumble.LowGain=4; rumble.MidGain=-12; rumble.HighGain=-40; rumble.Parent=motor
-   motor:Play()
+ local Maps=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("MapCatalog"))
+ local Thumbnail=require(script.Parent:WaitForChild("MapThumbnail"))
+ local mapPanel=box("MapVoting",UDim2.fromOffset(660,460),UDim2.fromScale(0.5,0.5))
+ local mapTitle=label(mapPanel,"Title",16,34,"CHOOSE YOUR NEXT ARENA",25)
+ local mapStatus=label(mapPanel,"Mode",53,28,"",17)
+ local mapTimer=label(mapPanel,"Timer",84,22,"",14); mapTimer.TextColor3=cyan
+ local cardList=Instance.new("ScrollingFrame"); cardList.Name="Maps"; cardList.Position=UDim2.fromOffset(20,113)
+ cardList.Size=UDim2.new(1,-40,0,280); cardList.BackgroundTransparency=1; cardList.BorderSizePixel=0
+ cardList.ScrollBarThickness=3; cardList.ScrollBarImageColor3=cyan; cardList.CanvasSize=UDim2.new()
+ cardList.AutomaticCanvasSize=Enum.AutomaticSize.X; cardList.ScrollingDirection=Enum.ScrollingDirection.X; cardList.Parent=mapPanel
+ local layout=Instance.new("UIListLayout"); layout.FillDirection=Enum.FillDirection.Horizontal
+ layout.Padding=UDim.new(0,14); layout.HorizontalAlignment=#Maps.list<=2 and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left; layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Parent=cardList
+ local cards={}
+ for index,map in ipairs(Maps.list) do
+  local card=Instance.new("TextButton"); card.Name=map.id; card.Size=UDim2.fromOffset(300,270)
+  card.Text=""; card.BackgroundColor3=Color3.fromRGB(43,42,78); card.BorderSizePixel=0
+  card.AutoButtonColor=false; card.LayoutOrder=index; card.Parent=cardList
+  local corner=Instance.new("UICorner"); corner.CornerRadius=UDim.new(0,14); corner.Parent=card
+  local stroke=Instance.new("UIStroke"); stroke.Color=map.accent; stroke.Thickness=1.5; stroke.Transparency=0.45; stroke.Parent=card
+  local glow=Instance.new("UIGradient"); glow.Rotation=45
+  glow.Color=ColorSequence.new(Color3.new(1,1,1),map.secondary); glow.Parent=card
+  local badge=label(card,"Badge",9,22,map.badge,11); badge.TextColor3=map.accent
+  local preview=Thumbnail.mount(card,map.id); preview.Position=UDim2.fromOffset(10,41); preview.Size=UDim2.new(1,-20,0,143)
+  local name=label(card,"MapName",188,28,map.name,24)
+  local detail=label(card,"Tagline",218,21,map.tagline,13); detail.TextColor3=Color3.fromRGB(205,204,231)
+  local votes=label(card,"Votes",243,22,"0 VOTES",13); votes.TextColor3=map.accent
+  card.Activated:Connect(function()
+   if party then remote:FireServer("MapVote",{revision=party.revision,map=map.id}) end
   end)
+  cards[map.id]={button=card,stroke=stroke,votes=votes}
  end
+ button(mapPanel,"Leave","Leave Elevator",20,403,620,function() remote:FireServer("Leave") end)
+ local mapFade=Instance.new("Frame"); mapFade.Name="MapFade"; mapFade.Size=UDim2.fromScale(1,1)
+ mapFade.BackgroundColor3=dark; mapFade.BorderSizePixel=0; mapFade.Visible=false; mapFade.ZIndex=10; mapFade.Parent=gui
+ local fadeUntil=0
+ local function renderMap()
+  if not party or (party.stage~="MapVoting" and party.stage~="Departing") then mapPanel.Visible=false; return end
+  mapPanel.Visible=true
+  local winning=party.stage=="Departing"
+  local selected=party.map and Maps.get(party.map)
+  mapTitle.Text=winning and ("NEXT STOP: "..string.upper(selected.name)) or "CHOOSE YOUR NEXT ARENA"
+  mapStatus.Text=(party.mode=="Chaos" and "CHAOTIC" or "CLASSIC").."  /  "..party.format:gsub("V","v")
+  mapTimer.Text=winning and "WINNING MAP / SEE YOU ON THE COURT"
+   or "ONE PICK EACH  /  "..math.max(0,math.ceil(party.endsAt-workspace:GetServerTimeNow())).."s"
+  local mine
+  for _,entry in ipairs(party.roster) do if entry.userId==player.UserId then mine=entry.mapVote end end
+  for id,card in pairs(cards) do
+   local picked=winning and id==party.map or not winning and id==mine
+   card.stroke.Thickness=picked and 3 or 1.5; card.stroke.Transparency=picked and 0 or 0.5
+   card.button.Interactable=not winning and not mine
+   local count=party.mapCounts[id] or 0
+   card.votes.Text=(picked and (winning and "WINNER  /  " or "YOUR PICK  /  ") or "")..count..(count==1 and " VOTE" or " VOTES")
+  end
+  if winning and party.endsAt-workspace:GetServerTimeNow()<0.35 and not mapFade.Visible then
+   mapFade.Visible=true; mapFade.BackgroundTransparency=1; fadeUntil=workspace:GetServerTimeNow()+5
+   TweenService:Create(mapFade,TweenInfo.new(0.3),{BackgroundTransparency=0}):Play()
+  end
+ end
+ network:WaitForChild("State").OnClientEvent:Connect(function(data)
+  if data.matchIntro and data.matchIntro.overview then mapFade.Visible=false end
+ end)
  local function renderParty()
   if not party then panel.Visible=false; return end
-  panel.Visible=party.stage~="Departing"
+  panel.Visible=party.stage=="Waiting" or party.stage=="Voting"
   title.Text=party.format:gsub("V","v").." ELEVATOR  /  "..party.count.."/"..party.capacity
   local names={}; local mine
   for _,entry in ipairs(party.roster) do
@@ -116,12 +116,12 @@ function UI.start(player,network)
   end
   roster.Text=table.concat(names,"\n")
   local voting=party.stage=="Voting"
-  ready.Visible=not voting and party.count==party.capacity
+  ready.Visible=party.stage=="Waiting" and party.count==party.capacity
   ready.Text=mine and mine.ready and "READY  /  "..party.ready.."/"..party.capacity or "READY UP  /  "..party.ready.."/"..party.capacity
   ready.Active=not (mine and mine.ready)
   classic.Visible=voting; chaos.Visible=voting
-  classic.Active=voting and party.allowed.Classic and not (mine and mine.vote)
-  chaos.Active=voting and party.allowed.Chaos and not (mine and mine.vote)
+  classic.Active=voting and party.allowed.Classic==true and not (mine and mine.vote)
+  chaos.Active=voting and party.allowed.Chaos==true and not (mine and mine.vote)
   classic.BackgroundTransparency=classic.Active and 0 or 0.65; chaos.BackgroundTransparency=chaos.Active and 0 or 0.65
   classic.Text="Classic  /  "..party.counts.Classic; chaos.Text="Chaotic  /  "..party.counts.Chaos
   status.Text=voting and "VOTE / "..math.max(0,math.ceil(party.endsAt-workspace:GetServerTimeNow())).."s"
@@ -134,10 +134,12 @@ function UI.start(player,network)
  remote.OnClientEvent:Connect(function(data)
   if type(data)~="table" then return end
   if data.kind=="Party" then
-   party=data; renderParty()
-   if data.stage=="Departing" then if not travel then startRide(data) end
-   elseif travel then stopRide() end
-  elseif data.kind=="Closed" then party=nil; panel.Visible=false; if travel then stopRide() end
+   party=data; renderParty(); renderMap()
+   if data.stage~="Departing" then mapFade.Visible=false end
+  elseif data.kind=="Closed" then
+   party=nil; panel.Visible=false; mapPanel.Visible=false
+   mapFade.Visible=data.enteringMap==true; mapFade.BackgroundTransparency=0
+   fadeUntil=workspace:GetServerTimeNow()+5
   elseif data.kind=="Invitation" then
    offer=data; invitation.Visible=true
    inviteTitle.Text="An opening is available in a "..data.format:gsub("V","v").." "..(data.replacement and "match!" or "party!")
@@ -161,22 +163,15 @@ function UI.start(player,network)
   elseif player:GetAttribute("MatchPaused") then
    message.Visible=true; messageText.Text="MATCH PAUSED / Finding an approved replacement"
   else message.Visible=false end
-  if travel then
-   local remaining=travel.endsAt-now
-   rideStatus.Text=remaining>1.2 and "Ascending..." or "ROOFTOP / ARRIVED"
-   for i,strip in ipairs(stripes) do strip.Position=UDim2.fromScale(i/9,((now-travelStarted)*0.7+i*0.17)%1) end
-   if travelCamera then travelCamera.CFrame=CFrame.lookAt(Vector3.new(math.sin(now*2)*0.045,5+math.sin(now*5)*0.025,15),Vector3.new(0,3,0)) end
-   if remaining<=1.2 and not arrivalPlayed then
-    arrivalPlayed=true; if motor then motor:Stop() end
-    local ding=Instance.new("Sound"); ding.SoundId=travel.arrivalSound; ding.Volume=0.55; ding.Parent=gui; ding:Play()
-    game:GetService("Debris"):AddItem(ding,3)
-   end
-  end
+  if party then renderMap() end
+  if mapFade.Visible and now>=fadeUntil then mapFade.Visible=false end
   if party or offer then UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true end
  end)
  local function resize()
   local camera=workspace.CurrentCamera; if not camera then return end
   local scale=math.min(1,(camera.ViewportSize.X-20)/520,(camera.ViewportSize.Y-30)/360)
+  local mapScale=mapPanel:FindFirstChildOfClass("UIScale") or Instance.new("UIScale",mapPanel)
+  mapScale.Scale=math.min(1,(camera.ViewportSize.X-20)/660,(camera.ViewportSize.Y-30)/460)
   for _,f in ipairs({panel,invitation,message}) do
    local scaler=f:FindFirstChildOfClass("UIScale") or Instance.new("UIScale",f); scaler.Scale=scale
   end

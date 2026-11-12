@@ -1,4 +1,4 @@
--- Coordinates physical parties and consent-based vacancy offers. All mutations run without yielding.
+-- Coordinates physical parties and consent-based vacancy offers. The update guard protects yielding court admission.
 local Players=game:GetService("Players")
 local Config=require(script.Parent.ElevatorConfig)
 local Party=require(script.Parent.ElevatorParty)
@@ -10,7 +10,7 @@ function Service.new(context)
  for _,entry in ipairs(Config.Elevators) do
   assert((entry.format=="1V1" and entry.capacity==2) or (entry.format=="2V2" and entry.capacity==4),"Invalid elevator capacity")
   assert(self.geometry[entry.id],"Missing configured elevator "..entry.id)
-  local settings=table.clone(entry); settings.voteSeconds=Config.VoteSeconds; settings.departureSeconds=Config.DepartureSeconds
+  local settings=table.clone(entry); settings.voteSeconds=Config.VoteSeconds; settings.maps=Config.MapIds; settings.mapVoteSeconds=Config.MapVoteSeconds; settings.revealSeconds=Config.RevealSeconds
   self.parties[entry.id]=Party.new(settings,context.clock)
   self:publish(self.parties[entry.id])
  end
@@ -27,6 +27,8 @@ function Service.new(context)
    end
   elseif action=="Vote" and type(value)=="table" and value.revision==party.revision and type(value.mode)=="string" then
    if party:vote(player,value.mode) then self:publish(party) end
+  elseif action=="MapVote" and type(value)=="table" and value.revision==party.revision and type(value.map)=="string" then
+   if party:voteMap(player,value.map) then self:publish(party) end
   end
  end)
  return self
@@ -36,7 +38,6 @@ function Service:send(player,data)
 end
 function Service:publish(party)
  local data=party:snapshot(); data.kind="Party"
- data.doorSeconds=Config.DoorSeconds; data.movementSound=Config.MovementSound; data.arrivalSound=Config.ArrivalSound
  self.geometry[party.config.id].label.Text=party.config.format:gsub("V","v").."  "..data.count.."/"..data.capacity.."  "..data.stage
  for _,p in ipairs(party.players) do self:send(p,data) end
 end
@@ -158,6 +159,13 @@ function Service:departed(player,id)
  self.ctx.pause(id,true)
 end
 function Service:update()
+ if self.closed or self.updating then return end
+ self.updating=true
+ local ok,err=xpcall(function() self:updateParties() end,debug.traceback)
+ self.updating=false
+ if not ok then error(err) end
+end
+function Service:updateParties()
  if self.closed then return end
  local now=self.ctx.clock()
  local cancel={}
@@ -191,17 +199,23 @@ function Service:update()
   if near then geometry.lastNear=now end
   geometry:setOpen(party.stage~="Departing" and (near or #party.players>0 or now-geometry.lastNear<Config.DoorHoldSeconds))
   if party:update() then
-   geometry:setOpen(false)
+   if party.stage=="Departing" then geometry:setOpen(false) end
    self:cancelTarget(party)
    self:publish(party)
   end
   if party.stage=="Waiting" and #party.players>0 and #party.players<party.config.capacity then self:offer(party,party.config.format) end
   if party.stage=="Departing" and now>=party.endsAt then
-   local group={players=table.clone(party.players),format=party.config.format,mode=party.mode,map="Rooftop",
-    modifier=party.mode=="Chaos" and "LowGravity" or "None"}
+   local revision=party.revision
+   local group={players=table.clone(party.players),format=party.config.format,mode=party.mode,map=party.map,overviewSeconds=Config.OverviewSeconds,
+    modifier=party.mode=="Chaos" and "LowGravity" or "None",
+    valid=function()
+     if self.closed or party.revision~=revision or party.stage~="Departing" then return false end
+     for _,p in ipairs(party.players) do if self.members[p]~=party then return false end end
+     return #party.players==party.config.capacity
+    end}
    local ok=self.ctx.start(group)
    if ok then
-    for _,p in ipairs(group.players) do self.members[p]=nil; p:SetAttribute("ElevatorId",nil); self:send(p,{kind="Closed"}) end
+    for _,p in ipairs(group.players) do self.members[p]=nil; p:SetAttribute("ElevatorId",nil); self:send(p,{kind="Closed",enteringMap=true}) end
     party.players={}; party.preferences={}; party.attempted={}; party:reset(); self:publish(party)
    else
     party:reset(); self:publish(party)

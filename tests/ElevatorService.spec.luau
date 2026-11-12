@@ -13,7 +13,7 @@ return function(source,Party,Queue,Config)
  local q=Queue.new(function() end,function() return now end)
  local ctx={lobby={},clock=function() return now end,owner=function(p) return ownerMap[p] end,queue=q,
   remote={OnServerEvent=signal,FireClient=function(_,p,data) events[p]=data end},
-  start=function() return false end,pause=function(id,value) positions.paused=value end,
+  start=function(group) positions.group=group; if positions.controller then positions.controller:update() end; return false end,pause=function(id,value) positions.paused=value end,
   replace=function(p,match,seat) positions.replaced=p; ownerMap[p]=match.courtId; return true end,
   terminate=function(id) positions.terminated=id end}
  local env=setmetatable({game={GetService=function() return players end},
@@ -30,7 +30,7 @@ return function(source,Party,Queue,Config)
   ownerMap[p]=0; table.insert(players.list,p); return p
  end
  local a,b,c,d=player(1),player(2),player(3),player(4)
- local s=Service.new(ctx); local party=s.parties[Config.Elevators[1].id]
+ local s=Service.new(ctx); positions.controller=s; local party=s.parties[Config.Elevators[1].id]
  assert(s:join(a,party),"Physical party admission")
  q:join(b,"Classic","1V1"); q:join(c,"Chaos","1V1")
  assert(s:offer(party,"1V1") and s.offers[b],"Invite a compatible queued player")
@@ -52,6 +52,19 @@ return function(source,Party,Queue,Config)
  assert(not party.votes[a],"Stale voting session packets are rejected")
  positions.onRequest(a,"Vote",{revision=revision,mode="Chaos"})
  assert(party.votes[a]=="Chaos","Current member can cast one authoritative vote")
+ positions.onRequest(c,"Vote",{revision=revision,mode="Chaos"})
+ local savedPlayers=players.list; players.list={}
+ s:update(); assert(party.stage=="MapVoting","Coordinator publishes the map phase after mode voting")
+ positions.onRequest(a,"MapVote",{revision=revision-1,map="Moon"})
+ assert(not party.mapVotes[a],"Stale map packets cannot affect the vote")
+ positions.onRequest(a,"MapVote",{revision=revision,map="Moon"})
+ positions.onRequest(c,"MapVote",{revision=revision,map="Moon"})
+ s:update(); assert(party.stage=="Departing","Winning map advances to reveal")
+ now+=Config.RevealSeconds; s:update()
+ assert(positions.group and positions.group.map=="Moon" and positions.group.mode=="Chaos"
+  and positions.group.overviewSeconds==4,"Selected map and independent ruleset reach match admission")
+ players.list=savedPlayers
+ assert(not positions.group.valid(),"A changed party invalidates an in-flight admission")
  s:leave(c,true); assert(not s.members[c] and party.stage=="Waiting","Explicit leave frees the slot")
  local group={players={a,d},format="1V1",mode="Classic",map="Rooftop",modifier="None"}
  a:SetAttribute("CourtSide",1); a:SetAttribute("CourtSlot",1)
@@ -68,7 +81,7 @@ return function(source,Party,Queue,Config)
  local stale=s.offers[spectator].id
  assert(s:offer(s.matches[5],"1V1","Classic",true) and not s.offers[nextSpectator],"Only one spectator is asked at a time")
  players.list={spectator,nextSpectator}
- now=10; s:update()
+ now+=10; s:update()
  assert(not s.offers[spectator] and s.offers[nextSpectator],"Ten-second timeout offers the next spectator")
  s:respond(spectator,stale,true); assert(not positions.replaced,"Timed-out invitation cannot claim the vacancy")
  s:respond(nextSpectator,s.offers[nextSpectator].id,true)

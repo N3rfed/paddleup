@@ -16,6 +16,9 @@
       "Shared": {
         "$className": "Folder",
         "$ignoreUnknownInstances": true,
+        "MapCatalog": {
+          "$path": "src/server/MapCatalog.luau"
+        },
         "ArcadeDeck": {
           "$path": "src/shared/ArcadeDeck.luau"
         },
