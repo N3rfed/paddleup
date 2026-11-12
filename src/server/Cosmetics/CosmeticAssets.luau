@@ -1,6 +1,7 @@
 -- Native Roblox geometry: the identical builders power shop viewports, boutique displays and equipment.
 -- All decoration is nonphysical. Existing paddle and character parts are never resized or re-welded.
 local Catalog=require(script.Parent:WaitForChild("CosmeticCatalog"))
+local Textures=require(script.Parent:WaitForChild("CosmeticTextures"))
 local Assets={}
 local V=Vector3.new
 local function part(parent,name,size,cf,color,material,anchor)
@@ -30,43 +31,27 @@ local function number07(parent,target,offset,width,height,color)
 end
 function Assets.paddle(face,id)
  local old=face:FindFirstChild("ShopPaddleArt"); if old then old:Destroy() end
+ for _,child in ipairs(face:GetChildren()) do if child.Name=="ShopPrintFront" or child.Name=="ShopPrintBack" then child:Destroy() end end
  if face:GetAttribute("ShopOriginalColor")==nil then
   face:SetAttribute("ShopOriginalColor",face.Color); face:SetAttribute("ShopOriginalMaterial",face.Material.Name)
  end
  face.Color=face:GetAttribute("ShopOriginalColor"); face.Material=Enum.Material[face:GetAttribute("ShopOriginalMaterial")]
  local item=Catalog.ById[id]; if not item or item.category~="Paddles" then return end
- local art=model(face,"ShopPaddleArt"); local c=item.colors; face.Color=c[1]
- face.Material=item.asset=="luxury" and Enum.Material.Metal or Enum.Material.SmoothPlastic
- local function ink(name,x,y,w,h,color,angle,side,material)
-  return attach(art,face,name,V(w,h,0.012),CFrame.new(x,y,(side or -1)*0.158)*CFrame.Angles(0,0,math.rad(angle or 0)),color,material)
+ local texture=Textures[item.asset]; assert(texture,"Missing paddle print")
+ local art=model(face,"ShopPaddleArt"); face.Color=item.colors[1]; face.Material=Enum.Material.SmoothPlastic
+ -- One decal on each real face: no coplanar art pieces or arbitrary hardcoded Z offsets.
+ for _,side in ipairs({Enum.NormalId.Front,Enum.NormalId.Back}) do
+  local decal=Instance.new("Decal"); decal.Name=side==Enum.NormalId.Front and "ShopPrintFront" or "ShopPrintBack"
+  decal.Face=side; decal.Texture=texture; decal.Parent=face
  end
+ local size=face.Size
  for _,side in ipairs({-1,1}) do
-  if item.asset=="minimal" then
-   ink("Graphite spine",-0.54,0,0.1,1.8,c[2],0,side); ink("Mint signature",0,-0.65,0.65,0.09,c[3],0,side)
-  elseif item.asset=="arcade" then
-   for _,x in ipairs({-0.72,0.72}) do ink("Neon rail",x,0,0.055,1.86,c[2],0,side,Enum.Material.Neon) end
-   for i=-2,2 do ink("Circuit step",i*0.22,i*0.28,0.32,0.075,c[3],0,side) end
-   ink("Arcade diamond",0,0,0.5,0.5,c[2],45,side)
-  elseif item.asset=="geometric" then
-   for x=-1,1 do for y=-2,2 do ink("Coral diamond",x*0.48,y*0.36,0.27,0.27,c[2],45,side) end end
-   ink("Golden axis",0,0,0.055,1.9,c[3],0,side)
-  elseif item.asset=="sport" then
-   for _,x in ipairs({-0.57,-0.37}) do ink("Speed stripe",x,0,0.09,1.9,c[2],0,side) end
-   ink("Tour badge",0.25,0.2,0.57,0.7,c[3],0,side)
-   number07(art,face,CFrame.new(0.25,0.2,side*0.178),0.43,0.5,c[1])
-  elseif item.asset=="playful" then
-   for x=-1,1 do for y=-2,2 do
-    ink("Confetti tile",x*0.47,y*0.35,0.29,0.19,c[(x+y+9)%3+1],(x+y)*15,side)
-   end end
-  elseif item.asset=="luxury" then
-   for _,x in ipairs({-0.74,0.74}) do ink("Brass frame",x,0,0.035,1.86,c[2],0,side,Enum.Material.Metal) end
-   for _,y in ipairs({-0.92,0.92}) do ink("Brass frame",0,y,1.51,0.035,c[2],0,side,Enum.Material.Metal) end
-   for i=-2,2 do ink("Deco fan",i*0.16,0.13,0.025,1.25,c[2],i*13,side,Enum.Material.Metal) end
-   ink("Reserve seal",0,-0.65,0.25,0.25,c[3],45,side)
-  end
+  attach(art,face,"Carbon side edge",V(0.035,size.Y,math.max(0.05,size.Z-0.035)),CFrame.new(side*(size.X/2+0.018),0,0),item.colors[2])
+  attach(art,face,"Carbon end edge",V(size.X+0.07,0.035,math.max(0.05,size.Z-0.035)),CFrame.new(0,side*(size.Y/2+0.018),0),item.colors[2])
  end
+ art:SetAttribute("PrintDesign",item.asset)
 end
-function Assets.wear(character,id)
+local function legacyWear(character,id)
  local old=character:FindFirstChild("ShopWearable"); if old then old:Destroy() end
  local item=Catalog.ById[id]; if not item or item.category~="Wearables" then return end
  local art=model(character,"ShopWearable"); local c=item.colors
@@ -122,6 +107,130 @@ function Assets.wear(character,id)
  end
  return art
 end
+local function restoreClothing(character)
+ local previous=character:FindFirstChild("ShopWearable")
+ if previous then
+  local stored=previous:FindFirstChild("OriginalClothing")
+  if stored then for _,item in ipairs(stored:GetChildren()) do item.Parent=character end end
+ end
+ for _,p in ipairs(character:GetDescendants()) do
+  if p:IsA("BasePart") and p:GetAttribute("ShopWearOriginalColor") then
+   p.Color=p:GetAttribute("ShopWearOriginalColor"); p:SetAttribute("ShopWearOriginalColor",nil)
+  end
+  if (p:IsA("BasePart") or p:IsA("Decal")) and p:GetAttribute("ShopHiddenTransparency")~=nil then
+   p.Transparency=p:GetAttribute("ShopHiddenTransparency"); p:SetAttribute("ShopHiddenTransparency",nil)
+  end
+ end
+ if previous then previous:Destroy() end
+end
+local function headband(art,head,colors)
+ if not head then return end
+ local w,h,d=head.Size.X,head.Size.Y,head.Size.Z
+ local radiusX,radiusZ=w*0.52+0.035,d*0.52+0.035
+ for i=1,40 do
+  local a,b=(i-1)*math.pi*2/40,i*math.pi*2/40
+  local p1=V(math.cos(a)*radiusX,h*0.25,math.sin(a)*radiusZ)
+  local p2=V(math.cos(b)*radiusX,h*0.25,math.sin(b)*radiusZ)
+  local middle=(p1+p2)/2
+  local offset=CFrame.lookAt(middle,p2)
+  attach(art,head,"Fitted woven headband",V(0.045,0.19,(p2-p1).Magnitude+0.003),offset,colors[1],Enum.Material.Fabric)
+  attach(art,head,"Headband contrast piping",V(0.056,0.028,(p2-p1).Magnitude+0.003),CFrame.new(0,-0.064,0)*offset,colors[3],Enum.Material.Fabric)
+ end
+ attach(art,head,"Embroidered club tab",V(w*0.13,0.1,0.018),CFrame.new(0,h*0.25,-radiusZ-0.033),colors[3],Enum.Material.Fabric)
+end
+function Assets.wear(character,id)
+ restoreClothing(character)
+ local item=Catalog.ById[id]
+ if not item or item.category~="Wearables" then return end
+ if item.asset~="outfit" and item.asset~="headband" then return legacyWear(character,id) end
+ local art=model(character,"ShopWearable"); local c=item.colors
+ local head=character:FindFirstChild("Head")
+ if item.asset=="headband" then headband(art,head,c); return art end
+ local stored=Instance.new("Folder"); stored.Name="OriginalClothing"; stored.Parent=art
+ local bodyNames={UpperTorso=true,LowerTorso=true,Torso=true,LeftUpperArm=true,RightUpperArm=true,
+  LeftLowerArm=true,RightLowerArm=true,LeftHand=true,RightHand=true,LeftUpperLeg=true,RightUpperLeg=true,
+  LeftLowerLeg=true,RightLowerLeg=true,LeftFoot=true,RightFoot=true,["Left Arm"]=true,["Right Arm"]=true,["Left Leg"]=true,["Right Leg"]=true}
+ local clothingTypes={TShirt=true,Shirt=true,Pants=true,Jacket=true,Sweater=true,Shorts=true,DressSkirt=true,LeftShoe=true,RightShoe=true}
+ for _,child in ipairs(character:GetChildren()) do
+  if child:IsA("Shirt") or child:IsA("Pants") or child:IsA("ShirtGraphic")
+   or (child:IsA("Accessory") and clothingTypes[child.AccessoryType.Name]) then
+   for _,p in ipairs(child:GetDescendants()) do
+    if p:IsA("BasePart") or p:IsA("Decal") then p:SetAttribute("ShopHiddenTransparency",p.Transparency); p.Transparency=1 end
+   end
+   child.Parent=stored
+  elseif child:IsA("BasePart") and bodyNames[child.Name] then
+   child:SetAttribute("ShopWearOriginalColor",child.Color)
+   child.Color=head and head.Color or Color3.fromRGB(214,177,145)
+  end
+ end
+ local function shell(target,name,color,scale,offset)
+  if not target then return end
+  local saved=target.Archivable; target.Archivable=true; local copy=target:Clone(); target.Archivable=saved
+  for _,child in ipairs(copy:GetChildren()) do
+   if child:IsA("DataModelMesh") then
+    if child:IsA("SpecialMesh") then child.TextureId="" end
+   else child:Destroy() end
+  end
+  if copy:IsA("MeshPart") then copy.TextureID="" end
+  copy:SetAttribute("ShopWearOriginalColor",nil)
+  copy.Name=name; copy.Size=target.Size*(scale or V(1.025,1.025,1.025))
+  copy.CFrame=target.CFrame*(offset or CFrame.identity); copy.Color=color; copy.Material=Enum.Material.Fabric
+  copy.Anchored=false; copy.CanCollide=false; copy.CanTouch=false; copy.CanQuery=false; copy.Massless=true; copy.CastShadow=false
+  copy.Parent=art
+  local weld=Instance.new("WeldConstraint"); weld.Part0=target; weld.Part1=copy; weld.Parent=copy
+  return copy
+ end
+ local torso=character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+ local hips=character:FindFirstChild("LowerTorso")
+ shell(torso,"Fitted court top",c[1]); shell(hips,"Tailored waist",c[1])
+ local female=item.fit=="Female"
+ if not female then
+  for _,side in ipairs({"Left","Right"}) do
+   local arm=character:FindFirstChild(side.."UpperArm")
+   if arm then shell(arm,"Polo short sleeve",c[1])
+   else
+    arm=character:FindFirstChild(side.." Arm")
+    if arm then shell(arm,"Polo short sleeve",c[1],V(1.025,0.45,1.025),CFrame.new(0,arm.Size.Y*0.275,0)) end
+   end
+  end
+ end
+ for _,side in ipairs({"Left","Right"}) do
+  local leg=character:FindFirstChild(side.."UpperLeg") or character:FindFirstChild(side.." Leg")
+  if leg then
+   local length=female and 0.52 or 0.72
+   shell(leg,"Tailored court shorts",c[2],V(1.025,length,1.025),CFrame.new(0,leg.Size.Y*(1-length)/2,0))
+  end
+  local shin=character:FindFirstChild(side.."LowerLeg")
+  if shin then shell(shin,"White court sock",Color3.fromRGB(244,241,231),V(1.03,0.38,1.03),CFrame.new(0,-shin.Size.Y*0.31,0)) end
+  local foot=character:FindFirstChild(side.."Foot")
+  if foot then
+   shell(foot,"Clean court sneaker",Color3.fromRGB(242,239,229),V(1.06,1.08,1.06))
+   attach(art,foot,"Sneaker heel accent",V(foot.Size.X*0.7,0.065,0.025),CFrame.new(0,foot.Size.Y*0.2,foot.Size.Z/2+0.045),c[3])
+  end
+ end
+ if female and (hips or torso) then
+  local target=hips or torso; local w,h,d=target.Size.X,target.Size.Y,target.Size.Z
+  local y=-h/2-0.24
+  for _,side in ipairs({-1,1}) do
+   attach(art,target,"Court skort front",V(w*1.13,0.7,0.09),CFrame.new(0,y,side*(d/2+0.075))*CFrame.Angles(math.rad(-side*10),0,0),c[2],Enum.Material.Fabric)
+   attach(art,target,"Court skort side",V(0.09,0.7,d*1.15),CFrame.new(side*(w/2+0.045),y,0)*CFrame.Angles(0,0,math.rad(side*10)),c[2],Enum.Material.Fabric)
+  end
+ end
+ if torso then
+  local w,h,d=torso.Size.X,torso.Size.Y,torso.Size.Z
+  local front=-d/2-0.065
+  attach(art,torso,"Embroidered chest mark",V(w*0.17,h*0.06,0.015),CFrame.new(-w*0.24,h*0.22,front),c[3],Enum.Material.Fabric)
+  attach(art,torso,"Club accent stitch",V(w*0.035,h*0.13,0.015),CFrame.new(-w*0.15,h*0.15,front),c[3],Enum.Material.Fabric)
+  if not female then
+   for _,side in ipairs({-1,1}) do
+    attach(art,torso,"Polo collar detail",V(w*0.13,h*0.12,0.025),CFrame.new(side*w*0.1,h*0.34,front)*CFrame.Angles(0,0,math.rad(side*20)),c[3],Enum.Material.Fabric)
+   end
+  end
+ end
+ headband(art,head,c)
+ art:SetAttribute("Fit",item.fit); art:SetAttribute("Theme",item.theme)
+ return art
+end
 -- Never touch lines, net, ball, lights, collision properties or dimensions.
 function Assets.court(root,id)
  local old=root:FindFirstChild("ShopCourtArt"); if old then old:Destroy() end
@@ -165,21 +274,43 @@ function Assets.court(root,id)
   end
  end
 end
-function Assets.preview(id)
+function Assets.preview(id,fit)
  local item=assert(Catalog.ById[id],"Unknown cosmetic")
  local root=model(nil,"Preview_"..id)
  if item.category=="Paddles" then
-  local grip=part(root,"PaddleGrip",V(0.3,1.2,0.3),CFrame.new(0,-1.3,0),Color3.fromRGB(35,47,52))
+  local grip=part(root,"PaddleGrip",V(1.2,0.3,0.3),CFrame.new(0,-1.3,0)*CFrame.Angles(0,0,math.pi/2),Color3.fromRGB(35,39,47))
+  grip.Shape=Enum.PartType.Cylinder
+  for i=1,7 do
+   local ring=part(root,"Grip wrap",V(0.027,0.31,0.31),CFrame.new(0,-1.83+i*0.145,0)*CFrame.Angles(0,0,math.pi/2),Color3.fromRGB(63,67,73))
+   ring.Shape=Enum.PartType.Cylinder
+  end
   local face=part(root,"PaddleFace",V(1.65,2,0.3),CFrame.new(0,0.2,0),Color3.fromRGB(31,193,180))
   Assets.paddle(face,id); grip.Anchored=true
  elseif item.category=="Wearables" then
-  local skin=Color3.fromRGB(201,169,141); local base=Color3.fromRGB(58,72,78)
-  for _,spec in ipairs({{"Head",V(1.3,1.1,1),V(0,2.05,0),skin},{"UpperTorso",V(2,1.6,1),V(0,0.6,0),base},
-   {"LowerTorso",V(1.6,0.5,0.9),V(0,-0.4,0),base},{"LeftHand",V(0.65,0.75,0.8),V(-1.4,-0.3,0),skin},
-   {"RightHand",V(0.65,0.75,0.8),V(1.4,-0.3,0),skin},{"Left Arm",V(0.7,1.3,0.8),V(-1.4,0.7,0),base},
-   {"Right Arm",V(0.7,1.3,0.8),V(1.4,0.7,0),base},{"Left Leg",V(0.75,1.7,0.85),V(-0.45,-1.45,0),base},
-   {"Right Leg",V(0.75,1.7,0.85),V(0.45,-1.45,0),base}}) do part(root,spec[1],spec[2],CFrame.new(spec[3]),spec[4]) end
+  local folder=game:GetService("ReplicatedStorage"):FindFirstChild("ShopMannequins")
+  if not folder and game:GetService("RunService"):IsServer() then
+   folder=require(game:GetService("ServerScriptService"):WaitForChild("Server"):WaitForChild("Cosmetics"):WaitForChild("ShopMannequins")).prepare()
+  end
+  folder=folder or game:GetService("ReplicatedStorage"):WaitForChild("ShopMannequins",20)
+  local template=folder and folder:FindFirstChild(item.fit or fit or "Male")
+  assert(template,"Standard shop mannequin unavailable")
+  root:Destroy(); root=template:Clone(); root.Name="Preview_"..id
+  if item.asset~="outfit" then
+   for _,p in ipairs(root:GetChildren()) do
+    if p:IsA("BasePart") then
+     if p.Name=="UpperTorso" or p.Name=="LowerTorso" then p.Color=Color3.fromRGB(244,241,231)
+     elseif p.Name:find("UpperLeg") then p.Color=Color3.fromRGB(42,48,58) end
+    end
+   end
+  end
   Assets.wear(root,id)
+  if item.asset=="headband" then
+   -- Headband cards are headshots; hide the unused body instead of showing
+   -- an untextured torso/neck below the product.
+   for _,p in ipairs(root:GetChildren()) do
+    if p:IsA("BasePart") and p.Name~="Head" then p.Transparency=1 end
+   end
+  end
  else
   part(root,"Playing surface",V(40,0.16,80),CFrame.new(),Color3.fromRGB(43,123,134))
   part(root,"Court surround",V(52,0.12,96),CFrame.new(0,-0.1,0),Color3.fromRGB(136,128,163))

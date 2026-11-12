@@ -1,4 +1,7 @@
 local Shared=game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+while Shared:GetAttribute("CosmeticsVersion")~=2 do
+ Shared:GetAttributeChangedSignal("CosmeticsVersion"):Wait()
+end
 local Catalog=require(Shared:WaitForChild("CosmeticCatalog"))
 local Assets=require(Shared:WaitForChild("CosmeticAssets"))
 local Shop={}
@@ -9,9 +12,9 @@ function Shop.start(player,network)
  local GuiService=game:GetService("GuiService")
  local Run=game:GetService("RunService")
  local remote=network:WaitForChild("Shop")
- local dark=Color3.fromRGB(26,39,44); local tile=Color3.fromRGB(38,55,60)
- local ivory=Color3.fromRGB(246,238,216); local muted=Color3.fromRGB(177,193,188)
- local mint=Color3.fromRGB(102,222,190); local gold=Color3.fromRGB(224,187,119); local coral=Color3.fromRGB(246,151,128)
+ local dark=Color3.fromRGB(27,27,64); local tile=Color3.fromRGB(43,43,78)
+ local ivory=Color3.fromRGB(246,246,255); local muted=Color3.fromRGB(192,192,218)
+ local mint=Color3.fromRGB(80,232,255); local gold=Color3.fromRGB(221,190,154); local coral=Color3.fromRGB(255,125,174)
  local gui=Instance.new("ScreenGui"); gui.Name="PaddleUpShop"; gui.ResetOnSpawn=false; gui.IgnoreGuiInset=true; gui.DisplayOrder=75; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; gui.Parent=pg
  local function box(parent,name,color)
   local f=Instance.new("Frame"); f.Name=name; f.BackgroundColor3=color or dark; f.BorderSizePixel=0; f.Parent=parent
@@ -32,8 +35,8 @@ function Shop.start(player,network)
  local panel=box(overlay,"GoodsBoutique",dark); panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5)
  local panelScale=Instance.new("UIScale"); panelScale.Parent=panel
  local outline=Instance.new("UIStroke"); outline.Color=gold; outline.Transparency=0.4; outline.Parent=panel
- local brand=label(panel,"Brand","P A D D L E U P   /   GOODS",12,gold)
- local title=label(panel,"Title","Make it your game.",26,ivory)
+ local brand=label(panel,"Brand","P A D D L E U P   /   PRO SHOP",12,gold)
+ local title=label(panel,"Title","Court-ready. Club-approved.",26,ivory)
  local balance=label(panel,"Currency","SPENDABLE XP  /  LOADING",18,mint)
  local progression=label(panel,"LifetimeXP","Loading club profile...",11,muted)
  local close=button(panel,"CloseShop","CLOSE",tile); close.TextColor3=ivory
@@ -60,11 +63,25 @@ function Shop.start(player,network)
  local accept=button(confirm,"ConfirmBuy","BUY",mint); accept.ZIndex=11
  local cancel=button(confirm,"CancelBuy","CANCEL",tile); cancel.TextColor3=ivory; cancel.ZIndex=11
  local view,viewCamera,viewTarget,viewRadius,viewCategory
- local category="Paddles"; local selected; local cards={}; local state={inventory={},equipped={}}
+ local category="Paddles"; local fit="Male"; local selected; local cards={}; local state={inventory={},equipped={}}
  local token,lastRevision,serial,pending,lastResult=nil,0,0,nil,nil
  local closedTokens={}
  local angle=0; local openedAt=0; local pendingAt=0; local confirmId; local lastWidth
  local resize,refresh,choose,makeCards,setOpen
+ local function visible(item)
+  return (not item.hidden or state.inventory[item.id]) and item.category==category and (category~="Wearables" or not item.fit or item.fit==fit)
+ end
+ local function firstVisible()
+  for _,item in ipairs(Catalog.Items) do if visible(item) then return item.id end end
+ end
+ local fits={}
+ for _,name in ipairs({"Male","Female"}) do
+  local b=button(panel,name.."Fit",string.upper(name),tile); b.TextColor3=ivory; fits[name]=b; b.Visible=false
+  b.Activated:Connect(function()
+   if confirm.Visible then return end
+   fit=name; makeCards(); choose(firstVisible())
+  end)
+ end
  local messages={Purchased="Purchased! This design is yours permanently.",Owned="You already own this design. No currency was spent.",
   Insufficient="Not enough spendable XP. Earn more through matches and club rewards.",Equipped="Equipped. Your selection has been saved.",
   Unequipped="Original appearance restored.",NotOwned="Purchase this design before equipping it.",InvalidItem="That item is unavailable.",Expired="This request expired. Check your balance and try again."}
@@ -77,8 +94,11 @@ function Shop.start(player,network)
   local v=Instance.new("ViewportFrame"); v.Name="ActualDesignPreview"; v.BackgroundTransparency=1
   v.Ambient=Color3.fromRGB(190,201,211); v.LightColor=Color3.fromRGB(255,244,220); v.LightDirection=Vector3.new(-1,-1,-2); v.Parent=parent
   local world=Instance.new("WorldModel"); world.Parent=v
-  local asset=Assets.preview(item.id); asset.Parent=world
+  local asset=Assets.preview(item.id,fit); asset.Parent=world
   local cf,size=asset:GetBoundingBox(); local target=cf.Position; local radius=math.max(size.X,size.Y,size.Z)
+  if item.category=="Wearables" and item.asset=="headband" and asset:FindFirstChild("Head") then
+   target=asset.Head.Position+Vector3.new(0,0.1,0); radius=1.75
+  end
   local camera=Instance.new("Camera"); camera.FieldOfView=38; camera.Parent=v; v.CurrentCamera=camera
   local offset=item.category=="Courts" and Vector3.new(0.65,1.15,-1) or Vector3.new(0.28,0.12,-1.55)
   camera.CFrame=CFrame.lookAt(target+offset*radius,target)
@@ -97,13 +117,16 @@ function Shop.start(player,network)
    card.status.TextColor3=equipped and mint or owned and gold or muted
    card.stroke.Color=id==selected and mint or tile
   end
+  for name,b in pairs(fits) do
+   b.Visible=category=="Wearables"; b.BackgroundColor3=fit==name and mint or tile; b.TextColor3=fit==name and dark or ivory
+  end
   for key,b in pairs(tabs) do b.BackgroundColor3=category==key and mint or tile; b.TextColor3=category==key and dark or ivory end
   reset.Active=not busy() and state.equipped[category]~=nil; reset.AutoButtonColor=reset.Active
   local item=Catalog.ById[selected]
   if item then
    local owned=state.inventory[selected]; local equipped=state.equipped[category]==selected
    price.Text=owned and (equipped and "EQUIPPED / SAVED" or "OWNED / READY TO WEAR") or string.format("%d SPENDABLE XP",item.price)
-   action.Text=busy() and "SAVING / PLEASE WAIT" or equipped and "UNEQUIP" or owned and "EQUIP DESIGN" or state.balance and state.balance<item.price and "INSUFFICIENT XP" or "BUY DESIGN"
+   action.Text=not state.ready and "SHOP UNAVAILABLE" or busy() and "SAVING / PLEASE WAIT" or equipped and "UNEQUIP" or owned and "EQUIP DESIGN" or state.balance and state.balance<item.price and "INSUFFICIENT XP" or "BUY DESIGN"
    action.Active=not busy() and (owned or state.balance and state.balance>=item.price) or false
    action.AutoButtonColor=action.Active; action.BackgroundColor3=action.Active and mint or Color3.fromRGB(83,99,98)
   end
@@ -119,12 +142,13 @@ function Shop.start(player,network)
   selected=id; local item=Catalog.ById[id]
   if view then view:Destroy() end
   view=viewport(detail,item,true); detailName.Text=item.name; description.Text=item.description
-  courtNote.Text=item.category=="Courts" and "Visible only to you. Court lines, lights and gameplay stay intact." or item.category=="Wearables" and "One wearable slot. Original avatar clothing and accessories are preserved underneath." or "Original grip, dimensions, hitbox and physics. Design is printed on both faces."
+  previewTag.Text=item.category=="Wearables" and ("FITTING ROOM / "..string.upper(item.fit or fit).." R15") or item.category=="Paddles" and "FITTING ROOM / PRINTED ON BOTH FACES" or "FITTING ROOM / PERSONAL COURT FINISH"
+  courtNote.Text=item.category=="Courts" and "Visible only to you. Court lines, lights and gameplay stay intact." or item.category=="Wearables" and "Outfits include a matching headband. Unequip restores your original avatar." or "Original grip, dimensions, hitbox and physics. Design is printed on both faces."
   refresh(); resize()
  end
  makeCards=function()
   for _,card in pairs(cards) do card.button:Destroy() end; cards={}
-  for _,item in ipairs(Catalog.Items) do if item.category==category then
+  for _,item in ipairs(Catalog.Items) do if visible(item) then
    local b=button(list,item.id,"",tile); b.LayoutOrder=#list:GetChildren(); b.ClipsDescendants=true
    local edge=Instance.new("UIStroke"); edge.Color=tile; edge.Thickness=2; edge.Parent=b
    local v=viewport(b,item,false); v.Position=UDim2.new(0,4,0,3); v.Size=UDim2.new(1,-8,1,-53)
@@ -140,7 +164,7 @@ function Shop.start(player,network)
   b.Activated:Connect(function()
    if confirm.Visible then return end
    category=key; makeCards()
-   for _,item in ipairs(Catalog.Items) do if item.category==category then choose(item.id); break end end
+   choose(firstVisible())
   end)
  end
  resize=function()
@@ -184,6 +208,12 @@ function Shop.start(player,network)
    rect(courtNote,18,bodyH-28,dw-36,25); courtNote.Visible=true
    grid.CellSize=UDim2.fromOffset((lw-30)/3,math.max(156,math.min(210,(bodyH-58)/2)))
   end
+  if category=="Wearables" then
+   local rowWidth=small and w-40 or (w-math.floor(w*0.35)-58)
+   rect(reset,20,bodyY,rowWidth-174,28)
+   rect(fits.Male,20+rowWidth-166,bodyY,78,28)
+   rect(fits.Female,20+rowWidth-80,bodyY,80,28)
+  end
   local cw=math.min(400,w-24); confirm.Size=UDim2.fromOffset(cw,270)
   rect(confirmTitle,20,18,cw-40,34); rect(confirmText,20,62,cw-40,126)
   rect(accept,20,208,(cw-50)/2,42); rect(cancel,30+(cw-50)/2,208,(cw-50)/2,42)
@@ -192,7 +222,7 @@ function Shop.start(player,network)
   if not value and token then closedTokens[token]=true end
   overlay.Visible=value; confirm.Visible=false; confirmId=nil; player:SetAttribute("ShopOpen",value)
   if value then
-   openedAt=os.clock(); resize(); refresh()
+   openedAt=os.clock(); makeCards(); if not cards[selected] then choose(firstVisible()) end; resize(); refresh()
    UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
    CAS:BindActionAtPriority("ShopControls",function() return Enum.ContextActionResult.Sink end,false,Enum.ContextActionPriority.High.Value+30,
     Enum.KeyCode.W,Enum.KeyCode.A,Enum.KeyCode.S,Enum.KeyCode.D,Enum.KeyCode.Up,Enum.KeyCode.Down,Enum.KeyCode.Left,Enum.KeyCode.Right,Enum.KeyCode.Space,Enum.KeyCode.Thumbstick1)

@@ -1,5 +1,9 @@
 -- Client-only surface finishes. Never replicate one player's choice onto an opponent's court.
-local Assets=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("CosmeticAssets"))
+local Shared=game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+while Shared:GetAttribute("CosmeticsVersion")~=2 do
+ Shared:GetAttributeChangedSignal("CosmeticsVersion"):Wait()
+end
+local Assets=require(Shared:WaitForChild("CosmeticAssets"))
 local Court={}
 function Court.start(player)
  local current,id,queued

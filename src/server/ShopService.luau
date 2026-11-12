@@ -12,7 +12,7 @@ function Shop.start(network,lobby,progression)
  prompt.MaxActivationDistance=12; prompt.RequiresLineOfSight=false; prompt.HoldDuration=0; prompt.Parent=point
  -- Real catalog samples on the counter; built with exactly the equipped paddle builder.
  local display=Instance.new("Model"); display.Name="ShopCatalogDisplay"; display.Parent=lobby
- for i,id in ipairs({"paddle_porcelain","paddle_afterglow","paddle_prism","paddle_tour","paddle_confetti","paddle_noir"}) do
+ for i,id in ipairs({"paddle_porcelain","paddle_tour","paddle_afterglow","paddle_confetti","paddle_prism","paddle_lotus"}) do
   local sample=Assets.preview(id); sample:ScaleTo(0.46)
   sample:PivotTo(counter.CFrame*CFrame.new((i-3.5)*1.2,1.15,0)*CFrame.Angles(0,math.pi,0)); sample.Parent=display
  end

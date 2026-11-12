@@ -26,7 +26,7 @@ return function(serverSource,clientSource,Assets)
  end
  local a,b=player(),player()
  function players:GetPlayers() return list end
- local shared={WaitForChild=function(_,name) return name end}
+ local shared={GetAttribute=function() return 2 end,WaitForChild=function(_,name) return name end}
  local fn=assert(loadstring(serverSource))
  setfenv(fn,setmetatable({require=function() return Assets end,
   game={GetService=function(_,name) if name=="Players" then return players end return {WaitForChild=function() return shared end} end}},{__index=getfenv()}))

@@ -11,11 +11,21 @@ return function(Assets,Catalog)
    end end
    if item.category=="Paddles" then
     local face=root.PaddleFace; local originalSize=face.Size; local cf=face.CFrame
-    assert(face:FindFirstChild("ShopPaddleArt") and #face.ShopPaddleArt:GetChildren()>=4)
+    assert(face:FindFirstChild("ShopPaddleArt") and #face.ShopPaddleArt:GetChildren()==4,"Only protective edges remain as 3D decoration")
+    assert(face.ShopPrintFront:IsA("Decal") and face.ShopPrintBack:IsA("Decal"),"Artwork is a single texture per face")
+    assert(face.ShopPrintFront.Face==Enum.NormalId.Front and face.ShopPrintBack.Face==Enum.NormalId.Back)
+    assert(face.ShopPrintFront.Texture==face.ShopPrintBack.Texture,"Both sides share the same clean print")
     Assets.paddle(face,nil)
     assert(face.Size==originalSize and face.CFrame==cf and face.Color==Color3.fromRGB(31,193,180) and not face:FindFirstChild("ShopPaddleArt"),"Paddle unequip restores its original face without resizing")
    elseif item.category=="Wearables" then
     assert(root:FindFirstChild("ShopWearable") and #root.ShopWearable:GetChildren()>0)
+    assert(root:FindFirstChildOfClass("Humanoid") and root.UpperTorso:IsA("MeshPart"),"Preview uses a standard R15 mannequin")
+    if item.fit then assert(root:GetAttribute("ShopFit")==item.fit,"Correct male/female template") end
+    for _,accessory in ipairs(root:GetChildren()) do
+     if accessory:IsA("Accessory") and accessory:FindFirstChild("Handle") then
+      assert((accessory.Handle.Position-root.Head.Position).Magnitude<3,"Hair is assembled on the head before viewport anchoring")
+     end
+    end
     local shirt=Instance.new("Shirt"); shirt.ShirtTemplate="rbxassetid://123"; shirt.Parent=root
     Assets.wear(root,nil); assert(shirt.Parent==root and not root:FindFirstChild("ShopWearable"),"Unequipping preserves default clothing")
    else
@@ -31,6 +41,12 @@ return function(Assets,Catalog)
    end
   end
   assert(counts.Paddles>=6 and counts.Wearables>=6 and counts.Courts>=6)
+  local visible=0
+  for _,item in ipairs(Catalog.Items) do if item.category=="Paddles" and not item.hidden then visible+=1 end end
+  assert(visible==6,"The shop displays six paddle designs")
+  assert(Catalog.ById.paddle_tour.asset=="cat" and Catalog.ById.paddle_tour.name=="Catnap Club","Existing ownership now uses the original cat design")
+  assert(Catalog.ById.paddle_lotus.asset=="lotus" and Catalog.ById.paddle_lotus.category=="Paddles","Lotus lake is available as a paddle")
+  for _,item in ipairs(Catalog.Items) do assert(not item.name:lower():find("hello kitty",1,true),"No removed branded paddle remains") end
   local a=Assets.preview("court_classic"); local b=Assets.preview("court_tropical"); table.insert(roots,a); table.insert(roots,b)
   local color=b["Playing surface"].Color
   Assets.court(a,"court_noir")
@@ -44,5 +60,5 @@ return function(Assets,Catalog)
  end)
  for _,root in ipairs(roots) do root:Destroy() end
  assert(ok,err)
- return "All 18 real designs built, nonphysical art, R6/R15 wearables, unchanged paddle/court geometry, default restoration and isolated themes passed"
+ return "Clean two-sided paddle prints, six visible designs, standard male/female rigs, fitted wearables, nonphysical art, original restoration, and isolated court themes passed"
 end

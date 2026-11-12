@@ -15,7 +15,7 @@ return function(source,Catalog,Assets)
  function remote:FireServer(action,id,token,value) table.insert(requests,{action=action,id=id,token=token,value=value}) end
  local input={InputBegan=signal(),GamepadEnabled=false}
  local render=signal(); local camera={ViewportSize=Vector2.new(1280,800)}
- local shared={WaitForChild=function(_,name) return name end}
+ local shared={GetAttribute=function() return 2 end,WaitForChild=function(_,name) return name end}
  local services={ReplicatedStorage={WaitForChild=function() return shared end},UserInputService=input,GuiService={},
   ContextActionService={BindActionAtPriority=function() end,UnbindAction=function() end},RunService={RenderStepped=render}}
  local captures={}
@@ -35,7 +35,7 @@ return function(source,Catalog,Assets)
   publish(true)
   local panel=gui.ShopOverlay.GoodsBoutique
   assert(attributes.ShopOpen and panel.Currency.Text:find("1000",1,true) and panel.LifetimeXP.Text:find("900",1,true))
-  assert(#panel.ItemGallery:GetChildren()==7,"Six actual item cards and their layout are present")
+  assert(#panel.ItemGallery:GetChildren()==7,"Six paddle cards and their layout are present")
   assert(panel.FittingRoom:FindFirstChild("ActualDesignPreview"):FindFirstChildOfClass("WorldModel"),"Detail preview contains real geometry")
   captures.ItemAction(); assert(gui.ShopOverlay.PurchaseConfirmation.Visible and requests[#requests].action=="Sync","Buying requires confirmation first")
   captures.ConfirmBuy(); assert(requests[#requests].action=="Buy" and requests[#requests].value=="paddle_porcelain")
@@ -49,8 +49,17 @@ return function(source,Catalog,Assets)
   captures.ItemAction(); assert(requests[#requests].action=="Unequip" and requests[#requests].value=="Paddles")
   current.equipped={}; publish(false)
   for _,key in ipairs({"Wearables","Courts","Paddles"}) do
-   captures[key](); assert(#panel.ItemGallery:GetChildren()==7)
+   captures[key]()
+   local expected=key=="Paddles" and 7 or key=="Wearables" and 11 or 7
+   assert(#panel.ItemGallery:GetChildren()==expected,"Each category has the intended visible designs")
   end
+  captures.Wearables(); captures.FemaleFit()
+  assert(panel.FemaleFit.Visible and panel.ItemGallery:FindFirstChild("wear_white_female") and not panel.ItemGallery:FindFirstChild("wear_club"),"Female browsing uses female outfit variants")
+  assert(panel.FittingRoom.ActualDesignPreview.WorldModel:FindFirstChildOfClass("Model"):FindFirstChildOfClass("Humanoid"),"Outfits use standard Roblox rigs")
+  captures.MaleFit(); assert(panel.ItemGallery:FindFirstChild("wear_club") and not panel.ItemGallery:FindFirstChild("wear_white_female"))
+  captures.Paddles()
+  captures.paddle_lotus(); assert(panel.FittingRoom.ItemName.Text=="Lotus Lake","Lotus print can be selected")
+  captures.paddle_tour(); assert(panel.FittingRoom.ItemName.Text=="Catnap Club","Original cat replaces the removed design")
   captures.paddle_prism(); current.balance=0; publish(false); assert(not panel.FittingRoom.ItemAction.Active and panel.FittingRoom.ItemAction.Text=="INSUFFICIENT XP")
   camera.ViewportSize=Vector2.new(390,844); render:Fire(0.016)
   assert(panel.Size.X.Offset<=366 and panel.FittingRoom.Position.Y.Offset>panel.ItemGallery.Position.Y.Offset,"Phone layout stacks gallery and fitting room")

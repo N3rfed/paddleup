@@ -50,6 +50,9 @@
         "CosmeticCatalog": {
           "$path": "src/server/Cosmetics/CosmeticCatalog.luau"
         },
+        "CosmeticTextures": {
+          "$path": "src/server/Cosmetics/CosmeticTextures.luau"
+        },
         "CosmeticAssets": {
           "$path": "src/server/Cosmetics/CosmeticAssets.luau"
         }

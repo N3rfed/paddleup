@@ -9,6 +9,9 @@ return function(Rules,Repository,Config,Catalog)
  assert(legacy.version==2 and legacy.inventory==nil,"Migration cannot mutate its input")
  local loaded=Rules.apply(migrated,op("Load"),now)
  assert(loaded.spendableXP==migrated.spendableXP,"Repeated migration cannot mint currency")
+ local lotus,lotusReceipt=Rules.apply(loaded,op("ShopBuy","paddle_lotus"),now)
+ assert(lotusReceipt.kind=="Purchased" and lotus.inventory.paddle_lotus
+  and lotus.spendableXP==loaded.spendableXP-Catalog.ById.paddle_lotus.price,"Lotus Lake can be purchased at its server catalog price")
  local item=Catalog.ById.paddle_porcelain
  local buy=op("ShopBuy",item.id)
  local purchased,receipt=Rules.apply(loaded,buy,now)
