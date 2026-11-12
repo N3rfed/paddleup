@@ -186,10 +186,20 @@ function UI.start(player,network)
   retry.Position=UDim2.fromOffset((contentWidth-170)/2,214)
   if previousWidth~=contentWidth and state and state.ready then fill.Size=UDim2.fromOffset(contentWidth*math.clamp(state.xp/state.required,0,1),6) end
  end
+ local gameplayModes={Practice=true,Spectate=true,["1V1"]=true,["1V2"]=true,["2V2"]=true}
+ local function inGameplay()
+  return (player:GetAttribute("CourtSide") or 0)~=0 or gameplayModes[player:GetAttribute("SessionMode")]==true
+ end
+ local function updateVisibility()
+  local visible=not inGameplay()
+  gui.Enabled=visible
+  profile.Visible=visible and not overlay.Visible
+ end
  local function setOpen(value)
-  if overlay.Visible==value then return end
+  if value and inGameplay() then return end
+  if overlay.Visible==value then updateVisibility(); return end
   if not value then zonePanel.Visible=false end
-  overlay.Visible=value; profile.Visible=not value; player:SetAttribute("CheckInOpen",value)
+  overlay.Visible=value; updateVisibility(); player:SetAttribute("CheckInOpen",value)
   if value then
    resize(); panel.Position=UDim2.new(0.5,0,0.5,18)
    tween("open",panel,{Position=UDim2.fromScale(0.5,0.5)},0.22)
@@ -310,7 +320,12 @@ function UI.start(player,network)
   if overlay.Visible and (input.KeyCode==Enum.KeyCode.Escape or input.KeyCode==Enum.KeyCode.ButtonB) then setOpen(false) end
  end)
  connect(player:GetAttributeChangedSignal("SessionMode"),function()
-  if player:GetAttribute("SessionMode")~="Lobby" then setOpen(false) end
+  if player:GetAttribute("SessionMode")~="Lobby" or inGameplay() then setOpen(false) end
+  updateVisibility()
+ end)
+ connect(player:GetAttributeChangedSignal("CourtSide"),function()
+  if inGameplay() then setOpen(false) end
+  updateVisibility()
  end)
  connect(remote.OnClientEvent,function(packet)
   if type(packet.revision)~="number" or packet.revision<=revision then return end
@@ -358,6 +373,6 @@ function UI.start(player,network)
   for _,animation in pairs(tweens) do animation:Cancel() end
  end)
  send("Sync")
- resize(); render()
+ resize(); render(); updateVisibility()
 end
 return UI
