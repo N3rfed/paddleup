@@ -12,7 +12,7 @@ require(script:WaitForChild("DayNightCycle")).start()
 local template=root:Clone(); template.Parent=nil
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")
 folder.Name="PaddleUp"; folder.Parent=ReplicatedStorage
-for _,name in ipairs({"Input","State","Feedback","Session","Queue","IntroReady","Powerup","Practice","Arcade","ArcadeLoadout"}) do
+for _,name in ipairs({"Input","State","Feedback","Session","Queue","IntroReady","Powerup","Practice","Arcade","ArcadeLoadout","Elevator"}) do
  if not folder:FindFirstChild(name) then
   local event=Instance.new("RemoteEvent"); event.Name=name; event.Parent=folder
  end
@@ -25,6 +25,7 @@ end
 local CourtSession=require(script:WaitForChild("CourtSession"))
 local progression=require(script:WaitForChild("ProgressionService")).start(folder,lobbyRoot)
 local queueRemote,session=folder.Queue,folder.Session
+local elevatorService
 local closing=false
 local dispatching=false
 local owners,runtimes,roots={},{},{}
@@ -102,6 +103,7 @@ local function dispatchQueue()
    assert(runtimes[id]:enter(player,group.format,group.mode,group.map,group.modifier),"Admission rejected")
   end
  end)
+ if success and elevatorService and (group.format=="1V1" or group.format=="2V2") then elevatorService:track(id,group) end
  if not success then
   warn("Match admission failed: "..tostring(reason))
   for _,player in ipairs(group.players) do lobby(player,"The group changed. Please queue again.") end
@@ -122,13 +124,14 @@ local connections={}
 local function connect(signal,callback) table.insert(connections,signal:Connect(callback)) end
 connect(Players.PlayerAdded,addPlayer)
 connect(Players.PlayerRemoving,function(player)
+ if elevatorService then elevatorService:departed(player,owners[player]); elevatorService:remove(player) end
  queue:remove(player)
  lastSessionRequest[player]=nil
  local id=owners[player]
  if id~=nil then
   local wasPlaying=player:GetAttribute("CourtSide")~=0
   runtimes[id]:remove(player); owners[player]=nil
-  if id~=0 and wasPlaying then
+  if id~=0 and wasPlaying and (not elevatorService or not elevatorService.matches[id]) then
    local peers={}
    for peer,courtId in pairs(owners) do
     if courtId==id and peer:GetAttribute("CourtSide")~=0 then table.insert(peers,peer) end
@@ -144,10 +147,11 @@ connect(session.OnServerEvent,function(player,mode)
  if mode~="Lobby" and mode~="Spectate" then
   session:FireClient(player,false,"Choose a mode and player count to join the queue."); return
  end
+ if elevatorService then elevatorService:leave(player,true); elevatorService:departed(player,owners[player]) end
  queue:remove(player)
  local previous=owners[player]
  local peers={}
- if previous~=0 and player:GetAttribute("CourtSide")~=0 then
+ if previous~=0 and player:GetAttribute("CourtSide")~=0 and (not elevatorService or not elevatorService.matches[previous]) then
   for peer,courtId in pairs(owners) do
    if peer~=player and courtId==previous and peer:GetAttribute("CourtSide")~=0 then table.insert(peers,peer) end
   end
@@ -166,7 +170,7 @@ connect(queueRemote.OnServerEvent,function(player,action,a,b)
  if closing or owners[player]==nil then return end
  if action=="Cancel" then queue:remove(player)
  elseif action=="Join" then
-  if owners[player]~=0 or player:GetAttribute("SessionMode")~="Lobby" or not queue:join(player,a,b) then
+  if (elevatorService and elevatorService.members[player]) or owners[player]~=0 or player:GetAttribute("SessionMode")~="Lobby" or not queue:join(player,a,b) then
    queueRemote:FireClient(player,{stage="Error",message="Return to the lobby and choose a valid mode and player count."})
   end
  elseif action=="Vote" then
@@ -176,12 +180,68 @@ connect(queueRemote.OnServerEvent,function(player,action,a,b)
  end
  updateQueue()
 end)
-connect(RunService.Heartbeat,updateQueue)
+-- Elevator admission reuses the same runtime, ownership, and CourtSession APIs.
+local function startElevatorMatch(group)
+ local id=freeSlot()
+ if not id or #group.players~=require(script.MatchSetup).players[group.format] then return false end
+ local ok,err=pcall(function()
+  runtime(id)
+  for _,p in ipairs(group.players) do
+   assert(p.Parent==Players and owners[p]==0 and p.Character,"Party changed before arrival")
+  end
+  for _,p in ipairs(group.players) do
+   queue:remove(p); move(p,id)
+   assert(runtimes[id]:enter(p,group.format,group.mode,group.map,group.modifier),"Admission rejected")
+  end
+ end)
+ if not ok then
+  warn("Elevator admission failed: "..tostring(err))
+  for _,p in ipairs(group.players) do if owners[p]==id then lobby(p,"The transition failed. Please try again.") end end
+  return false
+ end
+ elevatorService:track(id,group)
+ return true
+end
+elevatorService=require(script:WaitForChild("ElevatorService")).new({
+ lobby=lobbyRoot,remote=folder.Elevator,queue=queue,owner=owner,
+ clock=function() return workspace:GetServerTimeNow() end,
+ start=startElevatorMatch,
+ pause=function(id,paused) if runtimes[id] then runtimes[id]:pauseReplacement(paused) end end,
+ replace=function(player,match,seat)
+  local previous=owners[player]
+  if previous~=0 and previous~=match.courtId then return false end
+  if previous==0 then move(player,match.courtId) end
+  local success,admitted=pcall(function()
+   return runtimes[match.courtId]:replace(player,match.format,match.mode,match.map,match.modifier,seat)
+  end)
+  if not success then warn("Replacement admission failed: "..tostring(admitted)) end
+  if (not success or not admitted) and previous==0 then lobby(player,"The replacement spot is no longer available.") end
+  return success and admitted
+ end,
+ terminate=function(id)
+  local viewers={}
+  for p,courtId in pairs(owners) do if courtId==id then table.insert(viewers,p) end end
+  for _,p in ipairs(viewers) do lobby(p,"Match terminated: no replacement was available.") end
+  if runtimes[id] then runtimes[id]:destroy(); runtimes[id]=nil end
+  if roots[id] then roots[id]:Destroy(); roots[id]=nil end
+ end,
+})
+local elevatorElapsed=0
+connect(RunService.Heartbeat,function(dt)
+ elevatorElapsed+=dt
+ if elevatorElapsed>=require(script.ElevatorConfig).PollSeconds then
+  elevatorElapsed=0
+  local ok,err=xpcall(function() elevatorService:update() end,debug.traceback)
+  if not ok then warn("Elevator update failed: "..tostring(err)) end
+ end
+ updateQueue()
+end)
 for _,player in ipairs(Players:GetPlayers()) do addPlayer(player) end
 game:BindToClose(function()
  if closing then return end
  closing=true
  for _,connection in ipairs(connections) do connection:Disconnect() end
+ if elevatorService then elevatorService:destroy() end
  queue:destroy()
  for _,controller in pairs(runtimes) do controller:destroy() end
  table.clear(owners)
