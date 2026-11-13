@@ -69,6 +69,7 @@ local function copy(data)
  return result
 end
 function Rules.validTimeZone(id) return Zones.valid(id) end
+function Rules.timeZoneFromOffset(minutes) return Zones.fromOffsetMinutes(minutes) end
 function Rules.zone(data,now)
  if data.pendingTimeZone and now>=data.zoneEffectiveAt then return data.pendingTimeZone end
  return data.timeZone or Config.DefaultTimeZone
@@ -191,6 +192,8 @@ function Rules.snapshot(data,now)
   dailyBonusPercent=math.floor((Config.DailyMultiplier-1)*100+0.5),
   multiplier=active and Config.DailyMultiplier or 1,multiplierUntil=data.multiplierUntil,
   todayDate=current.date,todayLabel=current.label,timeZone=current.zone,timeZones=Zones.options(),
+  utcOffsetMinutes=current.offset/60,
+  pendingUtcOffsetMinutes=data.pendingTimeZone and now<data.zoneEffectiveAt and Zones.offset(now,data.pendingTimeZone)/60 or nil,
   pendingTimeZone=data.pendingTimeZone and now<data.zoneEffectiveAt and data.pendingTimeZone or nil,
   zoneChangeDays=Config.TimeZoneChangeDays,
   zoneEffectiveAt=data.zoneEffectiveAt,zoneChangeAvailableAt=data.zoneChangedAt>0 and data.zoneChangedAt+Config.TimeZoneChangeDays*86400 or 0,

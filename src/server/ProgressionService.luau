@@ -85,7 +85,7 @@ function Service.start(network,lobby)
     table.remove(entry.queue,1)
     if operation.kind=="Load" then entry.loading=false end
     local notice
-    if operation.kind~="Load" then
+    if operation.kind~="Load" and not operation.automatic then
      local kind=receipt and receipt.kind
      notice={amount=receipt and receipt.amount or 0,weekly=receipt and receipt.weekly or 0,
       levelUp=receipt and receipt.levelAfter and receipt.levelBefore and receipt.levelAfter>receipt.levelBefore or false,
@@ -160,7 +160,7 @@ function Service.start(network,lobby)
    if openId==entry.openId then entry.openUntil=nil end
    return
   end
-  if action~="Sync" and action~="Claim" and action~="Retry" and action~="SetTimeZone" then return end
+  if action~="Sync" and action~="Claim" and action~="Retry" and action~="SetTimeZone" and action~="AutoTimeZone" then return end
   if now()-(entry.requests[action] or -math.huge)<Config.RemoteCooldown then publish(entry); return end
   entry.requests[action]=now()
   if action=="Sync" then
@@ -173,6 +173,13 @@ function Service.start(network,lobby)
    elseif not entry.data or entry.failed then load(entry)
    end
    publish(entry)
+  elseif action=="AutoTimeZone" then
+   -- Treat device offset as a bounded preference. Dates, cooldowns, claims,
+   -- deferred activation, and all reward timestamps remain server-owned.
+   if not entry.data or entry.failed or entry.running or #entry.queue>0 then publish(entry); return end
+   local zone=Rules.timeZoneFromOffset(value)
+   if not zone then publish(entry); return end
+   if enqueue(entry,{kind="SetTimeZone",id=guid(),at=now(),zone=zone,automatic=true}) then publish(entry) end
   elseif action=="SetTimeZone" then
    if openId~=entry.openId then publish(entry); return end
    if not entry.data or entry.failed or not entry.openUntil or now()>entry.openUntil or not near(player) then publish(entry); return end

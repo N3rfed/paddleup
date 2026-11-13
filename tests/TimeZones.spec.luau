@@ -94,5 +94,14 @@ return function(Zones,Rules,Config,Repository)
  assert(replay.weeklyAwards==1 and replay.totalXP==run.totalXP)
  local missed=claim(run,Zones.dayStart(Rules.day(run.lastClaimAt,"America/New_York")+3,"America/New_York")+3600,"missed-local-days")
  assert(missed.streak==1 and missed.weeklyAwards==1)
+ for _,minutes in ipairs({-720,-300,0,330,345,765,840}) do
+  local zone=Zones.fromOffsetMinutes(minutes)
+  assert(Zones.valid(zone) and Zones.offset(at,zone)==minutes*60)
+  local calendar=Zones.calendar(at,zone)
+  assert(Zones.day(calendar.nextReset-1,zone)==calendar.day and Zones.day(calendar.nextReset,zone)==calendar.day+1)
+  assert(Rules.snapshot(selectZone(zone,at),at).utcOffsetMinutes==minutes)
+ end
+ for _,invalid in ipairs({-735,855,17,"330",math.huge}) do assert(Zones.fromOffsetMinutes(invalid)==nil) end
+ assert(Zones.fromOffsetMinutes(0/0)==nil and not Zones.valid("UTC+14:15"))
  return "419 zones, selected local dates, DST 23/25/half-hour days, repeated hours, midnight expiry, v1 migration, deferred changes/cooldown, rejoin, cross-server duplicates, and weekly streaks passed"
 end
