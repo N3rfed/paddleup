@@ -16,6 +16,7 @@ local users={}
 local matchRewards=context.progression and require(script.Parent:WaitForChild("MatchRewards")).new(context.progression)
 local connections,playerConnections={},{}
 local stopped=false
+local replacementPaused=false
 local function connect(signal,callback)
  local connection=signal:Connect(callback)
  table.insert(connections,connection)
@@ -84,7 +85,7 @@ local practiceRemote=remote("Practice")
 local practiceRoots={}
 local practiceServeSerial=0
 local function practicePaused()
- return courtMode=="Practice" and practice.paused
+ return replacementPaused or (courtMode=="Practice" and practice.paused)
 end
 local function freezePracticePlayer(p)
  local c=p.Character
@@ -144,6 +145,7 @@ local introSerial=0
 local introUntil=0
 local introReady={}
 local introLoadDeadline=0
+local entryOverviewSeconds
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -355,7 +357,15 @@ local function rosterChanged()
   end
   matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+3,home=portraits(1),away=portraits(-1),
    variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
-  if environments.active=="Moon" then
+  if entryOverviewSeconds and #home+#away==MatchSetup.players[courtMode] then
+   local environment=courtRoot:FindFirstChild(environments.active.."Environment")
+   matchIntro.overview=true; matchIntro.overviewSeconds=entryOverviewSeconds
+   matchIntro.environment=environments.active; matchIntro.format=courtMode
+   matchIntro.environmentModel=environments.active.."Environment"
+   matchIntro.environmentExpected=environment and #environment:GetDescendants() or 0
+   entryOverviewSeconds=nil
+  end
+  if environments.active=="Moon" or matchIntro.overview then
    matchIntro.loading=true
    introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
   end
@@ -381,8 +391,9 @@ connect(introReadyRemote.OnServerEvent,function(player,id)
  for participant,data in pairs(users) do
   if data.side~=0 and not introReady[participant] then return end
  end
- matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+3
- introUntil=os.clock()+3; nextServe=introUntil; introLoadDeadline=0
+ local duration=matchIntro.overviewSeconds or 3
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+duration
+ introUntil=os.clock()+duration; nextServe=introUntil; introLoadDeadline=0
 end)
 local function rootOf(p)
  local c=p.Character
@@ -709,19 +720,19 @@ local function leaveCourt(p)
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  p:SetAttribute("CourtSide",0)
  if not active then return end
- if not occupant(1) then
+ if not replacementPaused and not occupant(1) then
   local remaining,other=occupant(-1)
   if remaining then
    other.slot=availableSlot(1); other.side=1; remaining:SetAttribute("CourtSide",1)
    if remaining.Character then task.spawn(spawnCharacter,remaining,remaining.Character) end
   end
  end
- if not occupant(1) and not occupant(-1) then
+ if not replacementPaused and not occupant(1) and not occupant(-1) then
   courtMode=nil; courtVariant=nil; courtModifier="None"; GRAVITY=45; courtRoot:SetAttribute("EnvironmentalModifier","None"); rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new()
  end
  rosterChanged()
 end
-local function connectSession(p,mode,variant,environment,modifier)
+local function connectSession(p,mode,variant,environment,modifier,seat)
  local d=users[p]
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
@@ -736,7 +747,7 @@ local function connectSession(p,mode,variant,environment,modifier)
   session:FireClient(p,false,"Invalid map or environmental modifier."); return
  end
  local now=os.clock()
- if now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
+ if not seat and now-d.sessionAt<0.5 then session:FireClient(p,false,"Please wait a moment before switching."); return end
  d.sessionAt=now
  if mode==d.mode and (d.side==0 or (variant==d.variant and environment==environments.active and modifier==courtModifier)) then session:FireClient(p,true,"Already connected."); return end
  if mode=="Lobby" or mode=="Spectate" then
@@ -771,7 +782,12 @@ local function connectSession(p,mode,variant,environment,modifier)
   p:SetAttribute("EnvironmentModifier",modifier)
   courtVariant=variant; d.variant=variant; p:SetAttribute("MatchVariant",variant)
   d.side=(home<homeLimit and (home<=away or away>=awayLimit)) and 1 or -1
-  d.slot=availableSlot(d.side); d.mode=mode
+  if seat then
+   Spectator.leave(p)
+   d.side=seat.side
+  end
+  d.slot=seat and seat.slot or availableSlot(d.side); d.mode=mode
+  p:SetAttribute("CourtSlot",d.slot)
   p:SetAttribute("CourtSide",d.side)
   d.stamina=100; d.powerUntil=0; d.slowUntil=0
   rosterChanged()
@@ -900,6 +916,7 @@ local function suspendPracticeTimers(dt)
  nextServe+=dt
  if introUntil>0 then introUntil+=dt end
  if matchIntro then matchIntro.endsAt+=dt end
+ if introLoadDeadline>0 then introLoadDeadline+=dt end
  if draft then draft.endsAt+=dt end
  if serveDeadline then serveDeadline+=dt end
  for _,key in ipairs({"bounceAt","launchedAt","trackingHiddenUntil","trackingGlitchUntil"}) do
@@ -907,7 +924,7 @@ local function suspendPracticeTimers(dt)
  end
  botSlowUntil+=dt; botStunUntil+=dt; botReactAt+=dt; botThinkAt+=dt; botSwingAt+=dt
  for _,d in pairs(users) do
-  if d.mode=="Practice" then
+  if d.mode=="Practice" or replacementPaused then
    for _,key in ipairs({"lastSwing","diveAt","powerAt","slowAt","powerUntil","slowUntil","staminaRecoveryAt","chargeShotAt"}) do
     if d[key] then d[key]+=dt end
    end
@@ -1216,7 +1233,11 @@ local accumulator,broadcast=0,0
 connect(RunService.Heartbeat,function(dt)
  if stopped or not next(users) then return end
  local now=os.clock()
- if matchIntro and matchIntro.loading and now>=introLoadDeadline then
+ if not replacementPaused and matchIntro and matchIntro.loading and now>=introLoadDeadline then
+  if matchIntro.overview and context.onOverviewFailure then
+   context.onOverviewFailure()
+   return
+  end
   local waiting={}
   for player,data in pairs(users) do
    if data.side~=0 and not introReady[player] then table.insert(waiting,player) end
@@ -1249,7 +1270,7 @@ connect(RunService.Heartbeat,function(dt)
  end
  if not paused then powerups:update(now,(now<introUntil or not MatchSetup.abilities(courtVariant)) and {} or pickupParticipants) end
  for p,d in pairs(users) do
-  if paused and d.mode=="Practice" then freezePracticePlayer(p); continue end
+  if paused and (d.mode=="Practice" or replacementPaused) then freezePracticePlayer(p); continue end
   local recovered=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
   p:SetAttribute("SlowFallEnabled",Powerups.slowFall(d.powerups,d.side,d.variant))
   d.stamina=math.min(100,d.stamina+(recovered-d.stamina)*(1+((d.powerups and d.powerups.regen) or 0)))
@@ -1584,6 +1605,33 @@ connect(RunService.Heartbeat,function(dt)
 end)
 
 local api={}
+function api:prepareOverview(seconds)
+ assert(seconds==nil or (type(seconds)=="number" and seconds>=3 and seconds<=5),"Invalid overview duration")
+ entryOverviewSeconds=seconds
+end
+function api:pauseReplacement(paused)
+ if replacementPaused==paused then return end
+ replacementPaused=paused
+ for p,d in pairs(users) do
+  p:SetAttribute("MatchPaused",paused)
+  if paused and d.side~=0 then freezePracticePlayer(p) end
+ end
+ if not paused then
+  releasePracticePlayers()
+  -- Roster changes prepare a fresh serve through the existing serving logic.
+  nextServe=math.max(nextServe,os.clock()+1)
+ end
+end
+function api:replace(player,mode,variant,map,modifier,seat)
+ if not replacementPaused or not users[player] or users[player].side~=0 or not seat
+  or (seat.side~=1 and seat.side~=-1) or (seat.slot~=1 and seat.slot~=2) then return false end
+ for _,d in pairs(users) do if d.side==seat.side and d.slot==seat.slot then return false end end
+ connectSession(player,mode,variant,map,modifier,seat)
+ if users[player].side~=seat.side then return false end
+ player:SetAttribute("MatchPaused",true)
+ if player.Character then freezePracticePlayer(player) end
+ return true
+end
 function api:add(player) addPlayer(player) end
 function api:enter(player,mode,variant,map,modifier)
  connectSession(player,mode,variant,map,modifier)
@@ -1596,6 +1644,14 @@ function api:remove(player)
  if draft then draft.offers[player]=nil end
  introReady[player]=nil
  for side,hitter in pairs(lastHitter) do if hitter==player then lastHitter[side]=nil end end
+ local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+ if root and practiceRoots[root] then
+  local saved=practiceRoots[root]; root.Anchored=saved.anchored
+  if saved.humanoid.Parent then saved.humanoid.JumpPower=saved.jumpPower; saved.humanoid.JumpHeight=saved.jumpHeight end
+  practiceRoots[root]=nil
+ end
+ player:SetAttribute("MatchPaused",false)
+ player:SetAttribute("CourtSlot",nil)
  player:SetAttribute("PracticePaused",false)
  player:SetAttribute("PowerupDraftOpen",false)
  player:SetAttribute("PowerupStunned",false)

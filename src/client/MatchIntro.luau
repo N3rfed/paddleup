@@ -355,7 +355,7 @@ function MatchIntro.start(player,network)
  local connection=network:WaitForChild("State").OnClientEvent:Connect(function(state)
   if state.matchSessionId~=nil and state.matchSessionId~=player:GetAttribute("MatchSessionId") then return end
   local data=state.matchIntro
-  if not data then clear(); return end
+  if not data or data.overview then clear(); return end
   if data.loading then
    if pendingId==data.id then return end
    clear(); pendingId=data.id; token={}

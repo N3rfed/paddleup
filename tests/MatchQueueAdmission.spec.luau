@@ -15,7 +15,7 @@ return function(source)
   table.insert(entered,player); return true
  end}
  local returned={}
- local env=setmetatable({Players=players,owners=owners,closing=false,
+ local env=setmetatable({Players=players,owners=owners,closing=false,reservedSlots={},
   queue={update=function(_,available) assert(available); local result=pending; pending=nil; return result end},
   freeSlot=function() return 1 end,runtime=function() return controller end,runtimes={[1]=controller},roots={},
   move=function(player,id) owners[player]=id end,
@@ -24,12 +24,18 @@ return function(source)
  local chunk=assert(loadstring(source:sub(first,last-1).."\nreturn dispatchQueue")); setfenv(chunk,env)
  local dispatch=chunk()
  dispatch(); dispatch()
+ assert(not next(env.reservedSlots),"Court reservation is released after admission")
  assert(#entered==2 and owners[a]==1 and owners[b]==1,"The full group is admitted once")
  pending=group; owners[a]=0; owners[b]=0; failed=true
  dispatch()
  assert(returned[a] and returned[b] and owners[a]==0 and owners[b]==0,"Partial admission falls back to the lobby")
+ assert(not next(env.reservedSlots),"Failed admission releases its court reservation")
  table.clear(returned); failed=false; pending=group; b.Parent=nil
  dispatch()
  assert(returned[a] and returned[b],"Departed players cannot create an incomplete match")
+ b.Parent=players; pending=group; owners[a]=0; owners[b]=0
+ table.clear(returned); env.runtime=function() error("Initialization failed") end
+ dispatch()
+ assert(returned[a] and returned[b] and not next(env.reservedSlots),"Initialization failure returns players and releases court")
  return "Completed groups, winning settings, duplicate dispatch, rejected admissions, and departed-player fallback passed"
 end

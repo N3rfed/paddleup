@@ -3,7 +3,7 @@ local Setup=require(script.Parent:WaitForChild("MatchSetup"))
 local Queue={VOTE_SECONDS=15,REVEAL_SECONDS=4}
 Queue.__index=Queue
 function Queue.new(notify,clock,random)
- return setmetatable({groups={},members={},active=nil,notify=notify,
+ return setmetatable({groups={},members={},reservations={},active=nil,notify=notify,
   clock=clock or function() return workspace:GetServerTimeNow() end,random=random or Random.new()},Queue)
 end
 function Queue:publish(group)
@@ -23,6 +23,7 @@ end
 function Queue:remove(player)
  local group=self.members[player]
  if not group then return end
+ self.reservations[player]=nil
  self.members[player]=nil; group.votes[player]=nil; group.modifiers[player]=nil
  table.remove(group.players,table.find(group.players,player))
  if self.active==group then self.active=nil end
@@ -64,7 +65,9 @@ function Queue:update(available)
  local group=self.active
  if not group then
   for _,candidate in ipairs(self.groups) do
-   if #candidate.players==Setup.players[candidate.format] then
+   local reserved=false
+   for _,player in ipairs(candidate.players) do if self.reservations[player] then reserved=true; break end end
+   if not reserved and #candidate.players==Setup.players[candidate.format] then
     self.active=candidate; candidate.stage="Setup"; candidate.endsAt=now+Queue.VOTE_SECONDS
     self:publish(candidate); return
    end
@@ -98,6 +101,18 @@ function Queue:update(available)
   for _,player in ipairs(group.players) do self.members[player]=nil end
   return group
  end
+end
+-- Invitations reserve a player while preserving their queue and preference.
+function Queue:reserve(player,id)
+ local group=self.members[player]
+ if not group or group==self.active or self.reservations[player] then return false end
+ self.reservations[player]=id; return true
+end
+function Queue:isReserved(player,id)
+ return self.members[player]~=nil and self.reservations[player]==id
+end
+function Queue:release(player,id)
+ if self.reservations[player]==id then self.reservations[player]=nil end
 end
 function Queue:destroy()
  local players={}; for player in pairs(self.members) do table.insert(players,player) end
