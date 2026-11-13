@@ -17,7 +17,7 @@ function Rules.new()
   timeZone=Config.DefaultTimeZone,claims={},zoneChangedAt=0,spendableXP=0,inventory={},equipped={}}
 end
 function Rules.validate(data)
- assert(type(data)=="table" and (data.version==1 or data.version==2 or data.version==Config.SchemaVersion),"Unsupported progression data")
+ assert(type(data)=="table" and (data.version==1 or data.version==2 or data.version==3),"Unsupported progression data")
  assert(integer(data.level,1,100000) and integer(data.xp,0,Rules.required(data.level)-1),"Invalid XP or level")
  assert(integer(data.totalXP,data.xp,9007199254740991),"Invalid lifetime XP")
  assert(integer(data.lastDay,-1,1000000) and integer(data.streak,0,1000000),"Invalid check-in data")
@@ -51,12 +51,26 @@ function Rules.validate(data)
     and integer(claim.day,0,1000000),"Invalid local check-in history")
   end
  end
- if data.version>=3 then ShopRules.validate(data) end
+ -- Version 3 is already written by the shop release in the same store.
+ -- Validate its owned state without requiring that release's catalog on this branch.
+ if data.version==3 then
+  assert(integer(data.spendableXP,0,9007199254740991),"Invalid shop balance")
+  assert(type(data.inventory)=="table" and type(data.equipped)=="table","Invalid inventory")
+  for id,owned in pairs(data.inventory) do
+   assert(type(id)=="string" and #id<=80 and owned==true,"Invalid owned cosmetic")
+  end
+  for category,id in pairs(data.equipped) do
+   assert(type(category)=="string" and type(id)=="string" and data.inventory[id]==true,"Invalid equipped cosmetic")
+  end
+ end
  return data
 end
 local function copy(data)
  local result=table.clone(Rules.validate(data))
  for _,name in ipairs({"history","budgets","receipts","claims"}) do result[name]=table.clone(data[name] or {}) end
+ if data.version==3 then
+  result.inventory=table.clone(data.inventory); result.equipped=table.clone(data.equipped)
+ end
  if data.version==1 then
   result.timeZone=Config.DefaultTimeZone; result.zoneChangedAt=0
   for day,entry in pairs(data.history) do
@@ -79,6 +93,7 @@ local function copy(data)
  return result
 end
 function Rules.validTimeZone(id) return Zones.valid(id) end
+function Rules.timeZoneFromOffset(minutes) return Zones.fromOffsetMinutes(minutes) end
 function Rules.zone(data,now)
  if data.pendingTimeZone and now>=data.zoneEffectiveAt then return data.pendingTimeZone end
  return data.timeZone or Config.DefaultTimeZone
@@ -197,7 +212,9 @@ function Rules.snapshot(data,now)
    status=done and (day==today and "TodayDone" or "Done") or day<today and "Missed" or day==today and "Available" or "Upcoming"})
  end
  return {ready=true,level=data.level,xp=data.xp,required=Rules.required(data.level),totalXP=data.totalXP,
-  spendableXP=data.spendableXP,inventory=table.clone(data.inventory),equipped=table.clone(data.equipped),
+  spendableXP=data.spendableXP,
+  inventory=data.inventory and table.clone(data.inventory) or nil,
+  equipped=data.equipped and table.clone(data.equipped) or nil,
   streak=streak,cycle=streak>0 and (streak-1)%Config.StreakDays+1 or 0,weeklyAwards=data.weeklyAwards,
   weeklyCompletedToday=weeklyToday,
   weeklyPreview=math.floor(Rules.required(data.level)*Config.WeeklyFraction),weeklyPercent=Config.WeeklyFraction*100,
@@ -205,6 +222,8 @@ function Rules.snapshot(data,now)
   dailyBonusPercent=math.floor((Config.DailyMultiplier-1)*100+0.5),
   multiplier=active and Config.DailyMultiplier or 1,multiplierUntil=data.multiplierUntil,
   todayDate=current.date,todayLabel=current.label,timeZone=current.zone,timeZones=Zones.options(),
+  utcOffsetMinutes=current.offset/60,
+  pendingUtcOffsetMinutes=data.pendingTimeZone and now<data.zoneEffectiveAt and Zones.offset(now,data.pendingTimeZone)/60 or nil,
   pendingTimeZone=data.pendingTimeZone and now<data.zoneEffectiveAt and data.pendingTimeZone or nil,
   zoneChangeDays=Config.TimeZoneChangeDays,
   zoneEffectiveAt=data.zoneEffectiveAt,zoneChangeAvailableAt=data.zoneChangedAt>0 and data.zoneChangedAt+Config.TimeZoneChangeDays*86400 or 0,

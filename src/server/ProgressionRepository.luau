@@ -15,7 +15,10 @@ function Repository.errorInfo(err)
  if message:find("Time-zone",1,true) then
   return {code="TimeZoneData",retryable=false,message="Time-zone data needs an update. No progress was changed. Please contact the game team."}
  end
- if message:find("Unsupported progression data",1,true) or message:find("Invalid ",1,true) then
+ if message:find("Unsupported progression data",1,true) then
+  return {code="UnsupportedVersion",retryable=false,message="This server needs a progression update. Please rejoin an updated server. Your saved progress is safe."}
+ end
+ if message:find("Invalid ",1,true) then
   return {code="InvalidData",retryable=false,message="Your saved progression could not be validated. No progress was changed. Retry or contact the game team."}
  end
  return {code="Unavailable",retryable=true,message="Couldn't load or save check-in data. Please Retry."}
@@ -24,19 +27,24 @@ function Repository:commit(userId,operation,deadline)
  local lastError
  for attempt=1,Config.RetryAttempts do
   if deadline and self.clock()>=deadline then break end
-  local outcome
+  local outcome,transformError
   local ok,result=pcall(function()
    return self.store:UpdateAsync("player_"..userId,function(current)
-    local updated,receipt=Rules.apply(current,operation,self.clock())
-    outcome=receipt
+    -- Engine UpdateAsync can report a transform exception but return nil instead
+    -- of throwing to its caller. Capture validation errors before that boundary.
+    local valid,updated,receipt=pcall(Rules.apply,current,operation,self.clock())
+    if not valid then transformError=updated; return nil end
+    transformError=nil; outcome=receipt
     return updated
    end)
   end)
-  if ok and result~=nil then
+  if transformError then
+   lastError=transformError
+  elseif ok and result~=nil then
    local valid,err=pcall(Rules.validate,result)
    if valid then return result,result.receipts[operation.id] or outcome end
    lastError=err
-  else lastError=result end
+  else lastError=result or "Progression storage returned no saved record" end
   if not Repository.errorInfo(lastError).retryable then break end
   if attempt<Config.RetryAttempts then
    local delay=Config.RetryBaseSeconds*2^(attempt-1)+math.random()*0.2
