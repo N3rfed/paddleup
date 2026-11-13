@@ -159,6 +159,21 @@ return function(source,modules)
   player.Parent=players; players.PlayerAdded:Fire(player); task.wait()
   assert(record.timeZone=="America/New_York" and not record.pendingTimeZone and record.totalXP==beforeZoneXP,"Rejoin persists and activates the setting without rewards")
   assert(packets[#packets].state.timeZone=="America/New_York" and packets[#packets].state.todayDate=="2026-10-23")
+  -- Shop transactions use this same queue and confirmed profile publisher.
+  assert(record.spendableXP==record.totalXP*modules.ProgressionConfig.ShopCurrencyRatio,"Every existing service reward also minted shop currency")
+  local total,level,xp,balance=record.totalXP,record.level,record.xp,record.spendableXP
+  local observed=0
+  local unsubscribe=api:subscribe(function(entry) if entry.data then observed+=1 end end)
+  blocked=true
+  assert(api:shop(player,"ShopBuy","wear_wrists"))
+  assert(not api:shop(player,"ShopBuy","wear_wrists"),"Unknown/pending shop operations retain one queue slot")
+  blocked=false; task.wait()
+  assert(record.inventory.wear_wrists and record.spendableXP==balance-140 and record.totalXP==total and record.level==level and record.xp==xp)
+  assert(api:shop(player,"ShopEquip","wear_wrists")); task.wait()
+  assert(record.equipped.Wearables=="wear_wrists" and observed>1 and attributes.SpendableXP==record.spendableXP)
+  assert(api:shop(player,"ShopUnequip",nil,"Wearables")); task.wait()
+  assert(record.equipped.Wearables==nil and record.inventory.wear_wrists)
+  unsubscribe()
   player.Parent=nil; players.PlayerRemoving:Fire(player); task.wait()
   assert(api.entries[player]==nil,"Player departure cleans idle profile resources")
  end)

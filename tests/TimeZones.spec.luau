@@ -46,7 +46,7 @@ return function(Zones,Rules,Config,Repository)
  local legacy={version=1,level=3,xp=40,totalXP=300,lastDay=20749,streak=2,multiplierUntil=1792800000,
   weeklyAwards=0,lastWeeklyDay=-1,history={["20748"]={at=1792713140.601,multiplier=1.10},["20749"]={at=1792713671.279,multiplier=1.05}},budgets={},receipts={}}
  local migrated=Rules.apply(legacy,{kind="Load"},at+120)
- assert(legacy.version==1 and migrated.version==2 and migrated.timeZone=="UTC")
+ assert(legacy.version==1 and migrated.version==Config.SchemaVersion and migrated.timeZone=="UTC")
  assert(migrated.level==3 and migrated.xp==40 and migrated.totalXP==300 and migrated.streak==2 and migrated.multiplierUntil==legacy.multiplierUntil)
  assert(migrated.history["20748"].at==legacy.history["20748"].at and migrated.claims["legacy:20749"],"Migration preserves audit dates and adds timestamp-based claims")
  local zoneAt=utc(2026,10,23,1)

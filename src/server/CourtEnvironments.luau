@@ -16,7 +16,10 @@ function Environments.new(root,height,preview)
  local rooftop=Instance.new("Model"); rooftop.Name="RooftopEnvironment"
  for _,item in ipairs(root:GetChildren()) do
   if not shared[item.Name] then item.Parent=rooftop
-  elseif item:IsA("BasePart") then self.colors[item]={color=item.Color,material=item.Material} end
+  elseif item:IsA("BasePart") then
+   self.colors[item]={color=item.Color,material=item.Material}
+   item:SetAttribute("ShopCourtBaseColor",item.Color); item:SetAttribute("ShopCourtBaseMaterial",item.Material.Name)
+  end
  end
  rooftop.Parent=root; self.rooftop=rooftop
  root:SetAttribute("Environment","Rooftop"); root:SetAttribute("EnvironmentTitle","SKYLINE CLUB")
@@ -61,6 +64,9 @@ function Environments:set(name)
   elseif part.Name=="Court surround" then part.Color=Color3.fromRGB(48,59,77)
   elseif part.Name=="Playing surface" then part.Color=Color3.fromRGB(48,89,107)
   elseif part.Name=="Kitchen" then part.Color=Color3.fromRGB(57,127,140) end
+ end
+ for part in pairs(self.colors) do
+  part:SetAttribute("ShopCourtBaseColor",part.Color); part:SetAttribute("ShopCourtBaseMaterial",part.Material.Name)
  end
  self.active=name
  self.root:SetAttribute("Environment",name)

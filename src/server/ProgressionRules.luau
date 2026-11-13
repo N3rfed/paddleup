@@ -1,6 +1,7 @@
 -- Pure server-time calendar, XP, and idempotent transitions; IANA data stays on the server.
 local Config=require(script.Parent:WaitForChild("ProgressionConfig"))
 local Zones=require(script.Parent:WaitForChild("TimeZones"))
+local ShopRules=require(script.Parent:WaitForChild("ShopRules"))
 local Rules={}
 local function integer(value,minimum,maximum)
  return type(value)=="number" and value==value and value%1==0 and value>=minimum and value<=maximum
@@ -13,10 +14,10 @@ end
 function Rules.new()
  return {version=Config.SchemaVersion,level=1,xp=0,totalXP=0,lastDay=-1,streak=0,
   multiplierUntil=0,weeklyAwards=0,lastWeeklyDay=-1,history={},budgets={},receipts={},
-  timeZone=Config.DefaultTimeZone,claims={},zoneChangedAt=0}
+  timeZone=Config.DefaultTimeZone,claims={},zoneChangedAt=0,spendableXP=0,inventory={},equipped={}}
 end
 function Rules.validate(data)
- assert(type(data)=="table" and (data.version==1 or data.version==Config.SchemaVersion),"Unsupported progression data")
+ assert(type(data)=="table" and (data.version==1 or data.version==2 or data.version==Config.SchemaVersion),"Unsupported progression data")
  assert(integer(data.level,1,100000) and integer(data.xp,0,Rules.required(data.level)-1),"Invalid XP or level")
  assert(integer(data.totalXP,data.xp,9007199254740991),"Invalid lifetime XP")
  assert(integer(data.lastDay,-1,1000000) and integer(data.streak,0,1000000),"Invalid check-in data")
@@ -37,7 +38,7 @@ function Rules.validate(data)
    and type(receipt.kind)=="string" and integer(receipt.amount,0,9007199254740991)
    and integer(receipt.weekly,0,9007199254740991),"Invalid receipt")
  end
- if data.version==Config.SchemaVersion then
+ if data.version>=2 then
   assert(Zones.valid(data.timeZone) and type(data.claims)=="table","Invalid time-zone data")
   assert(type(data.zoneChangedAt)=="number" and data.zoneChangedAt>=0 and data.zoneChangedAt<1e12,"Invalid zone change date")
   if data.pendingTimeZone then
@@ -50,13 +51,14 @@ function Rules.validate(data)
     and integer(claim.day,0,1000000),"Invalid local check-in history")
   end
  end
+ if data.version>=3 then ShopRules.validate(data) end
  return data
 end
 local function copy(data)
  local result=table.clone(Rules.validate(data))
  for _,name in ipairs({"history","budgets","receipts","claims"}) do result[name]=table.clone(data[name] or {}) end
  if data.version==1 then
-  result.version=Config.SchemaVersion; result.timeZone=Config.DefaultTimeZone; result.zoneChangedAt=0
+  result.timeZone=Config.DefaultTimeZone; result.zoneChangedAt=0
   for day,entry in pairs(data.history) do
    local number=tonumber(day)
    result.claims["legacy:"..day]={at=entry.at,expires=(number+1)*86400,zone="UTC",day=number,
@@ -66,6 +68,14 @@ local function copy(data)
   if not result.lastClaimAt and data.lastDay>=0 then result.lastClaimAt=data.lastDay*86400 end
   if result.lastClaimAt then result.lastClaimEnd=math.max(data.multiplierUntil,(data.lastDay+1)*86400) end
  end
+ if data.version<3 then
+  -- The schema bump is the migration marker. Replaying Load cannot mint a second opening balance.
+  result.spendableXP=math.floor(data.totalXP*Config.ShopCurrencyRatio)
+  result.inventory={}; result.equipped={}
+ else
+  result.inventory=table.clone(data.inventory); result.equipped=table.clone(data.equipped)
+ end
+ result.version=Config.SchemaVersion
  return result
 end
 function Rules.validTimeZone(id) return Zones.valid(id) end
@@ -87,6 +97,7 @@ end
 local function grant(data,amount)
  amount=math.max(0,math.floor(amount))
  data.totalXP+=amount; data.xp+=amount
+ data.spendableXP+=math.floor(amount*Config.ShopCurrencyRatio)
  while data.xp>=Rules.required(data.level) do
   data.xp-=Rules.required(data.level); data.level+=1
  end
@@ -105,7 +116,9 @@ function Rules.apply(saved,operation,now)
  if now-operation.at>Config.ReceiptSeconds then return data,{kind="Expired",amount=0} end
  local today,earnedDay=current.day,Rules.day(operation.at,current.zone)
  local receipt={at=operation.at,kind=operation.kind,amount=0,weekly=0,levelBefore=data.level}
- if operation.kind=="SetTimeZone" then
+ if ShopRules.isOperation(operation.kind) then
+  receipt.kind=ShopRules.apply(data,operation)
+ elseif operation.kind=="SetTimeZone" then
   assert(Zones.valid(operation.zone),"Invalid time zone")
   Zones.calendar(now,operation.zone)
   if data.pendingTimeZone==operation.zone or not data.pendingTimeZone and data.timeZone==operation.zone then return data,{kind="ZoneUnchanged",amount=0} end
@@ -184,6 +197,7 @@ function Rules.snapshot(data,now)
    status=done and (day==today and "TodayDone" or "Done") or day<today and "Missed" or day==today and "Available" or "Upcoming"})
  end
  return {ready=true,level=data.level,xp=data.xp,required=Rules.required(data.level),totalXP=data.totalXP,
+  spendableXP=data.spendableXP,inventory=table.clone(data.inventory),equipped=table.clone(data.equipped),
   streak=streak,cycle=streak>0 and (streak-1)%Config.StreakDays+1 or 0,weeklyAwards=data.weeklyAwards,
   weeklyCompletedToday=weeklyToday,
   weeklyPreview=math.floor(Rules.required(data.level)*Config.WeeklyFraction),weeklyPercent=Config.WeeklyFraction*100,
