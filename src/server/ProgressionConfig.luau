@@ -1,6 +1,8 @@
 -- All progression tuning is server-owned and lives here.
 return {
- StoreName="PaddleUpProgression_v1", SchemaVersion=2,
+ StoreName="PaddleUpProgression_v1", SchemaVersion=3,
+ -- One lifetime XP credit earns this many spendable credits; migration uses the same ratio once.
+ ShopCurrencyRatio=1,
  DefaultTimeZone="UTC", TimeZoneChangeDays=7,
  BaseXP=100, LinearXP=50, QuadraticXP=10,
  DailyXP=150, DailyMultiplier=1.05, MultiplyDailyReward=false, MultiplyWeeklyReward=false,

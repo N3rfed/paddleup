@@ -55,11 +55,13 @@ function UI.start(player,network)
  local function stroke(parent,color)
   local item=Instance.new("UIStroke"); item.Color=color; item.Transparency=0.35; item.Parent=parent; return item
  end
- local profile=frame(gui,"XPProfile",0,78,224,78,dark,1)
+ local profile=frame(gui,"XPProfile",0,78,224,114,dark,1)
  profile.AnchorPoint=Vector2.new(1,0); profile.Position=UDim2.new(1,-16,0,78); round(profile,16); stroke(profile,Color3.fromRGB(85,88,139))
  local profileScale=Instance.new("UIScale",profile)
  local levelLabel=text(profile,"CLUB PROFILE",14,10,196,19,13,cyan)
  local xpLabel=text(profile,"Loading progress...",14,31,196,18,11,muted)
+ local totalLabel=text(profile,"",14,75,196,14,10,muted); totalLabel.Name="TotalEarnedXP"
+ local currencyLabel=text(profile,"",14,92,196,14,10,gold); currencyLabel.Name="SpendableXP"
  local profileTrack=frame(profile,"XPTrack",14,58,196,5,Color3.fromRGB(60,61,96),2); round(profileTrack,3)
  local profileFill=frame(profileTrack,"XPProgress",0,0,0,5,cyan,3); round(profileFill,3)
  local overlay=Instance.new("TextButton")
@@ -231,6 +233,7 @@ function UI.start(player,network)
   summary.Text=""; message.Text=""; message.Visible=false; reset.Text=""; calendarHeading.Text=""
   if not ready then
    levelLabel.Text="CLUB PROFILE"; xpLabel.Text="Progress unavailable"
+   totalLabel.Text=""; currencyLabel.Text=""
    local failed=timedOut or state and state.status=="Error" or false
    statusLabel.Text=timedOut and "Taking longer than expected. Please retry."
     or failed and state.error or "Loading check-in data..."

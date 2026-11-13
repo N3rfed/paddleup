@@ -22,8 +22,20 @@ shared.Name="Shared"; shared.Parent=ReplicatedStorage
 for _,name in ipairs({"MatchRules","MatchSetup"}) do
  if not shared:FindFirstChild(name) then script:WaitForChild(name):Clone().Parent=shared end
 end
+-- Directory syncs include these templates even when an existing place lacks new Shared mappings.
+-- Publish before requiring ProgressionRules/ShopRules so neither lobby interaction can wait forever.
+shared:SetAttribute("CosmeticsVersion",nil)
+for _,name in ipairs({"CosmeticCatalog","CosmeticTextures","CosmeticAssets"}) do
+ local previous=shared:FindFirstChild(name)
+ if previous then previous:Destroy() end
+ script:WaitForChild("Cosmetics"):WaitForChild(name):Clone().Parent=shared
+end
+shared:SetAttribute("CosmeticsVersion",2)
 local CourtSession=require(script:WaitForChild("CourtSession"))
 local progression=require(script:WaitForChild("ProgressionService")).start(folder,lobbyRoot)
+require(script:WaitForChild("CosmeticService")).start(progression)
+require(script:WaitForChild("Cosmetics"):WaitForChild("ShopMannequins")).prepare()
+require(script:WaitForChild("ShopService")).start(folder,lobbyRoot,progression)
 local queueRemote,session=folder.Queue,folder.Session
 local closing=false
 local dispatching=false

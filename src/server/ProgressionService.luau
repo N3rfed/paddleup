@@ -10,7 +10,7 @@ function Service.start(network,lobby)
  local function now() return DateTime.now().UnixTimestampMillis/1000 end
  local remote=network:FindFirstChild("Progression") or Instance.new("RemoteEvent")
  remote.Name="Progression"; remote.Parent=network
- local api={entries={},closing=false,connections={}}
+ local api={entries={},closing=false,connections={},subscribers={}}
  Service.active=api
  local store=game:GetService("DataStoreService"):GetDataStore(Config.StoreName)
  local repository=Repository.new(store,now)
@@ -54,10 +54,15 @@ function Service.start(network,lobby)
   if snapshot.ready then
    player:SetAttribute("Level",snapshot.level); player:SetAttribute("XP",snapshot.xp)
    player:SetAttribute("XPRequired",snapshot.required)
+   player:SetAttribute("TotalEarnedXP",snapshot.totalXP); player:SetAttribute("SpendableXP",snapshot.spendableXP)
   end
   player:SetAttribute("XPDataReady",snapshot.ready)
   remote:FireClient(player,{state=snapshot,notice=notice,open=open==true,
    revision=entry.revision,ackId=entry.ackId,openId=entry.openId})
+  for callback in pairs(api.subscribers) do
+   local ok,err=pcall(callback,entry)
+   if not ok then warn("Profile subscriber failed: "..tostring(err)) end
+  end
  end
  local startWorker
  local function enqueue(entry,operation)
@@ -85,7 +90,9 @@ function Service.start(network,lobby)
     table.remove(entry.queue,1)
     if operation.kind=="Load" then entry.loading=false end
     local notice
-    if operation.kind~="Load" and not operation.automatic then
+    local shop=operation.kind=="ShopBuy" or operation.kind=="ShopEquip" or operation.kind=="ShopUnequip"
+    if shop then entry.shopResult={id=operation.id,kind=receipt and receipt.kind,item=operation.item,category=operation.category} end
+    if operation.kind~="Load" and not shop then
      local kind=receipt and receipt.kind
      notice={amount=receipt and receipt.amount or 0,weekly=receipt and receipt.weekly or 0,
       levelUp=receipt and receipt.levelAfter and receipt.levelBefore and receipt.levelAfter>receipt.levelBefore or false,
@@ -131,6 +138,28 @@ function Service.start(network,lobby)
    return false
   end
   return enqueue(entry,{kind="Gameplay",id=eventId,reward=reward,at=earnedAt,zone=zone})
+ end
+ -- Trusted server entry points. Clients reach these only through ShopService's proximity/session checks.
+ function api:subscribe(callback)
+  self.subscribers[callback]=true
+  for _,entry in pairs(self.entries) do callback(entry) end
+  return function() self.subscribers[callback]=nil end
+ end
+ function api:shop(player,kind,item,category)
+  local entry=self.entries[player]
+  if self.closing or not entry or not entry.data or entry.failed or player.Parent~=Players then return false end
+  if kind~="ShopBuy" and kind~="ShopEquip" and kind~="ShopUnequip" then return false end
+  for _,op in ipairs(entry.queue) do
+   if op.kind=="ShopBuy" or op.kind=="ShopEquip" or op.kind=="ShopUnequip" then return false end
+  end
+  return enqueue(entry,{kind=kind,item=item,category=category,id=guid(),at=now()})
+ end
+ function api:refreshShop(player,retry)
+  local entry=self.entries[player]; if not entry or self.closing then return end
+  if retry and now()-entry.lastRetry>=Config.ManualRetrySeconds and not entry.running then
+   entry.lastRetry=now(); entry.nextRetry=nil
+   if #entry.queue>0 then startWorker(entry,true) else load(entry) end
+  elseif not entry.lastVerified or now()-entry.lastVerified>=Config.RefreshSeconds then load(entry) end
  end
  connect(Players.PlayerAdded,add)
  connect(Players.PlayerRemoving,function(player)

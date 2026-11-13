@@ -1,6 +1,7 @@
 -- Pure server-time calendar, XP, and idempotent transitions; IANA data stays on the server.
 local Config=require(script.Parent:WaitForChild("ProgressionConfig"))
 local Zones=require(script.Parent:WaitForChild("TimeZones"))
+local ShopRules=require(script.Parent:WaitForChild("ShopRules"))
 local Rules={}
 local function integer(value,minimum,maximum)
  return type(value)=="number" and value==value and value%1==0 and value>=minimum and value<=maximum
@@ -13,7 +14,7 @@ end
 function Rules.new()
  return {version=Config.SchemaVersion,level=1,xp=0,totalXP=0,lastDay=-1,streak=0,
   multiplierUntil=0,weeklyAwards=0,lastWeeklyDay=-1,history={},budgets={},receipts={},
-  timeZone=Config.DefaultTimeZone,claims={},zoneChangedAt=0}
+  timeZone=Config.DefaultTimeZone,claims={},zoneChangedAt=0,spendableXP=0,inventory={},equipped={}}
 end
 function Rules.validate(data)
  assert(type(data)=="table" and (data.version==1 or data.version==2 or data.version==3),"Unsupported progression data")
@@ -71,7 +72,7 @@ local function copy(data)
   result.inventory=table.clone(data.inventory); result.equipped=table.clone(data.equipped)
  end
  if data.version==1 then
-  result.version=Config.SchemaVersion; result.timeZone=Config.DefaultTimeZone; result.zoneChangedAt=0
+  result.timeZone=Config.DefaultTimeZone; result.zoneChangedAt=0
   for day,entry in pairs(data.history) do
    local number=tonumber(day)
    result.claims["legacy:"..day]={at=entry.at,expires=(number+1)*86400,zone="UTC",day=number,
@@ -81,6 +82,14 @@ local function copy(data)
   if not result.lastClaimAt and data.lastDay>=0 then result.lastClaimAt=data.lastDay*86400 end
   if result.lastClaimAt then result.lastClaimEnd=math.max(data.multiplierUntil,(data.lastDay+1)*86400) end
  end
+ if data.version<3 then
+  -- The schema bump is the migration marker. Replaying Load cannot mint a second opening balance.
+  result.spendableXP=math.floor(data.totalXP*Config.ShopCurrencyRatio)
+  result.inventory={}; result.equipped={}
+ else
+  result.inventory=table.clone(data.inventory); result.equipped=table.clone(data.equipped)
+ end
+ result.version=Config.SchemaVersion
  return result
 end
 function Rules.validTimeZone(id) return Zones.valid(id) end
@@ -103,8 +112,7 @@ end
 local function grant(data,amount)
  amount=math.max(0,math.floor(amount))
  data.totalXP+=amount; data.xp+=amount
- -- Preserve the shop release's one-credit-per-XP earning policy.
- if data.version==3 then data.spendableXP+=amount end
+ data.spendableXP+=math.floor(amount*Config.ShopCurrencyRatio)
  while data.xp>=Rules.required(data.level) do
   data.xp-=Rules.required(data.level); data.level+=1
  end
@@ -123,7 +131,9 @@ function Rules.apply(saved,operation,now)
  if now-operation.at>Config.ReceiptSeconds then return data,{kind="Expired",amount=0} end
  local today,earnedDay=current.day,Rules.day(operation.at,current.zone)
  local receipt={at=operation.at,kind=operation.kind,amount=0,weekly=0,levelBefore=data.level}
- if operation.kind=="SetTimeZone" then
+ if ShopRules.isOperation(operation.kind) then
+  receipt.kind=ShopRules.apply(data,operation)
+ elseif operation.kind=="SetTimeZone" then
   assert(Zones.valid(operation.zone),"Invalid time zone")
   Zones.calendar(now,operation.zone)
   if data.pendingTimeZone==operation.zone or not data.pendingTimeZone and data.timeZone==operation.zone then return data,{kind="ZoneUnchanged",amount=0} end

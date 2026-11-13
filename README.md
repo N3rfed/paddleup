@@ -98,3 +98,6 @@ At exactly 9–3 (or 3–9), the trailing team receives +15% movement speed, +15
 
 ## XP and daily check-in
 Press **E** at the existing lobby reception table for daily rewards and the weekly check-in calendar. Your profile shows level and XP toward the next level. Qualified completed games award XP; checking in activates the daily gameplay multiplier. See [progression rules, persistence, setup, and verification](PROGRESSION.md).
+
+## PaddleUp Goods shop
+Press **E** at the existing lobby boutique counter to preview, buy and equip 18 real paddle, wearable and court designs. Spendable XP is separate from lifetime leveling XP. See [shop assets, currency architecture, migration, tests and rollout](SHOP.md).
