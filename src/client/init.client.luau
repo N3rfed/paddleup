@@ -304,7 +304,7 @@ local function hitInputReady()
  local perfect=snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)
  return perfect or (os.clock()>=localHitReadyAt and workspace:GetServerTimeNow()>=readyAt)
 end
-local function animateSwing(softRequested,charge)
+local function animateSwing(softRequested,charge,slam)
  local character=player.Character
  local root=character and character:FindFirstChild("HumanoidRootPart")
  if not root then return end
@@ -312,7 +312,7 @@ local function animateSwing(softRequested,charge)
  local backhand=snapshot and root.CFrame:PointToObjectSpace(snapshot.p).X<0 or false
  local side=player:GetAttribute("CourtSide") or 1
  local soft=softRequested and (Rules and Rules.softShot(root.Position,side) or "drop") or nil
- DiveController.swing(player.UserId,backhand,false,nil,nil,charge or 0,soft,true)
+ DiveController.swing(player.UserId,backhand,slam==true,nil,nil,charge or 0,soft,true)
  localHitReadyAt=os.clock()+((snapshot and snapshot.live and (snapshot.green or snapshot.slamReady)) and 0 or 0.28)
 end
 local function setDiveHeld(held)
@@ -334,6 +334,16 @@ local function stopServeMeter()
  input:FireServer("ServeTimingStop")
 end
 local function beginCharge(key)
+ local character=player.Character
+ local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+ if humanoid and humanoid.FloorMaterial==Enum.Material.Air and not character:GetAttribute("Diving") then
+  if not playing() or not hitInputReady() then return end
+  cancelCharge()
+  animateSwing(false,0,true)
+  -- The animation is immediate; the server still decides whether a ball is hit.
+  input:FireServer("Swing")
+  return
+ end
  if snapshot and canServe(snapshot) then
   if not hitInputReady() then return end
   if meterPending or not playing() then return end
@@ -674,7 +684,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    local server=snapshot.serverId and Players:GetPlayerByUserId(snapshot.serverId)
    local world=CourtView.root()
    local holder=server and server.Character or (snapshot.bot and world and world:FindFirstChild("Practice Partner"))
-   predicted=Rules.heldBallPosition(holder) or predicted
+   predicted=Rules.heldBallPosition(holder,CourtView.height()) or predicted
   end
  end
  local spectating=player:GetAttribute("SessionMode")=="Spectate"
@@ -736,7 +746,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    local heading=CFrame.Angles(0,yaw,0)
    camera.FieldOfView=65+MovementController.render(c,r,h,heading,locked and aiming,dt)
    local orbit=heading*CFrame.Angles(pitch,0,0)
-   focus=r.Position+Vector3.new(0,2.5,0)
+   focus=Vector3.new(r.Position.X,Rules.CAMERA_FOCUS_Y+CourtView.height()+Rules.jumpHeight(c,CourtView.height()),r.Position.Z)
    -- Shorten the orbit when looking up so the camera stays above the roof.
    local distance=16
    if orbit.LookVector.Y>0 then

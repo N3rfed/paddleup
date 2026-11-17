@@ -306,12 +306,42 @@ end
 
 Rules.CHARGE_TIME=1
 Rules.HIT_COOLDOWN=0.28
-function Rules.heldBallPosition(character)
+Rules.PADDLE_Y=184
+Rules.CAMERA_FOCUS_Y=187.5
+Rules.SERVE_BALL_Y=184
+function Rules.jumpHeight(character,height)
+ local root=character:FindFirstChild("HumanoidRootPart")
+ local humanoid=character:FindFirstChildOfClass("Humanoid")
+ -- FloorMaterial can lag takeoff and differ between the owner and observers.
+ -- Derive elevation directly from the root so all equipment follows its motion.
+ if not root or not humanoid then return 0 end
+ local standing=root.Size.Y/2+humanoid.HipHeight
+ if humanoid.RigType==Enum.HumanoidRigType.R6 then
+  local leg=character:FindFirstChild("Left Leg")
+  standing+=leg and leg.Size.Y or 2
+ end
+ return math.max(0,root.Position.Y-standing-(181.24+(height or 0)))
+end
+-- Hand-local grips remain continuous through takeoff, landing and arm animation.
+function Rules.updatePaddle(character,height)
+ for _,name in ipairs({"PaddleFace","PaddleGrip"}) do
+  local part=character:FindFirstChild(name)
+  local weld=part and part:FindFirstChild("PaddleWeld")
+  if weld then weld.C0=CFrame.new(0,name=="PaddleFace" and -2 or -0.7,0) end
+ end
+end
+function Rules.heldBallPosition(character,height)
  if not character then return nil end
+ local y=Rules.SERVE_BALL_Y+(height or 0)+Rules.jumpHeight(character,height)
  local hand=character:FindFirstChild("LeftHand") or character:FindFirstChild("Left Arm")
- if hand then return hand.CFrame:PointToWorldSpace(Vector3.new(0,-hand.Size.Y*0.5-0.3,-0.2)) end
+ if hand then
+  local position=hand.CFrame:PointToWorldSpace(Vector3.new(0,-hand.Size.Y*0.5-0.3,-0.2))
+  return position
+ end
  local root=character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Body")
- return root and root.CFrame:PointToWorldSpace(Vector3.new(-1.2,0,-1.2)) or nil
+ if not root then return nil end
+ local position=root.CFrame:PointToWorldSpace(Vector3.new(-1.2,0,-1.2))
+ return Vector3.new(position.X,y,position.Z)
 end
 
 function Rules.hitReady(now,readyAt,perfect)
@@ -342,6 +372,8 @@ end
 -- Court coordinates differ only in height; each runtime gets its own wrapper table.
 function Rules.withHeight(height)
  local scoped=table.clone(Rules)
+ scoped.heldBallPosition=function(character) return Rules.heldBallPosition(character,height) end
+ scoped.updatePaddle=function(character) return Rules.updatePaddle(character,height) end
  for _,name in ipairs({"serveTarget","timedServeTarget","startPosition"}) do
   scoped[name]=function(...)
    return Rules[name](...)+Vector3.new(0,height,0)

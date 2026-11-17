@@ -6,6 +6,7 @@ local Movement=require(script.Parent:WaitForChild("MovementController"))
 local active={}
 local Locomotion=require(script.Parent:WaitForChild("CourtLocomotion"))
 local Shots=require(script.Parent:WaitForChild("ShotAnimation"))
+local Rules=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("MatchRules"))
 Controller.charge=Shots.charge
 Controller.release=Shots.release
 Controller.swing=Shots.swing
@@ -145,5 +146,10 @@ RunService.PreSimulation:Connect(function(dt)
   end
  end
  Shots.update()
+ for _,player in ipairs(Players:GetPlayers()) do
+  if player.Character and (player:GetAttribute("CourtSide") or 0)~=0 then
+   Rules.updatePaddle(player.Character,player:GetAttribute("CourtHeight") or 0)
+  end
+ end
 end)
 return Controller

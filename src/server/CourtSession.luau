@@ -1,5 +1,6 @@
 -- The existing authoritative court simulation, instantiated once per independent session.
 local CourtSession={}
+local INTRO_DURATION=8
 function CourtSession.new(context)
 local Players=game:GetService("Players")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
@@ -344,7 +345,7 @@ local function rosterChanged()
  introUntil=0; matchIntro=nil; introReady={}; introLoadDeadline=0
  if #home>0 and #away>0 then
   introSerial+=1
-  introUntil=os.clock()+3
+  introUntil=os.clock()+INTRO_DURATION
   nextServe=introUntil
   local function portraits(side)
    local result={}
@@ -356,7 +357,7 @@ local function rosterChanged()
    end
    return result
   end
-  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+3,home=portraits(1),away=portraits(-1),
+  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+INTRO_DURATION,home=portraits(1),away=portraits(-1),
    variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
   if entryOverviewSeconds and #home+#away==MatchSetup.players[courtMode] then
    local environment=courtRoot:FindFirstChild(environments.active.."Environment")
@@ -392,7 +393,7 @@ connect(introReadyRemote.OnServerEvent,function(player,id)
  for participant,data in pairs(users) do
   if data.side~=0 and not introReady[participant] then return end
  end
- local duration=matchIntro.overviewSeconds or 3
+ local duration=matchIntro.overviewSeconds or INTRO_DURATION
  matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+duration
  introUntil=os.clock()+duration; nextServe=introUntil; introLoadDeadline=0
 end)
@@ -644,13 +645,14 @@ local function paddle(character)
   p.Name=name; p.Size=size; p.Color=color; p.Material=Enum.Material.SmoothPlastic
   p.CanCollide=false; p.CanTouch=false; p.CanQuery=false; p.Massless=true
   p.CFrame=hand.CFrame*offset; p.Parent=character
-  local weld=Instance.new("WeldConstraint",p); weld.Part0=hand; weld.Part1=p
+  local weld=Instance.new("Weld",p); weld.Name="PaddleWeld"; weld.C0=offset; weld.Part0=hand; weld.Part1=p
   return p
  end
  attach("PaddleGrip",Vector3.new(0.3,1.2,0.3),CFrame.new(0,-0.7,0),Color3.fromRGB(35,47,52))
  local face=attach("PaddleFace",Vector3.new(1.65,2,0.3),CFrame.new(0,-2,0),Color3.fromRGB(31,193,180))
  face:SetAttribute("Paddle",true)
  require(ReplicatedStorage.Shared.CosmeticAssets).paddle(face,nil)
+ Rules.updatePaddle(character)
 end
 local function spawnCharacter(p,c)
  local d=users[p]; if not d then return end
@@ -850,6 +852,8 @@ local function serve(p,d,r,h)
   tell(p,"Foot Fault! Serve from behind the baseline on the marked side.","fault"); return
  end
  local from=Rules.heldBallPosition(p.Character) or Vector3.new(r.Position.X,(184+HEIGHT),r.Position.Z)
+ -- Keep the held visual in the hand; raise only the launch for small avatars.
+ from=Vector3.new(from.X,math.max(from.Y,Rules.SERVE_BALL_Y+HEIGHT),from.Z)
  lastHitter[servingSide]=p
  if Powerups.has(d.powerups,"serveVolley") then d.powerupRally.burstUntil=os.clock()+3; activatePowerup(p,"serveVolley",3) end
  d.serveChargeAt=nil; d.chargeAt=nil; if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
@@ -1336,6 +1340,7 @@ connect(RunService.Heartbeat,function(dt)
    local face=p.Character:FindFirstChild("PaddleFace")
    local fire=ball.live and Powerups.onFire(d.powerups,effect,ball.shots+1)
    if face then
+    Rules.updatePaddle(p.Character)
     face.Size=Vector3.new(1.65,2,0.3)*arcade:reach(p,now)
     face.Material=fire and Enum.Material.Neon or Enum.Material.SmoothPlastic
     face.Color=fire and Color3.fromRGB(255,115,25) or Color3.fromRGB(31,193,180)

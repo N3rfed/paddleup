@@ -114,6 +114,24 @@ end
 function MatchIntro.ensurePaddle(model)
  local face=model:FindFirstChild("PaddleFace")
  if face then
+  -- Gameplay welds contain a court-height correction; clones need a hand grip.
+  local hand=model:FindFirstChild("RightHand") or model:FindFirstChild("Right Arm")
+  if hand then
+   for _,name in ipairs({"PaddleFace","PaddleGrip"}) do
+    local part=model:FindFirstChild(name)
+    if part then
+     local offset=CFrame.new(0,name=="PaddleFace" and -2 or -0.7,0)
+     local target=hand.CFrame*offset
+     local delta=target*part.CFrame:Inverse()
+     for _,child in ipairs(part:GetDescendants()) do
+      if child:IsA("BasePart") then child.CFrame=delta*child.CFrame end
+     end
+     part.CFrame=target
+     local weld=part:FindFirstChild("PaddleWeld")
+     if weld and weld:IsA("Weld") then weld.C0=offset; weld.C1=CFrame.identity end
+    end
+   end
+  end
   face.Transparency=face:FindFirstChild("ShopPaddleArt") and 1 or 0
   local grip=model:FindFirstChild("PaddleGrip"); if grip then grip.Transparency=0 end
   return face

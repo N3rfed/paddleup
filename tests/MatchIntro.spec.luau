@@ -20,6 +20,11 @@ return function(MatchIntro)
   local face=assert(MatchIntro.ensurePaddle(rig))
   assert(face.Name=="PaddleFace" and rig:FindFirstChild("PaddleGrip") and face.Anchored,"Intro avatars hold their paddle before replication finishes")
   assert(MatchIntro.ensurePaddle(rig)==face and #rig:GetChildren()==3,"Existing paddles are reused")
+  local weld=Instance.new("Weld",face); weld.Name="PaddleWeld"; weld.Part0=hand; weld.Part1=face; weld.C0=CFrame.new(0,12,0)
+  face.CFrame=hand.CFrame*weld.C0
+  MatchIntro.ensurePaddle(rig)
+  assert((face.Position-(hand.CFrame*CFrame.new(0,-2,0)).Position).Magnitude<0.001,"Intro resets gameplay height correction to the hand")
+  assert(weld.C0==CFrame.new(0,-2,0),"Neutral pose keeps the intro paddle in hand")
   local head=Instance.new("Part",rig); head.Name="Head"; head.CFrame=CFrame.new(0,6,0); head.Anchored=true
   local actor=MatchIntro.prepareActor(rig,0)
   local animationRoot=Instance.new("Frame",parent); Instance.new("Frame",animationRoot).Name="Canvas"

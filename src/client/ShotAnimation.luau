@@ -39,7 +39,9 @@ function Shots.swing(userId,backhand,slam,contact,direction,charge,soft,predicte
  local old=states[c]
  -- Reconcile the accepted contact without replaying the locally predicted swing.
  if old and old.predicted and not predicted and not old.charging and os.clock()-old.start<0.6 then
-  old.backhand=backhand; old.slam=slam; old.contact=contact; old.direction=direction
+  -- A confirmed slam needs its full downward stroke, even after network delay.
+  if slam and not old.slam then old.start=os.clock() end
+  old.backhand=backhand; old.slam=old.slam or slam; old.contact=contact; old.direction=direction
   old.charge=charge or old.charge; old.soft=soft or old.soft; old.predicted=false
   return
  end
@@ -66,6 +68,21 @@ local function pose(d,name,rotation,weight)
  entry.previous=entry.previous or j.Transform
  local basis=j.C0.Rotation
  j.Transform=j.Transform:Lerp(basis:Inverse()*rotation*basis,weight)
+end
+function Shots.slamPose(d,t)
+ -- Drive from overhead to below the waist in 140ms, hold the finish briefly,
+ -- then release smoothly back into the jump/landing animation.
+ local strike=smooth(t/0.14)
+ local weight=1-smooth((t-0.22)/0.24)
+ pose(d,"rightshoulder",angles(155-180*strike,-20+45*strike,18-30*strike),weight)
+ pose(d,"rightelbow",angles(85-75*strike),weight)
+ pose(d,"rightwrist",angles(-15+65*strike,0,0),weight)
+ pose(d,"leftshoulder",angles(65-45*strike,0,-25),weight)
+ pose(d,"leftelbow",angles(25+20*strike),weight)
+ if not d.character:GetAttribute("Diving") then
+  pose(d,"waist",angles(8-32*strike,-18+36*strike,0),weight)
+  pose(d,"neck",angles(8*strike,-10*strike,0),weight)
+ end
 end
 local function worldPart(part,d,cache)
  if cache[part] then return cache[part] end
@@ -156,11 +173,15 @@ function Shots.update()
  for c,d in pairs(states) do
   local h=c:FindFirstChildOfClass("Humanoid")
   local t=os.clock()-d.start
-  local duration=d.slam and 0.62 or 0.52+0.1*(d.charge or 0)
+  local duration=d.slam and 0.46 or 0.52+0.1*(d.charge or 0)
   if not c.Parent or not d.root or not d.root.Parent or not h or h.Health<=0
    or (not d.charging and t>=duration) or (d.releaseAt and os.clock()-d.releaseAt>0.3) then
    restore(d); states[c]=nil
   else
+   if d.slam and not d.charging then
+    Shots.slamPose(d,t)
+    continue
+   end
    local charge=d.charging and math.clamp((t-0.4)/0.6,0,1) or d.charge or 0
    local side=d.backhand and -1 or 1
    -- A tap is a normal swing; only begin showing the windup after the charge threshold.

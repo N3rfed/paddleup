@@ -13,5 +13,5 @@ return {
  CabinDepth=9,DoorPanelDepth=0.23,DoorStackX=4.65,
  ApproachForward=4.5,ApproachSize=Vector3.new(14,14,18),InteriorSize=Vector3.new(9.7,11,8.4),
  MapIds=Maps.ids(),
- InvitationSeconds=10,VoteSeconds=15,MapVoteSeconds=15,RevealSeconds=1.2,OverviewSeconds=4,TerminationSeconds=5,
+ InvitationSeconds=10,VoteSeconds=15,MapVoteSeconds=15,RevealSeconds=1.2,OverviewSeconds=8,TerminationSeconds=5,
 }
