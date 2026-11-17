@@ -1,6 +1,11 @@
 # Project place file
 /Roblox.rbxlx
 
+# Local video reference decoder and extracted review frames.
+/.tmp-video-tools/
+/reference-overview.jpg
+/reference-stride.jpg
+
 # Roblox Studio lock files
 /*.rbxlx.lock
 /*.rbxl.lock
