@@ -199,10 +199,29 @@ function Rules.kitchenLobWindow(lob,overhead,position,side)
   and math.abs(position.X)<=Rules.HALF_WIDTH
 end
 
+-- Applied to an accepted hit: jumping into any incoming lob guarantees a slam.
+function Rules.airborneLobSlam(lob,grounded,diving)
+ return lob==true and not grounded and not diving
+end
+
 function Rules.jumpSlam(position,side,grounded,diving)
  local depth=position.Z*side
  return side~=0 and not grounded and not diving and depth>=0
-  and depth<=Rules.KITCHEN+Rules.SLAM_HORIZONTAL and math.abs(position.X)<=Rules.HALF_WIDTH
+  and depth<=Rules.BASELINE and math.abs(position.X)<=Rules.HALF_WIDTH
+end
+
+-- Airborne overhead strike has a finite reach; timing never grants remote contact.
+function Rules.jumpSlamContact(ballPosition,rootFrame,lob)
+ local offset=rootFrame:PointToObjectSpace(ballPosition)
+ return Rules.contactInFront(ballPosition,rootFrame)
+  and offset.Y>=(lob and -0.5 or 0.5) and offset.Y<=(lob and 9 or 7)
+  and Vector3.new(offset.X,0,offset.Z).Magnitude<=Rules.HIT_RANGE
+end
+
+-- Reward positioning on an incoming lob rather than a frame-perfect strike plane.
+function Rules.jumpLobSlam(position,side,grounded,diving,lob,bounces,ballPosition,rootFrame)
+ return lob==true and bounces==0 and Rules.jumpSlam(position,side,grounded,diving)
+  and Rules.jumpSlamContact(ballPosition,rootFrame,true)
 end
 
 function Rules.slamTiming(ballPosition,ballVelocity,contactPosition,perfectVision)

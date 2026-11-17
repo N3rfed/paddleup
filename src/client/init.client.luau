@@ -1,3 +1,11 @@
+-- Warm the dedicated crack at startup; contact playback must never yield.
+local slamCrack=Instance.new("Sound")
+slamCrack.Name="Slam crack template"; slamCrack.SoundId="rbxassetid://9113611449"
+slamCrack.Volume=1.4; slamCrack.PlaybackSpeed=1.25
+slamCrack.Parent=game:GetService("SoundService")
+task.spawn(function() pcall(function() game:GetService("ContentProvider"):PreloadAsync({slamCrack}) end) end)
+local SlamFeedback=require(script:WaitForChild("SlamFeedback"))
+local MovementController=require(script:WaitForChild("MovementController"))
 local CourtView=require(script:WaitForChild("CourtView"))
 local PowerupVisuals=require(script:WaitForChild("PowerupVisuals"))
 local Players=game:GetService("Players")
@@ -300,6 +308,7 @@ local function animateSwing(softRequested,charge)
  local character=player.Character
  local root=character and character:FindFirstChild("HumanoidRootPart")
  if not root then return end
+ MovementController.syncAim()
  local backhand=snapshot and root.CFrame:PointToObjectSpace(snapshot.p).X<0 or false
  local side=player:GetAttribute("CourtSide") or 1
  local soft=softRequested and (Rules and Rules.softShot(root.Position,side) or "drop") or nil
@@ -321,6 +330,7 @@ local function stopServeMeter()
  local _,_,accuracy=Rules.serveTiming(meterStarted or workspace:GetServerTimeNow(),workspace:GetServerTimeNow())
  meterPending=true; meterInput=nil; meterStarted=nil
  animateSwing(false,accuracy)
+ MovementController.syncAim()
  input:FireServer("ServeTimingStop")
 end
 local function beginCharge(key)
@@ -357,6 +367,7 @@ end
 local function specialShot(kind)
  if not playing() or not hitInputReady() then return end
  -- Send the shot before clearing the windup so the server can validate a feint.
+ MovementController.syncAim()
  input:FireServer(kind)
  chargeStarted=nil; chargeInput=nil; chargeCanShow=false; chargeTrack.Visible=false
  animateSwing(kind=="Lob")
@@ -545,9 +556,11 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
   return
  end
  if kind=="ballHit" then
+  SlamFeedback.hit(message)
   local shared=ReplicatedStorage:FindFirstChild("Shared")
   local hello=shared and shared:FindFirstChild("Hello")
-  local template=hello and hello:FindFirstChild("pickleball hit")
+  local slammed=type(message)=="table" and message.slam==true
+  local template=slammed and slamCrack or (hello and hello:FindFirstChild("pickleball hit"))
   if template and template:IsA("Sound") then
    -- A separate voice per impact lets rapid rallies overlap naturally.
    local sound=template:Clone()
@@ -665,6 +678,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
   end
  end
  local spectating=player:GetAttribute("SessionMode")=="Spectate"
+ if inLobby or spectating or courtSide==0 or not r then MovementController.render(c,r,h,CFrame.identity,false,dt) end
  if wasSpectating and not spectating then
   UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true
   camera.CameraType=Enum.CameraType.Custom; camera.CameraSubject=h
@@ -720,7 +734,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    desired=CFrame.lookAt(Vector3.new(r.Position.X*0.35,225+CourtView.height(),side*79),focus)
   else
    local heading=CFrame.Angles(0,yaw,0)
-   if locked then r.CFrame=CFrame.new(r.Position)*heading end
+   camera.FieldOfView=65+MovementController.render(c,r,h,heading,locked and aiming,dt)
    local orbit=heading*CFrame.Angles(pitch,0,0)
    focus=r.Position+Vector3.new(0,2.5,0)
    -- Shorten the orbit when looking up so the camera stays above the roof.

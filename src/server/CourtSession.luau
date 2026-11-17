@@ -665,7 +665,7 @@ local function spawnCharacter(p,c)
   local weld=seatedAt:FindFirstChild("SeatWeld")
   if weld and weld:IsA("Weld") and weld.Part1 and weld.Part1:IsDescendantOf(c) then weld:Destroy() end
  end
- h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=38
+ h.WalkSpeed=WALK_SPEED; h.UseJumpPower=true; h.JumpPower=42
  local z=d.side==0 and 58 or d.side*28
  c:PivotTo(d.mode=="Lobby" and Lobby.Spawn or CFrame.lookAt(Vector3.new(d.side==0 and 40 or 0,(185+HEIGHT),z),Vector3.new(0,(185+HEIGHT),0)))
  if d.side~=0 and os.clock()<introUntil then
@@ -942,6 +942,23 @@ local function suspendPracticeTimers(dt)
  end
  for _,burst in ipairs(powerups.bursts) do burst.at+=dt; burst.pickup.born+=dt end
 end
+-- FloorMaterial can lag on a client-owned character. Verify actual support at
+-- foot height before deciding whether an incoming lob is an airborne slam.
+local function groundedForShot(character,root)
+ local h=character.Humanoid
+ if h.FloorMaterial==Enum.Material.Air then return false end
+ if not root.Size then return true end -- Isolated server-rule fixtures.
+ local standing=root.Size.Y*0.5+h.HipHeight
+ if h.RigType==Enum.HumanoidRigType.R6 then
+  local leg=character:FindFirstChild("Left Leg")
+  standing+=leg and leg.Size.Y or 2
+ end
+ local params=RaycastParams.new()
+ params.FilterType=Enum.RaycastFilterType.Exclude
+ params.FilterDescendantsInstances={character}
+ params.RespectCanCollide=true
+ return workspace:Raycast(root.Position,Vector3.new(0,-standing-0.1,0),params)~=nil
+end
 local function overheadStatus(p,r)
   local face=p.Character:FindFirstChild("PaddleFace")
   local center=face and face.Position or r.Position
@@ -951,8 +968,12 @@ local function overheadStatus(p,r)
  return distance,overhead
 end
 local function slamQuality(p,d,r,now,overhead)
- local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
+ local grounded=groundedForShot(p.Character,r)
  local diving=now<(d.divePoseUntil or d.diveUntil or 0)
+ if Rules.airborneLobSlam(ball.lob,grounded,diving) then
+  local distance,inOverhead=overheadStatus(p,r)
+  if Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE or inOverhead) then return "perfect" end
+ end
  local jumping=Rules.jumpSlam(r.Position,d.side,grounded,diving)
  if not overhead and not jumping then return nil end
  local minY=Rules.slamBounds(p.Character,r)
@@ -965,7 +986,7 @@ local function slamReady(p,d,now)
  if not r or not h or h.Health<=0 or d.side==0 then return false end
  if not ball.live or ball.last==d.side or ball.p.Z*d.side< -1 then return false end
  if ball.shots==0 and receiverId and p.UserId~=receiverId then return false end
- if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,h.FloorMaterial~=Enum.Material.Air,d.kitchenTouched)) then return false end
+ if Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(r.Position,groundedForShot(p.Character,r),d.kitchenTouched)) then return false end
  local _,overhead=overheadStatus(p,r)
  return slamQuality(p,d,r,now,overhead)=="perfect"
 end
@@ -985,17 +1006,24 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local deceptive=not shield and d.diveHeld and Powerups.has(d.powerups,"deceptiveDrop")
   local offensive=not shield and diving and Powerups.has(d.powerups,"offensiveDive")
   local heavy=Powerups.apex(d.powerups,ball.bounces,ball.v.Y,ball.g or GRAVITY)
-  local grounded=p.Character.Humanoid.FloorMaterial~=Enum.Material.Air
+  local grounded=groundedForShot(p.Character,r)
   if Powerups.warden(d.powerups,r.Position.Z*d.side,r.Position.X,Vector3.new(r.AssemblyLinearVelocity.X,0,r.AssemblyLinearVelocity.Z).Magnitude,grounded) then
    local face=p.Character:FindFirstChild("PaddleFace")
    local center=(face and face.Position or r.Position)+r.CFrame.LookVector*Rules.HIT_RANGE*reach*0.25
    -- Union with the normal sphere: only the forward intercept volume is added.
    distance=math.min(distance,(ball.p-center).Magnitude)
   end
+  local airborneLob=Rules.airborneLobSlam(ball.lob,grounded,diving)
+  if airborneLob then
+   -- The aerial lob return takes precedence over soft/lob/slice and guided variants.
+   softRequested=false; shotKind=nil; shield=false; guided=false; feint=false; deceptive=false
+  end
   local slamTiming=not softRequested and shotKind~="Lob" and shotKind~="Slice" and not shield
    and not guided and not feint and not deceptive and slamQuality(p,d,r,now,overhead) or nil
-  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach+extension or overhead or slamTiming~=nil)
+  local inReach=Rules.contactInFront(ball.p,r.CFrame) and (distance<=Rules.HIT_RANGE*reach+extension or overhead or (not airborneLob and slamTiming~=nil))
   local valid=ball.live and ball.last~=d.side and ball.p.Z*d.side>=-1 and inReach
+  local jumpSlamContact=not grounded and not diving and valid and ball.live and ball.lob
+  if jumpSlamContact then slamTiming="perfect" end
   if automatic and not valid then return false end
   local clean=valid and (distance<=Rules.PERFECT_RANGE*reach*(Powerups.has(d.powerups,"carbonFiber") and 1.15 or 1)+extension or overhead) and perfect(now,d)
   if guided or feint or deceptive or shield then clean=valid end
@@ -1038,6 +1066,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local serveReturn=ball.shots==0
   ball.shots+=1
   local slam=slamTiming~=nil
+  local jumpSlam=slam and not grounded and not diving
   if slam then quality=slamTiming end
   local restored=clean and ball.speed<1
   if clean then ball.perfects+=1 end
@@ -1104,9 +1133,9 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   local positions={}
   for _,opponent in ipairs(teamPlayers(-d.side)) do local root=rootOf(opponent); if root then table.insert(positions,root.Position) end end
   if courtMode=="Practice" then table.insert(positions,Vector3.new(botX,(184+HEIGHT),botZ)) end
-  local heatTarget=arcade:heatTarget(p,now,positions,d.side)
+  local heatTarget=not airborneLob and arcade:heatTarget(p,now,positions,d.side) or nil
   if heatTarget then target=heatTarget; quality="perfect"; soft=nil; slam=false end
-  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net",charged and charge or 0,{userId=p.UserId,clean=clean,heatseeker=heatTarget~=nil,
+  launch(ball.p,Vector3.new(target.X,FLOOR,target.Z),powered,quality=="lob",slam,momentum,soft,quality=="net",charged and charge or 0,{userId=p.UserId,clean=clean,jumpSlam=jumpSlam and slam,heatseeker=heatTarget~=nil,
    reflectedSpeed=shield and incomingSpeed*2 or calculated and incomingSpeed*0.8 or nil,
    offensive=offensive,heavy=heavy,deceptive=deceptive,afterimage=afterimage,
    uncapped=Powerups.has(d.powerups,"terminalVelocity") and not shield and not calculated,speedMultiplier=multiplier,spin=(guided or offensive) and "topspin" or shotKind=="Slice" and "slice" or nil,
@@ -1114,12 +1143,13 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
 
   feedback:FireAllClients({userId=p.UserId,backhand=backhand,slam=slam or deceptive,hidePaddle=rhythm,contact=ball.p,direction=ball.v.Unit,charge=charge,soft=not deceptive and (soft or (softRequested and Rules.softShot(r.Position,d.side) or nil)) or nil},"swing")
   local message=restored and (slam and "SLAM!  SPEED RESET TO 1.00x" or "PERFECT!  SPEED RESET TO 1.00x")
-   or (slam and "SLAM!  +10%" or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
+   or (slam and (jumpSlam and "JUMP SLAM!  +10%" or "SLAM!  +10%") or (clean and "PERFECT!  +5%" or "LOB RETURN  /  -5%"))
   if charged and clean then message="CHARGED RETURN!  +7%"
   elseif charged and quality~="net" then message="MISTIMED CHARGE  /  WIDE RETURN" end
   if soft then message=soft=="dink" and "PERFECT DINK!" or "PERFECT DROP!"
   elseif quality=="net" then message="BAD TIMING  /  LOW CONTACT" end
-  if accelerationMessage then message=accelerationMessage end
+  if accelerationMessage and not slam then message=accelerationMessage end
+  if jumpSlam then message=restored and "JUMP SLAM!  SPEED RESET TO 1.00x" or "JUMP SLAM!  +10%" end
   if slam and quality=="net" then message="EARLY SLAM / NET"
   elseif slam and quality=="out" then message="LATE SLAM / OUT" end
   feedback:FireAllClients({userId=p.UserId,text=message,tone=clean and "good" or (quality=="net" or quality=="out" or charged) and "bad" or "neutral"},"playerText")
@@ -1292,6 +1322,11 @@ connect(RunService.Heartbeat,function(dt)
    local lateral=original.Magnitude>0.01 and original.Unit.X or 0
    local movement=(1+(d.powerups.speed or 0)+(d.powerupMatch.speedWins or 0)*0.05)*Powerups.lateralScale(d.powerups,r.Position.Z*d.side,r.Position.X,lateral)*(camper and 1.15 or 1)*(now<effect.burstUntil and 1.75 or 1)*(Comeback.active(comeback,d.side) and Comeback.MOVE or 1)
    movement*=arcade:speed(p,now)
+   local recoveryAge=now-(d.divePoseUntil or 0)
+   if d.side~=0 and (d.divePoseUntil or 0)>0 and recoveryAge>=0 and recoveryAge<0.18 then
+    local progress=recoveryAge/0.18
+    movement*=0.45+0.55*progress*progress*(3-2*progress)
+   end
    local sliding,slideDirection=false,nil
    if d.side~=0 then sliding,slideDirection=arcade:touch(p,d.side,r.Position,now) end
    local stunned=now<effect.stunUntil or sliding

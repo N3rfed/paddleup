@@ -42,6 +42,15 @@
               "PlaybackSpeed": 0.8,
               "Looped": false
             }
+          },
+          "pickleball slam": {
+            "$className": "Sound",
+            "$properties": {
+              "SoundId": "rbxassetid://9113611449",
+              "Volume": 1.4,
+              "PlaybackSpeed": 1.25,
+              "Looped": false
+            }
           }
         },
         "MatchRules": {

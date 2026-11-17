@@ -2,7 +2,7 @@
 return function(source,Rules,Powerups,Comeback)
  local launchFirst=assert(source:find("local function launch(",1,true))
  local launchLast=assert(source:find("local function point(",launchFirst,true))
- local returnFirst=assert(source:find("local function overheadStatus(",1,true))
+ local returnFirst=assert(source:find("local function groundedForShot(",1,true))
  local returnLast=assert(source:find("connect(arcadeRemote.OnServerEvent,",returnFirst,true))
  local ball={}
  local faults,events={},{}
@@ -28,13 +28,16 @@ return function(source,Rules,Powerups,Comeback)
  local chunk=assert(loadstring(source:sub(launchFirst,launchLast-1)..source:sub(returnFirst,returnLast-1).."\nreturn tryReturn,slamReady"))
  setfenv(chunk,env)
  local tryReturn,slamReady=chunk()
+ for _,incomingLob in ipairs({false,true}) do
  for _,side in ipairs({-1,1}) do
   for _,case in ipairs({{0.1,"net"},{0,"perfect"},{-0.1,"out"}}) do
+   local case={case[1],incomingLob and "perfect" or case[2]}
    table.clear(events); table.clear(faults); table.clear(ball); table.clear(data)
    root.Position=Vector3.new(0,188,side*16)
    root.CFrame=CFrame.lookAt(root.Position,Vector3.new(0,188,0))
    local contact=root.Position+root.CFrame.LookVector*5+Vector3.new(0,1.5,0)
    ball.v=Vector3.new(0,-12,side*40); ball.p=contact-ball.v*case[1]
+   ball.lob=incomingLob
    ball.live=true; ball.last=-side; ball.shots=2; ball.bounces=0; ball.bounceAt=-100
    ball.speed=1; ball.perfects=0
    data.side=side; data.powerups={}; data.powerupMatch={}; data.powerupRally=Powerups.newRally()
@@ -57,6 +60,7 @@ return function(source,Rules,Powerups,Comeback)
    if case[2]=="net" then assert(message.text=="EARLY SLAM / NET" and message.tone=="bad")
    elseif case[2]=="out" then assert(message.text=="LATE SLAM / OUT" and message.tone=="bad") end
   end
+ end
  end
  return "Actual server jump slams: early net collision, perfect in-bounds landing, late out landing, timing UI and credit passed on both sides"
 end

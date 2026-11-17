@@ -2,7 +2,9 @@
 local Players=game:GetService("Players")
 local RunService=game:GetService("RunService")
 local Controller={}
+local Movement=require(script.Parent:WaitForChild("MovementController"))
 local active={}
+local Locomotion=require(script.Parent:WaitForChild("CourtLocomotion"))
 local Shots=require(script.Parent:WaitForChild("ShotAnimation"))
 Controller.charge=Shots.charge
 Controller.release=Shots.release
@@ -28,8 +30,7 @@ local function finish(character,d)
   d.humanoid.AutoRotate=d.autoRotate
   d.humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping,d.jumpEnabled)
   if d.root.Parent then
-   local v=d.root.AssemblyLinearVelocity
-   d.root.AssemblyLinearVelocity=Vector3.new(0,v.Y,0)
+   Movement.recover()
   end
  end
  active[character]=nil
@@ -89,6 +90,7 @@ function Controller.play(userId,direction,moveTime,poseTime)
   d.raycast.FilterDescendantsInstances={c}
   d.raycast.RespectCanCollide=true
  end
+ if d.localPlayer then Movement.juice() end
  c:SetAttribute("Diving",true)
  active[c]=d
 end
@@ -96,8 +98,11 @@ end
 RunService.PreAnimation:Connect(function()
  Shots.restore()
  for _,d in pairs(active) do restorePose(d) end
+ Locomotion.restore()
 end)
 RunService.PreSimulation:Connect(function(dt)
+ Movement.step(dt)
+ Locomotion.update(dt)
  for c,d in pairs(active) do
   local elapsed=os.clock()-d.start
   if not c.Parent or not d.root.Parent or d.humanoid.Health<=0 or elapsed>=d.poseTime then
@@ -128,7 +133,7 @@ RunService.PreSimulation:Connect(function(dt)
     h:Move(Vector3.zero,false)
     h.Jump=false
     local direction=d.direction
-    local speed=elapsed<d.moveTime and 64*(1-smooth(elapsed/d.moveTime)) or 0
+    local speed=elapsed<d.moveTime and 64*(1-smooth(elapsed/(d.moveTime*0.73))) or 0
     local position=r.Position
     local safeStep=math.max(dt,1/240)
     local hit=workspace:Raycast(position,direction*(speed*safeStep+1.6),d.raycast)

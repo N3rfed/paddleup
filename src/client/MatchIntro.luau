@@ -56,6 +56,46 @@ local function viewport(parent,name,position,size)
  local camera=Instance.new("Camera",frame); camera.FieldOfView=35; frame.CurrentCamera=camera
  return {viewport=frame,world=world,camera=camera,loaded={}}
 end
+-- Rebuild a neutral pose instead of freezing the live running/jumping frame.
+function MatchIntro.standActor(model)
+ local root=model:FindFirstChild("HumanoidRootPart")
+ if not root then return end
+ local links={}
+ for _,j in ipairs(model:GetDescendants()) do
+  if (j:IsA("Motor6D") or j:IsA("AnimationConstraint") or j:IsA("Weld") or j:IsA("WeldConstraint")) and j.Part0 and j.Part1 then
+   local offset
+   if j:IsA("WeldConstraint") then offset=j.Part0.CFrame:ToObjectSpace(j.Part1.CFrame)
+   else
+    local pose=CFrame.identity
+    local name=j.Name:lower():gsub(" ","")
+    local side=name:find("left") and -1 or 1
+    local rotation
+    if name:find("shoulder") then rotation=CFrame.Angles(math.rad(6),0,math.rad(side*10))
+    elseif name:find("elbow") then rotation=CFrame.Angles(math.rad(12),0,0)
+    elseif name:find("hip") then rotation=CFrame.Angles(0,0,math.rad(side*4)) end
+    if rotation then
+     local basis=j.C0.Rotation
+     pose=basis:Inverse()*rotation*basis
+    end
+    offset=j.C0*pose*j.C1:Inverse()
+   end
+   table.insert(links,{a=j.Part0,b=j.Part1,offset=offset})
+   if j:IsA("Motor6D") or j:IsA("AnimationConstraint") then j.Transform=CFrame.identity end
+  end
+ end
+ local solved={[root]=true}
+ for _=1,#links do
+  local changed=false
+  for _,link in ipairs(links) do
+   if solved[link.a] and not solved[link.b] then
+    link.b.CFrame=link.a.CFrame*link.offset; solved[link.b]=true; changed=true
+   elseif solved[link.b] and not solved[link.a] then
+    link.a.CFrame=link.b.CFrame*link.offset:Inverse(); solved[link.a]=true; changed=true
+   end
+  end
+  if not changed then break end
+ end
+end
 function MatchIntro.groundActor(model,floorY)
  local lowest
  for _,part in ipairs(model:GetDescendants()) do
@@ -114,7 +154,7 @@ function MatchIntro.prepareActor(model,phase)
    end
   end
  end
- local actor={model=model,pivot=pivot,phase=phase or 0,parts={},headParts=headParts,armParts=armParts}
+ local actor={model=model,pivot=pivot,phase=phase or 0,parts={},headParts=headParts,armParts=armParts,floorY=model:GetAttribute("IntroFloorY")}
  actor.neck=head and pivot:ToObjectSpace(head.CFrame*CFrame.new(0,-head.Size.Y/2,0)) or CFrame.identity
  actor.shoulder=hand and pivot:ToObjectSpace(hand.CFrame*CFrame.new(0,hand.Size.Y/2,0)) or CFrame.identity
  for _,joint in ipairs(model:GetDescendants()) do
@@ -123,7 +163,9 @@ function MatchIntro.prepareActor(model,phase)
   end
  end
  for _,part in ipairs(model:GetDescendants()) do
-  if part:IsA("BasePart") then actor.parts[part]=pivot:ToObjectSpace(part.CFrame) end
+  if part:IsA("BasePart") then
+   actor.parts[part]=pivot:ToObjectSpace(part.CFrame)
+  end
  end
  return actor
 end
@@ -132,14 +174,15 @@ function MatchIntro.animateScenes(scene,elapsed)
  for _,shot in ipairs(scene.portraits) do
   for _,actor in pairs(shot.actors or {}) do
    local t=elapsed+actor.phase
-   local body=actor.pivot*CFrame.new(0,math.sin(t*2.3)*0.025,0)
-    *CFrame.Angles(0,math.sin(t*1.6)*math.rad(5),math.sin(t*1.8)*math.rad(0.7))
-   local glance=math.sin(t*2.2)*math.rad(21)
+   local body=actor.pivot*CFrame.Angles(0,math.sin(t*1.6)*math.rad(3),0)
+   local glance=math.sin(t*2.2)*math.rad(14)
    local head=actor.neck*CFrame.Angles(math.sin(t*1.7)*math.rad(3),glance,0)*actor.neck:Inverse()
-   local arm=actor.shoulder*CFrame.Angles(math.sin(t*2)*math.rad(5),0,math.sin(t*1.6)*math.rad(3))*actor.shoulder:Inverse()
+   local arm=actor.shoulder*CFrame.Angles(math.sin(t*2)*math.rad(14),math.sin(t*1.3)*math.rad(5),math.sin(t*1.6)*math.rad(9))*actor.shoulder:Inverse()
    for part,rest in pairs(actor.parts) do
     if part.Parent then part.CFrame=body*(actor.headParts[part] and head or actor.armParts[part] and arm or CFrame.identity)*rest end
    end
+   -- Re-anchor the feet after pose evaluation, including nonstandard avatar feet.
+   if actor.floorY then MatchIntro.groundActor(actor.model,actor.floorY) end
   end
   if shot.baseCamera then
    shot.camera.CFrame=shot.baseCamera*CFrame.new(math.sin(elapsed*0.8)*0.05,math.sin(elapsed)*0.025,0.65*math.exp(-elapsed*1.5))
@@ -177,10 +220,17 @@ function MatchIntro.updateScenes(scene)
         if piece:IsA("BasePart") then piece.Transparency=piece:FindFirstChild("ShopPaddleArt") and 1 or 0 end
        end
       else MatchIntro.ensurePaddle(model) end
+      MatchIntro.standActor(model)
+      -- Presentation geometry is posed once, then animated as connected groups.
+      -- Stop cloned Animator/joints from reapplying the captured live pose.
+      for _,item in ipairs(model:GetDescendants()) do
+       if item:IsA("Animator") or item:IsA("Motor6D") or item:IsA("AnimationConstraint") then item:Destroy() end
+      end
       local x=(index-(#shot.team+1)/2)*4.5
       local spot=origin+floor.CFrame.RightVector*x+Vector3.new(0,3,0)
       model:PivotTo(CFrame.lookAt(spot,spot+forward))
       MatchIntro.groundActor(model,origin.Y)
+      model:SetAttribute("IntroFloorY",origin.Y)
       model.Parent=shot.world; shot.loaded[index]=model
       shot.actors=shot.actors or {}; shot.actors[index]=MatchIntro.prepareActor(model,shot.phase+index*0.6)
       shot.bounds=shot.bounds or {}; local center,extent=model:GetBoundingBox(); shot.bounds[index]={center=center,size=extent}
