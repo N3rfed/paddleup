@@ -95,7 +95,7 @@ function PowerupDraft.start(player,network)
   eyebrow.Visible=false; title.Visible=false; hint.Visible=false
   subtitle.Position=UDim2.fromOffset(16,175); subtitle.Size=UDim2.new(1,-32,0,34)
   local tierColor=Color3.fromRGB(80,232,255)
-  subtitle.Text="CHAOS  /  UPGRADE YOUR POWERUPS  /  LASTS ALL MATCH"; subtitle.TextSize=24
+  subtitle.Text="ARCADE  /  UPGRADE YOUR POWERUPS  /  LASTS ALL MATCH"; subtitle.TextSize=24
   subtitle.TextColor3=tierColor
   footer.Position=UDim2.fromOffset(16,850); footer.TextSize=22
   for index,card in ipairs(data.cards) do

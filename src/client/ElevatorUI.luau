@@ -34,7 +34,7 @@ function UI.start(player,network)
  local roster=label(panel,"Roster",96,100,"",16)
  local ready=button(panel,"Ready","READY UP",20,210,400,function() if party then remote:FireServer("Ready",{revision=party.revision}) end end)
  local classic=button(panel,"Classic","Classic",20,210,194,function() if party then remote:FireServer("Vote",{revision=party.revision,mode="Classic"}) end end)
- local chaos=button(panel,"Chaotic","Chaotic",226,210,194,function() if party then remote:FireServer("Vote",{revision=party.revision,mode="Chaos"}) end end)
+ local chaos=button(panel,"Arcade","Arcade",226,210,194,function() if party then remote:FireServer("Vote",{revision=party.revision,mode="Chaos"}) end end)
  button(panel,"Leave","Leave Elevator",20,274,400,function() remote:FireServer("Leave") end)
  local inviteTitle=label(invitation,"Title",16,44,"",22)
  local inviteDetail=label(invitation,"Detail",64,65,"",16)
@@ -85,7 +85,7 @@ function UI.start(player,network)
   local winning=party.stage=="Departing"
   local selected=party.map and Maps.get(party.map)
   mapTitle.Text=winning and ("NEXT STOP: "..string.upper(selected.name)) or "CHOOSE YOUR NEXT ARENA"
-  mapStatus.Text=(party.mode=="Chaos" and "CHAOTIC" or "CLASSIC").."  /  "..party.format:gsub("V","v")
+  mapStatus.Text=(party.mode=="Chaos" and "ARCADE" or "CLASSIC").."  /  "..party.format:gsub("V","v")
   mapTimer.Text=winning and "WINNING MAP / SEE YOU ON THE COURT"
    or "ONE PICK EACH  /  "..math.max(0,math.ceil(party.endsAt-workspace:GetServerTimeNow())).."s"
   local mine
@@ -153,7 +153,7 @@ function UI.start(player,network)
   if party then renderParty() end
   if offer then
    local seconds=math.max(0,math.ceil(offer.endsAt-now))
-   inviteDetail.Text=(offer.mode=="Chaos" and "Chaotic" or offer.mode=="Any" and "Any Mode" or offer.mode)
+   inviteDetail.Text=(offer.mode=="Chaos" and "Arcade" or offer.mode=="Any" and "Any Mode" or offer.mode)
     .." / "..seconds.."s to respond\nYour current queue is retained until you accept."
    if seconds==0 then invitation.Visible=false end
   end

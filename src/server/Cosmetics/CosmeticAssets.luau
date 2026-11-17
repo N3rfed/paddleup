@@ -29,27 +29,58 @@ local function number07(parent,target,offset,width,height,color)
   end
  end
 end
+-- Shared silhouette for equipment, bots and shop previews. Catalog colors and
+-- textures supply skins; gameplay continues to use the original face bounds.
+Assets.DefaultPaddle={face=Color3.fromRGB(222,224,218),edge=Color3.fromRGB(38,42,46),accent=Color3.fromRGB(116,134,127)}
 function Assets.paddle(face,id)
+ face:SetAttribute("PaddleSkin",id or "")
+ if not face:GetAttribute("PaddleModelBound") then
+  face:SetAttribute("PaddleModelBound",true)
+  face:GetPropertyChangedSignal("Size"):Connect(function() Assets.paddle(face,face:GetAttribute("PaddleSkin")) end)
+ end
  local old=face:FindFirstChild("ShopPaddleArt"); if old then old:Destroy() end
- for _,child in ipairs(face:GetChildren()) do if child.Name=="ShopPrintFront" or child.Name=="ShopPrintBack" then child:Destroy() end end
- if face:GetAttribute("ShopOriginalColor")==nil then
-  face:SetAttribute("ShopOriginalColor",face.Color); face:SetAttribute("ShopOriginalMaterial",face.Material.Name)
+ for _,child in ipairs(face:GetChildren()) do
+  if child.Name=="ShopPrintFront" or child.Name=="ShopPrintBack" then child:Destroy() end
  end
- face.Color=face:GetAttribute("ShopOriginalColor"); face.Material=Enum.Material[face:GetAttribute("ShopOriginalMaterial")]
- local item=Catalog.ById[id]; if not item or item.category~="Paddles" then return end
- local texture=Textures[item.asset]; assert(texture,"Missing paddle print")
- local art=model(face,"ShopPaddleArt"); face.Color=item.colors[1]; face.Material=Enum.Material.SmoothPlastic
- -- One decal on each real face: no coplanar art pieces or arbitrary hardcoded Z offsets.
- for _,side in ipairs({Enum.NormalId.Front,Enum.NormalId.Back}) do
-  local decal=Instance.new("Decal"); decal.Name=side==Enum.NormalId.Front and "ShopPrintFront" or "ShopPrintBack"
-  decal.Face=side; decal.Texture=texture; decal.Parent=face
+ local item=Catalog.ById[id]
+ if item and item.category~="Paddles" then item=nil end
+ local style=Assets.DefaultPaddle
+ local colors=item and item.colors or {style.face,style.edge,style.accent}
+ local art=model(face,"ShopPaddleArt")
+ face.Transparency=1
+ local w,h,d=face.Size.X,face.Size.Y,face.Size.Z
+ local function rounded(name,width,height,depth,z,color)
+  local radius=width*0.19
+  attach(art,face,name,V(width-2*radius,height,depth),CFrame.new(0,0,z),color)
+  attach(art,face,name,V(width,height-2*radius,depth),CFrame.new(0,0,z),color)
+  for _,x in ipairs({-1,1}) do for _,y in ipairs({-1,1}) do
+   local corner=attach(art,face,name,V(depth,2*radius,2*radius),
+    CFrame.new(x*(width/2-radius),y*(height/2-radius),z)*CFrame.Angles(0,math.pi/2,0),color)
+   corner.Shape=Enum.PartType.Cylinder
+  end end
  end
- local size=face.Size
+ rounded("Protective edge guard",w,h,d,0,colors[2])
  for _,side in ipairs({-1,1}) do
-  attach(art,face,"Carbon side edge",V(0.035,size.Y,math.max(0.05,size.Z-0.035)),CFrame.new(side*(size.X/2+0.018),0,0),item.colors[2])
-  attach(art,face,"Carbon end edge",V(size.X+0.07,0.035,math.max(0.05,size.Z-0.035)),CFrame.new(0,side*(size.Y/2+0.018),0),item.colors[2])
+  rounded("Composite face",w*0.94,h*0.95,0.018,side*(d/2+0.008),colors[1])
+  local print=attach(art,face,"Skin print",V(w*0.70,h*0.73,0.012),CFrame.new(0,0,side*(d/2+0.024)),colors[1])
+  if item and Textures[item.asset] then
+   local decal=Instance.new("Decal"); decal.Name="ShopPrint"
+   decal.Face=side<0 and Enum.NormalId.Front or Enum.NormalId.Back
+   decal.Texture=Textures[item.asset]; decal.Parent=print
+  else
+   attach(art,face,"Club stripe",V(w*0.35,h*0.025,0.014),CFrame.new(0,-h*0.24,side*(d/2+0.04)),colors[3])
+   attach(art,face,"Club mark",V(w*0.08,h*0.12,0.014),CFrame.new(0,0,side*(d/2+0.04)),colors[2])
+  end
  end
- art:SetAttribute("PrintDesign",item.asset)
+ local direction=face:GetAttribute("HandleDirection") or 1
+ attach(art,face,"Throat",V(w*0.24,h*0.25,d*0.8),CFrame.new(0,direction*h*0.52,0),colors[2])
+ attach(art,face,"Grip core",V(w*0.18,h*0.48,d),CFrame.new(0,direction*h*0.86,0),colors[2],Enum.Material.Fabric)
+ for i=0,7 do
+  attach(art,face,"Grip wrap",V(w*0.20,h*0.027,d*1.07),CFrame.new(0,direction*(h*0.67+i*h*0.055),0),Color3.fromRGB(62,65,68),Enum.Material.Fabric)
+ end
+ attach(art,face,"Butt cap",V(w*0.24,h*0.07,d*1.18),CFrame.new(0,direction*h*1.09,0),colors[2])
+ art:SetAttribute("PrintDesign",item and item.asset or "default")
+ return art
 end
 local function legacyWear(character,id)
  local old=character:FindFirstChild("ShopWearable"); if old then old:Destroy() end
@@ -285,7 +316,7 @@ function Assets.preview(id,fit)
    ring.Shape=Enum.PartType.Cylinder
   end
   local face=part(root,"PaddleFace",V(1.65,2,0.3),CFrame.new(0,0.2,0),Color3.fromRGB(31,193,180))
-  Assets.paddle(face,id); grip.Anchored=true
+  face:SetAttribute("HandleDirection",-1); Assets.paddle(face,id); grip.Anchored=true
  elseif item.category=="Wearables" then
   local folder=game:GetService("ReplicatedStorage"):FindFirstChild("ShopMannequins")
   if not folder and game:GetService("RunService"):IsServer() then

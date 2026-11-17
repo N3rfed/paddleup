@@ -12,7 +12,7 @@ function MainMenu.start(player,network)
  courtMusic.Looped=true; courtMusic.Volume=0.2
  courtMusic.Parent=game:GetService("SoundService")
  -- Current court sessions share the Classic/Arcade soundtrack.
- local musicModes={Practice=true,["1V1"]=true,["1V2"]=true,["2V2"]=true,Classic=true,Arcade=true,CLASSIC=true,ARCADE=true}
+ local musicModes={Practice=true,["1V1"]=true,["1V2"]=true,["2V2"]=true,Classic=true,Arcade=true,Chaos=true,CLASSIC=true,ARCADE=true}
  local cream=Color3.fromRGB(246,246,255)
  local dark=Color3.fromRGB(27,27,64)
  local gold=Color3.fromRGB(80,232,255)

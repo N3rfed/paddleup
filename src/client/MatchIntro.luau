@@ -74,7 +74,7 @@ end
 function MatchIntro.ensurePaddle(model)
  local face=model:FindFirstChild("PaddleFace")
  if face then
-  face.Transparency=0
+  face.Transparency=face:FindFirstChild("ShopPaddleArt") and 1 or 0
   local grip=model:FindFirstChild("PaddleGrip"); if grip then grip.Transparency=0 end
   return face
  end
@@ -89,6 +89,7 @@ function MatchIntro.ensurePaddle(model)
  part("PaddleGrip",Vector3.new(0.3,1.2,0.3),CFrame.new(0,-0.7,0),Color3.fromRGB(35,47,52))
  face=part("PaddleFace",Vector3.new(1.65,2,0.3),CFrame.new(0,-2,0),Color3.fromRGB(31,193,180))
  face:SetAttribute("Paddle",true)
+ require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("CosmeticAssets")).paddle(face,nil)
  return face
 end
 -- Pose only the presentation clones; live players keep their gameplay controls.
@@ -172,7 +173,9 @@ function MatchIntro.updateScenes(scene)
      local model=staticClone(source)
      if model then
       if member.bot then
-       for _,piece in ipairs(model:GetDescendants()) do if piece:IsA("BasePart") then piece.Transparency=0 end end
+       for _,piece in ipairs(model:GetDescendants()) do
+        if piece:IsA("BasePart") then piece.Transparency=piece:FindFirstChild("ShopPaddleArt") and 1 or 0 end
+       end
       else MatchIntro.ensurePaddle(model) end
       local x=(index-(#shot.team+1)/2)*4.5
       local spot=origin+floor.CFrame.RightVector*x+Vector3.new(0,3,0)
@@ -287,7 +290,7 @@ function MatchIntro.createScreen(parent,data,userId)
  end
  label(canvas,"MatchFormat",#data.home.."V"..#data.away,760,71,400,136,100)
  local variant=data.variant or "Classic"
- local mode=variant=="Classic" and "NORMAL MODE" or string.upper(variant).." MODE"
+ local mode=variant=="Classic" and "NORMAL MODE" or (variant=="Chaos" and "ARCADE" or string.upper(variant)).." MODE"
  label(canvas,"Mode",(mode:gsub("([^ ])","%1 "):gsub(" $","")),655,207,610,31,24,Enum.FontWeight.Bold)
  image(canvas,"vsHomeFrame",269,62,362,98)
  image(canvas,"vsAwayFrame",1289,62,362,98)

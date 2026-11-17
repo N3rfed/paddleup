@@ -56,7 +56,7 @@ function Build.start(player,network)
  local panel=Instance.new("Frame",gui); panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5)
  panel.Name="BuildPanel"; panel.Size=UDim2.fromOffset(640,466); panel.BackgroundColor3=Color3.fromRGB(13,21,34); panel.Visible=false; round(panel)
  local scale=Instance.new("UIScale",panel)
- local heading=label(panel,"MY CHAOS POWERUPS",22); heading.Position=UDim2.fromOffset(24,20); heading.Size=UDim2.fromOffset(540,30); heading.TextXAlignment=Enum.TextXAlignment.Left; heading.Font=Enum.Font.GothamBold
+ local heading=label(panel,"MY ARCADE POWERUPS",22); heading.Position=UDim2.fromOffset(24,20); heading.Size=UDim2.fromOffset(540,30); heading.TextXAlignment=Enum.TextXAlignment.Left; heading.Font=Enum.Font.GothamBold
  local hint=label(panel,"These work automatically. No Q or E needed. They last for this match.",12)
  hint.Position=UDim2.fromOffset(24,56); hint.Size=UDim2.new(1,-48,0,22); hint.TextXAlignment=Enum.TextXAlignment.Left; hint.TextColor3=Color3.fromRGB(163,178,196)
  local close=Instance.new("TextButton",panel); close.Text="X"; close.TextSize=18; close.TextColor3=Color3.new(1,1,1)

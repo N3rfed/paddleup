@@ -13,7 +13,7 @@ return function(Flow)
  local other={DisplayName="Other Player"}
  local ok,result=pcall(function()
   Flow.start(self,network,panel,status)
-  assert(panel:FindFirstChild("Classic") and panel:FindFirstChild("Arcade") and panel:FindFirstChild("Chaos"),"Mode comes first")
+  assert(panel:FindFirstChild("Classic") and panel:FindFirstChild("Arcade") and not panel:FindFirstChild("Chaos"),"Mode comes first")
   assert(not panel:FindFirstChild("1V1"),"Player counts are on the next screen")
   local now=workspace:GetServerTimeNow()
   local data={stage="Setup",mode="Classic",format="1V1",count=2,required=2,endsAt=now+15,
@@ -35,11 +35,9 @@ return function(Flow)
   assert(not moon.Voters:FindFirstChild("Other Player"),"Departed voters are removed")
   table.insert(data.roster,1,otherVote); data.counts.Moon=2; receive(data)
   assert(not panel:FindFirstChild("LowGravity"),"Classic has no modifier")
-  data.mode="Arcade"; receive({stage="Cancelled"}); receive(data)
-  assert(panel.LowGravity.Selectable,"Every Arcade player can toggle their modifier vote")
   data.mode="Chaos"; data.modifier="LowGravity"; data.roster[2].modifier="LowGravity"
   receive({stage="Cancelled"}); receive(data)
-  assert(not panel.LowGravity.Selectable and panel.LowGravity.Title.Text:find("ON",1,true),"Chaos modifier stays required")
+  assert(not panel.LowGravity.Selectable and panel.LowGravity.Title.Text:find("ON",1,true),"Renamed Arcade retains required Low Gravity")
   data.stage="Reveal"; data.candidates={"Rooftop","Moon"}; data.map="Moon"; data.revealAt=now; data.revealEndsAt=now+4
   receive(data)
   assert(not panel.Moon.Selectable and not panel.Rooftop.Selectable,"Reveal locks map inputs")

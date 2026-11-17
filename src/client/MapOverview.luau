@@ -85,7 +85,7 @@ function Overview.start(player,network)
   if fadeTween then fadeTween:Cancel(); fadeTween=nil end
   gui.Enabled=true; heading.Visible=true; sub.Visible=true
   heading.Text=map.title; heading.TextColor3=map.accent
-  sub.Text=(data.variant=="Chaos" and "CHAOTIC" or "CLASSIC").." / "..data.format:gsub("V","v").." / "..map.tagline
+  sub.Text=(data.variant=="Chaos" and "ARCADE" or "CLASSIC").." / "..data.format:gsub("V","v").." / "..map.tagline
   savedFov=workspace.CurrentCamera and workspace.CurrentCamera.FieldOfView
   RunService:BindToRenderStep(binding,Enum.RenderPriority.Last.Value+10,function()
    if not active or active.loading then return end

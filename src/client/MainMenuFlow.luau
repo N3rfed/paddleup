@@ -1,4 +1,5 @@
 local Flow={}
+local function modeName(mode) return mode=="Chaos" and "Arcade" or mode end
 local Art=require(script.Parent:WaitForChild("MenuArt"))
 local Thumbnail=require(script.Parent:WaitForChild("MapThumbnail"))
 function Flow.start(player,network,panel,status)
@@ -194,7 +195,7 @@ function Flow.start(player,network,panel,status)
   if buttons.LowGravity then
    local modifier=stage=="Reveal" and group.modifier or (own and own.modifier or group.modifier)
    buttons.LowGravity.Title.Text="LOW GRAVITY  /  "..(modifier=="LowGravity" and "ON" or "OFF")
-   buttons.LowGravity.Detail.Text=stage=="Reveal" and "Match setting" or (mode=="Chaos" and "Always on in Chaos" or "Toggle before choosing a map")
+   buttons.LowGravity.Detail.Text=stage=="Reveal" and "Match setting" or "Always on in Arcade"
    buttons.LowGravity.Active=stage=="Setup" and mode=="Arcade"; buttons.LowGravity.Selectable=buttons.LowGravity.Active
   end
   status.Text=mode=="Arcade" and "Choose Low Gravity before picking your map."
@@ -212,17 +213,17 @@ function Flow.start(player,network,panel,status)
    if marker then marker.BackgroundColor3=index<=current and cyan or Color3.fromRGB(60,61,96) end
   end
   if heading then heading.Text=stage=="Modes" and "LET'S PLAY!" or stage=="Players" and "PICK YOUR MATCH!" or nextView=="Vote" and "PICK A COURT!" or "FINDING PLAYERS" end
-  if step then step.Text=mode and (string.upper(mode)..(format and " / "..format or "")) or "CHOOSE A MODE" end
+  if step then step.Text=mode and (string.upper(modeName(mode))..(format and " / "..format or "")) or "CHOOSE A MODE" end
   if stage=="Modes" then
    status.Text=""
-   for index,item in ipairs({{"Classic","Standard rules",cyan},{"Arcade","Low Gravity option",Color3.fromRGB(169,151,255)},{"Chaos","Powerups on!",pink}}) do
-    local card=button(item[1],string.upper(item[1]),item[2],120+(index-1)*100,function() mode=item[1]; stage="Players"; render() end,true,item[3],88)
+   for index,item in ipairs({{"Classic","Standard rules",cyan},{"Chaos","Powerups on!",pink}}) do
+    local card=button(modeName(item[1]),string.upper(modeName(item[1])),item[2],120+(index-1)*100,function() mode=item[1]; stage="Players"; render() end,true,item[3],88)
     local art=gameTile(card,item[1],item[3])
     art.Position=UDim2.fromOffset(214,0); art.Size=UDim2.fromOffset(150,88)
     card.Title.TextSize=26; card.Title.Position=UDim2.fromOffset(18,13); card.Title.Size=UDim2.fromOffset(190,34)
     card.Detail.Position=UDim2.fromOffset(18,50); card.Detail.Size=UDim2.fromOffset(190,24); card.Detail.TextSize=13
    end
-   button("Spectate","WATCH","Spectate a match",420,function() network.Session:FireServer("Spectate") end,true,cyan,58)
+   button("Spectate","WATCH","Spectate a match",320,function() network.Session:FireServer("Spectate") end,true,cyan,58)
   elseif stage=="Players" then
    status.Text=""
    for index,item in ipairs({{"Practice","Warm up your shots"},{"1V1","Singles"},{"1V2","One against two"},{"2V2","Doubles"}}) do
@@ -239,7 +240,7 @@ function Flow.start(player,network,panel,status)
    end
    button("Back","BACK","Choose another mode",408,function() stage="Modes"; render() end,true,cyan,58)
   elseif stage=="Queued" or stage=="Joining" then
-   status.Text=stage=="Joining" and "Joining queue..." or mode.." / "..format.." / Waiting for players and an available court."
+   status.Text=stage=="Joining" and "Joining queue..." or modeName(mode).." / "..format.." / Waiting for players and an available court."
    local count=text(panel,"QueueCount",stage=="Joining" and "CONNECTING..." or group.count.." / "..group.required.." PLAYERS",190,64,30,cyan)
    table.insert(controls,count)
    button("CancelQueue","LEAVE QUEUE","Return to game modes",350,function() queue:FireServer("Cancel") end,true,pink)
@@ -261,7 +262,7 @@ function Flow.start(player,network,panel,status)
    end
    local footerY=416
    if mode~="Classic" then
-    button("LowGravity","",mode=="Chaos" and "Required for Chaos" or "Your modifier vote / majority wins",footerY,function()
+    button("LowGravity","","Required for Arcade",footerY,function()
      local own=ownVote(); local modifier=own and own.modifier or "None"
      queue:FireServer("Vote",nil,modifier=="LowGravity" and "None" or "LowGravity")
     end,stage=="Setup" and mode=="Arcade",cyan)

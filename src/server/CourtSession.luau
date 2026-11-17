@@ -284,6 +284,7 @@ end
 local botBody=botPart("Body",Vector3.new(2.4,2.6,1.4),Color3.fromRGB(240,135,104))
 local botHead=botPart("Head",Vector3.new(1.5,1.5,1.5),Color3.fromRGB(233,227,209)); botHead.Shape=Enum.PartType.Ball
 local botPaddle=botPart("Paddle",Vector3.new(1.5,2.2,0.3),Color3.fromRGB(35,193,182))
+require(ReplicatedStorage.Shared.CosmeticAssets).paddle(botPaddle,nil)
 local botLegs={botPart("Left leg",Vector3.new(0.8,2,0.8),Color3.fromRGB(35,55,63)),botPart("Right leg",Vector3.new(0.8,2,0.8),Color3.fromRGB(35,55,63))}
 local tag=Instance.new("BillboardGui",botHead); tag.Size=UDim2.fromOffset(180,35); tag.StudsOffset=Vector3.new(0,2,0); tag.AlwaysOnTop=true
 local tagText=Instance.new("TextLabel",tag); tagText.Size=UDim2.fromScale(1,1); tagText.BackgroundTransparency=1; tagText.Text="PRACTICE PARTNER"; tagText.TextColor3=Color3.fromRGB(249,235,204); tagText.Font=Enum.Font.GothamBold; tagText.TextSize=12
@@ -649,6 +650,7 @@ local function paddle(character)
  attach("PaddleGrip",Vector3.new(0.3,1.2,0.3),CFrame.new(0,-0.7,0),Color3.fromRGB(35,47,52))
  local face=attach("PaddleFace",Vector3.new(1.65,2,0.3),CFrame.new(0,-2,0),Color3.fromRGB(31,193,180))
  face:SetAttribute("Paddle",true)
+ require(ReplicatedStorage.Shared.CosmeticAssets).paddle(face,nil)
 end
 local function spawnCharacter(p,c)
  local d=users[p]; if not d then return end
@@ -737,7 +739,7 @@ local function connectSession(p,mode,variant,environment,modifier,seat)
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
  if mode~="Lobby" and mode~="Spectate" and not MatchSetup.modes[variant] then
-  session:FireClient(p,false,"Choose Classic, Arcade, or Chaos first."); return
+  session:FireClient(p,false,"Choose Classic or Arcade first."); return
  end
  environment=environment or (courtMode and environments.active or "Rooftop")
  if mode~="Lobby" and mode~="Spectate" and not CourtEnvironments.valid(environment) then
@@ -1346,7 +1348,12 @@ connect(RunService.Heartbeat,function(dt)
   end
  end
  local hasBot=courtMode=="Practice" and occupant(1)~=nil and occupant(-1)==nil
- for _,p in ipairs(bot:GetChildren()) do if p:IsA("BasePart") then p.Transparency=hasBot and 0 or 1 end end
+ for _,p in ipairs(bot:GetDescendants()) do
+  if p:IsA("BasePart") then
+   -- The paddle root carries gameplay bounds; only its model pieces render.
+   p.Transparency=(hasBot and p~=botPaddle) and 0 or 1
+  end
+ end
  tag.Enabled=hasBot
  if not paused and not draft and not draftDue and not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
  if courtMode=="Practice" then
