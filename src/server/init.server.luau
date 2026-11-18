@@ -8,6 +8,7 @@ game:SetAttribute("PaddleUpServerInitialized",true)
 game:GetService("StarterPlayer").EnableMouseLockOption=false
 local root=require(script:WaitForChild("World")).build()
 local lobbyRoot=require(script:WaitForChild("Lobby")).build()
+require(script.LobbyDoor).start(lobbyRoot)
 require(script:WaitForChild("DayNightCycle")).start()
 local template=root:Clone(); template.Parent=nil
 local folder=ReplicatedStorage:FindFirstChild("PaddleUp") or Instance.new("Folder")

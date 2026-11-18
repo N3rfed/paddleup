@@ -35,7 +35,7 @@ function Shop.start(player,network)
  local panel=box(overlay,"GoodsBoutique",dark); panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5)
  local panelScale=Instance.new("UIScale"); panelScale.Parent=panel
  local outline=Instance.new("UIStroke"); outline.Color=gold; outline.Transparency=0.4; outline.Parent=panel
- local brand=label(panel,"Brand","P A D D L E U P   /   PRO SHOP",12,gold)
+ local brand=label(panel,"Brand","PRO SHOP",12,gold)
  local title=label(panel,"Title","Court-ready. Club-approved.",26,ivory)
  local balance=label(panel,"Currency","SPENDABLE XP  /  LOADING",18,mint)
  local progression=label(panel,"LifetimeXP","Loading club profile...",11,muted)

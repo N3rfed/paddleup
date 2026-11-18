@@ -1,10 +1,72 @@
 -- Static scenery around the lobby: shared construction, no running decor scripts or lights.
 local CitySurroundings={}
 function CitySurroundings.build(lobby)
- if workspace:FindFirstChild("LobbyCity") then return lobby end
  local floor=lobby.Architecture["Cream marble floor"]
  local base=workspace:WaitForChild("Baseplate")
  local groundY=base.Position.Y+base.Size.Y/2
+ -- The two rooftop venues predate the street grade. Extend only the
+ -- supporting walls downward so the decks and their gameplay stay aligned.
+ local function groundTower(model,name)
+  local wall=model and model:FindFirstChild(name)
+  if not wall then return end
+  local gap=wall.Position.Y-wall.Size.Y/2-groundY
+  if gap>0.001 then
+   wall.Size+=Vector3.yAxis*gap
+   wall.Position-=Vector3.yAxis*(gap/2)
+  end
+ end
+ groundTower(workspace:FindFirstChild("PaddleUp"),"Apartment tower")
+ groundTower(workspace:FindFirstChild("SkylineLobby"),"Lobby tower")
+ local function openBlock(district)
+  local origin=Vector3.new(floor.Position.X,groundY,floor.Position.Z)
+  -- Fit the entire retail frontage, including its apron, between the
+  -- west sidewalk and the adjacent apartment lot. Keep its base at street grade.
+  local retail=district["Front commercial block"]
+  local body=retail["Concrete structure"]
+  if body.Size.X>61 then
+   retail:ScaleTo(retail:GetScale()*60/body.Size.X)
+   local target=origin+Vector3.new(-68,body.Size.Y/2,215)
+   retail:PivotTo(retail:GetPivot()+(target-body.Position))
+  end
+  -- Legacy skyline windows are separate parts, so move each facade with
+  -- its tower when setting it back from the entrance street and sidewalks.
+  local skyline=workspace.PaddleUp:GetChildren()
+  for _,tower in ipairs(skyline) do
+   if tower.Name~="City tower" then continue end
+   local offset=tower.Position-origin
+   local dz=offset.Z-104
+   local setback=17+tower.Size.Z/2-math.abs(dz)
+   if setback<=0.001 or offset.X< -120 or offset.X>205 then continue end
+   local shift=Vector3.zAxis*math.sign(dz)*setback
+   for _,window in ipairs(skyline) do
+    if window.Name=="City window ribbon" then
+     local relative=window.Position-tower.Position
+     if math.abs(relative.X)<=tower.Size.X/2+0.12 and math.abs(relative.Z)<=tower.Size.Z/2+0.12 then
+      window.Position+=shift
+     end
+    end
+   end
+   tower.Position+=shift
+  end
+  local details=district:FindFirstChild("Concrete tower details")
+  for _,band in ipairs(details:GetChildren()) do
+   if band.Name=="Concrete base course" and band.Size.X>180 and band.Position.Z>origin.Z then
+    local half=(band.Size.X-12)/2
+    local center=band.Position
+    band.Size=Vector3.new(half,band.Size.Y,band.Size.Z)
+    band.Position=center+Vector3.new(6+half/2,0,0)
+    local opposite=band:Clone()
+    opposite.Position=center-Vector3.new(6+half/2,0,0); opposite.Parent=details
+   end
+  end
+  require(script.Parent.LobbyStreet).build(district,origin)
+ end
+ local saved=workspace:FindFirstChild("LobbyCity")
+ if saved then
+  openBlock(saved)
+  require(script.Parent.CityValley).build(saved,lobby,base)
+  return lobby
+ end
  local city=workspace:WaitForChild("PaddleUp")
  local concrete=city:FindFirstChild("Balcony slab")
  local tower=city:FindFirstChild("City tower")
@@ -24,7 +86,6 @@ function CitySurroundings.build(lobby)
   return part(parent,name,size,center+Vector3.new(x,y,z),color,material,collide)
  end
  local stone=concrete.Color
- local asphalt=Color3.fromRGB(47,52,60)
  local metal=Color3.fromRGB(65,75,84)
  local pavement=Color3.fromRGB(139,144,145)
  -- Tile beyond the original baseplate so the lobby never overlooks its nearby edge.
@@ -35,20 +96,6 @@ function CitySurroundings.build(lobby)
     part(ground,"City ground extension",Vector3.new(base.Size.X,base.Size.Y,base.Size.Z),
      base.Position+Vector3.new(x*base.Size.X,0,z*base.Size.Z),base.Color,base.Material)
    end
-  end
- end
- localPart(ground,"West street",Vector3.new(28,0.2,760),-120,groundY+0.1,10,asphalt,Enum.Material.Asphalt)
- localPart(ground,"Connecting street",Vector3.new(410,0.2,20),-90,groundY+0.1,104,asphalt,Enum.Material.Asphalt)
- localPart(ground,"West sidewalk",Vector3.new(12,0.5,760),-100,groundY+0.25,10,pavement,Enum.Material.Concrete)
- localPart(ground,"Opposite sidewalk",Vector3.new(14,0.5,760),-141,groundY+0.25,10,pavement,Enum.Material.Concrete)
- localPart(ground,"Lobby forecourt",Vector3.new(184,0.5,15),0,groundY+0.25,86.5,pavement,Enum.Material.Concrete)
- localPart(ground,"North curb",Vector3.new(410,0.5,3),-90,groundY+0.25,115.5,pavement,Enum.Material.Concrete)
- localPart(ground,"East sidewalk",Vector3.new(10,0.5,158),99,groundY+0.25,0,pavement,Enum.Material.Concrete)
- -- Sparse road markings stop before the junction.
- for z=-330,330,32 do
-  if math.abs(z-104)>22 then
-   localPart(ground,"Lane marking",Vector3.new(0.2,0.02,10),-120,groundY+0.21,z,
-    Color3.fromRGB(204,201,181),Enum.Material.SmoothPlastic,false)
   end
  end
  -- Concrete additions sit outside the retained windows and join the grounded foundation.
@@ -156,7 +203,9 @@ function CitySurroundings.build(lobby)
   {-15,640,160,100,190,"Distant north apartments"},
  }
  for index,spec in ipairs(blocks) do building(spec,index) end
+ openBlock(district)
  district.Parent=workspace
+ require(script.Parent.CityValley).build(district,lobby,base)
  return lobby
 end
 return CitySurroundings

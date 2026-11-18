@@ -92,7 +92,7 @@ function Club.buildHall()
  local title=fixture("Hall of Fame fascia",Vector3.new(64,2.8,0.15),Vector3.new(0,34,22.8),P.emerald)
  label(title,"TOP PLAYERS  /  HALL OF FAME",P.ivory)
  local sub=fixture("Tournament subtitle",Vector3.new(47,1.2,0.1),Vector3.new(0,12.4,24.25),P.emerald)
- label(sub,"PADDLEUP  /  CHAMPIONS GALLERY",P.gold)
+ label(sub,"CHAMPIONS GALLERY",P.gold)
  -- Reusable podium blueprint; every copy shares the same layout and court-facing labels.
  local template=Instance.new("Model"); template.Name="Ranking podium"
  part(template,"Marble podium",Vector3.new(13,2,9),CFrame.new(0,1,0),P.ivory,Enum.Material.Marble)

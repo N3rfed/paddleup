@@ -275,20 +275,9 @@ local powerups=require(script.Parent:WaitForChild("CourtPickups")).new(world,fun
  player:SetAttribute("PowerupsCollected",(player:GetAttribute("PowerupsCollected") or 0)+1)
  feedback:FireAllClients({userId=player.UserId,text="POWERUP COLLECTED / TEST",tone="good"},"playerText")
 end)
-local bot=Instance.new("Model")
-bot.Name="Practice Partner"; bot.Parent=world
-local function botPart(name,size,color)
- local p=Instance.new("Part")
- p.Name=name; p.Size=size; p.Color=color; p.Anchored=true; p.CanCollide=false; p.Parent=bot
- return p
-end
-local botBody=botPart("Body",Vector3.new(2.4,2.6,1.4),Color3.fromRGB(240,135,104))
-local botHead=botPart("Head",Vector3.new(1.5,1.5,1.5),Color3.fromRGB(233,227,209)); botHead.Shape=Enum.PartType.Ball
-local botPaddle=botPart("Paddle",Vector3.new(1.5,2.2,0.3),Color3.fromRGB(35,193,182))
-require(ReplicatedStorage.Shared.CosmeticAssets).paddle(botPaddle,nil)
-local botLegs={botPart("Left leg",Vector3.new(0.8,2,0.8),Color3.fromRGB(35,55,63)),botPart("Right leg",Vector3.new(0.8,2,0.8),Color3.fromRGB(35,55,63))}
-local tag=Instance.new("BillboardGui",botHead); tag.Size=UDim2.fromOffset(180,35); tag.StudsOffset=Vector3.new(0,2,0); tag.AlwaysOnTop=true
-local tagText=Instance.new("TextLabel",tag); tagText.Size=UDim2.fromScale(1,1); tagText.BackgroundTransparency=1; tagText.Text="PRACTICE PARTNER"; tagText.TextColor3=Color3.fromRGB(249,235,204); tagText.Font=Enum.Font.GothamBold; tagText.TextSize=12
+local partner=require(script.Parent.PracticePartner).new(world)
+local bot=partner.model
+partner:pose(Vector3.new(botX,181.24+HEIGHT,botZ),0,0,0,1)
 local function teamPlayers(side)
  local team={}
  for p,d in pairs(users) do if d.side==side then table.insert(team,p) end end
@@ -870,6 +859,7 @@ end
 -- No delayed tasks: one countdown is advanced by the authoritative heartbeat.
 local function autoBotServe()
  local config=PracticeSession.Profiles[practice.difficulty]
+ botSwingAt=os.clock()+0.28
  serveReady=false; serveDeadline=nil; ball.last=servingSide; ball.shots=0
  ball.speed=Rules.servePower(1)
  local from=Rules.heldBallPosition(bot) or Vector3.new(serveX,(184+HEIGHT),servingSide*46)
@@ -1290,7 +1280,9 @@ connect(RunService.Heartbeat,function(dt)
  if not paused and courtVariant=="Chaos" then
   local participants={}
   for p,d in pairs(users) do if d.side~=0 then table.insert(participants,{player=p,side=d.side}) end end
-  if courtMode=="Practice" then table.insert(participants,{player="PracticeBot",side=-1}) end
+  if courtMode=="Practice" and not occupant(-1) then
+   table.insert(participants,{player="PracticeBot",side=-1,position=Vector3.new(botX,0,botZ),target=botTarget})
+  end
   local live=ball.live and now>=introUntil and not draft and not draftDue
   arcade:chaosUpdate(math.min(dt,0.1),now,participants,world,live)
   if live then arcade:chaosStep(math.min(dt,0.1),now,participants,world) end
@@ -1332,7 +1324,11 @@ connect(RunService.Heartbeat,function(dt)
     movement*=0.45+0.55*progress*progress*(3-2*progress)
    end
    local sliding,slideDirection=false,nil
-   if d.side~=0 then sliding,slideDirection=arcade:touch(p,d.side,r.Position,now) end
+   if d.side~=0 then
+    local triggered
+    sliding,slideDirection,triggered=arcade:touch(p,d.side,r.Position,now,h.FloorMaterial~=Enum.Material.Air)
+    if triggered then p.Character:SetAttribute("CourtSlipStarted",workspace:GetServerTimeNow()) end
+   end
    local stunned=now<effect.stunUntil or sliding
    h.WalkSpeed=(stunned or d.mode=="Spectate" or (d.side~=0 and (now<introUntil or loadoutPending or draft~=nil))) and 0 or (now<d.slowUntil and SLOWED_SPEED or WALK_SPEED)*movement
    p:SetAttribute("PowerupStunned",stunned)
@@ -1388,13 +1384,7 @@ connect(RunService.Heartbeat,function(dt)
   end
  end
  local hasBot=courtMode=="Practice" and occupant(1)~=nil and occupant(-1)==nil
- for _,p in ipairs(bot:GetDescendants()) do
-  if p:IsA("BasePart") then
-   -- The paddle root carries gameplay bounds; only its model pieces render.
-   p.Transparency=(hasBot and p~=botPaddle) and 0 or 1
-  end
- end
- tag.Enabled=hasBot
+ partner:show(hasBot)
  if not paused and not draft and not draftDue and not ball.live and not serveReady and now>=nextServe and occupant(1) then prepareServe() end
  if courtMode=="Practice" then
   local key=hasBot and serveReady and servingSide==-1 and serverId==0 and tostring(practiceServeSerial)..":"..tostring(serveX) or nil
@@ -1528,7 +1518,13 @@ connect(RunService.Heartbeat,function(dt)
   end
   local delta=botTarget-Vector3.new(botX,0,botZ)
   local move=math.min(delta.Magnitude,math.min(dt,0.1)*(now<botSlowUntil and SLOWED_SPEED or config.move)*(Comeback.active(comeback,-1) and Comeback.MOVE or 1)*arcade:speed("PracticeBot",now))
-  local botSliding=arcade:touch("PracticeBot",-1,Vector3.new(botX,(184+HEIGHT),botZ),now)
+  local receiving=ball.last==1 and ball.p.Z<0
+  local botSliding,slideDirection=arcade:touch("PracticeBot",-1,Vector3.new(botX,(184+HEIGHT),botZ),now,receiving)
+  if botSliding then
+   local drift=math.min(dt,0.1)*7
+   botX=math.clamp(botX+slideDirection.X*drift,-30,30)
+   botZ=math.clamp(botZ+slideDirection.Z*drift,-Rules.BACK_LIMIT,-2.5)
+  end
   if now<botStunUntil or botSliding then move=0 end
   botMoving=move>0.01
   botStride+=move*0.65
@@ -1537,7 +1533,7 @@ connect(RunService.Heartbeat,function(dt)
   local rootFrame=CFrame.lookAt(rootPosition,rootPosition+Vector3.new(0,0,1))
   local center=Vector3.new(botX,(184.5+HEIGHT),botZ+1)
   local distance=(ball.p-center).Magnitude
-  if ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
+  if not botSliding and ball.last==1 and now>=botReactAt and now>=botSwingAt and not botAttempted
    and ball.p.Z< -2 and distance<6.5*(Comeback.active(comeback,-1) and Comeback.HIT or 1)*arcade:reach("PracticeBot",now) and Rules.contactInFront(ball.p,rootFrame)
    and ball.p.Y<(188+HEIGHT) and (ball.v.Y<0 or ball.bounces>0)
    and not Rules.returnFault(ball.bounces,ball.shots,Rules.kitchenHitFault(rootPosition,true,false)) then
@@ -1567,13 +1563,11 @@ connect(RunService.Heartbeat,function(dt)
    end
   end
  end
- botBody.Position=Vector3.new(botX,(184.2+HEIGHT),botZ)
- botHead.Position=Vector3.new(botX,(186.3+HEIGHT),botZ)
- botPaddle.Size=Vector3.new(1.5,2.2,0.3)*arcade:reach("PracticeBot",now)
- botPaddle.CFrame=CFrame.new(botX-1.8,(184.4+HEIGHT),botZ+1)*CFrame.Angles(0,0,0.2)
- for i,p in ipairs(botLegs) do
-  local stride=botMoving and math.sin(botStride)*(i==1 and 1 or -1) or 0
-  p.CFrame=CFrame.new(botX+(i==1 and -0.6 or 0.6),(182.4+HEIGHT),botZ+stride*0.45)*CFrame.Angles(stride*0.4,0,0)
+ local botSlip=arcade:effect("PracticeBot","slide",now)
+ local stumble=botSlip and math.sin(now*14) or 0
+ if hasBot then
+  local swing=math.sin(math.pi*math.clamp((botSwingAt-now)/0.28,0,1))
+  partner:pose(Vector3.new(botX,181.24+HEIGHT,botZ),botMoving and math.sin(botStride) or 0,stumble,swing,arcade:reach("PracticeBot",now))
  end
  if serveReady and not paused then
   local server=serverId and Players:GetPlayerByUserId(serverId)
@@ -1620,7 +1614,7 @@ connect(RunService.Heartbeat,function(dt)
    p:SetAttribute("ComebackBoost",Comeback.active(comeback,d.side))
    state:FireClient(p,{
     matchSessionId=p:GetAttribute("MatchSessionId"),
-    practice=practiceState,practicePaused=paused,
+    practice=practiceState,practicePaused=paused,practiceBotSlipping=hasBot and botSlip,
     arcade=d.side~=0 and (courtVariant=="Arcade" or courtVariant=="Chaos") and arcade:snapshot(p,now) or nil,curveX=ball.curveX,
     comeback=Comeback.active(comeback,d.side),
     powerupEffects=activeEffects,powerupProgress={tension=d.powerupRally.tension,perfectChain=d.powerupRally.perfectChain,

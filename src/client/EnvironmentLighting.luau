@@ -10,19 +10,33 @@ function EnvironmentLighting.start(player)
  local connections={}
  local lobbySaved={}
  local lobbyActive=false
- local lobbyProfile={Brightness=1.7,ExposureCompensation=-0.25,
-  Ambient=Color3.fromRGB(110,116,130),OutdoorAmbient=Color3.fromRGB(125,130,145),
-  EnvironmentDiffuseScale=0.4,EnvironmentSpecularScale=0.5}
+ local lobbyProfile={ClockTime=13,Brightness=2.05,ExposureCompensation=-0.12,
+  Ambient=Color3.fromRGB(141,146,153),OutdoorAmbient=Color3.fromRGB(159,165,171),
+  ColorShift_Top=Color3.new(),ColorShift_Bottom=Color3.new(),
+  EnvironmentDiffuseScale=0.55,EnvironmentSpecularScale=0.35}
+ local daylightAir={Color=Color3.fromRGB(207,225,244),Decay=Color3.fromRGB(156,175,196),
+  Density=0.18,Haze=0.6,Glare=0.08}
  local function setLobby(enabled)
   if enabled==lobbyActive then return end
   lobbyActive=enabled
   local rooftop=Lighting:FindFirstChild("RooftopProfile")
-  if enabled then
-   for property,value in pairs(lobbyProfile) do
-    lobbySaved[property]=Lighting[property]; Lighting[property]=value
+  local function apply(instance,profile)
+   if not instance then return end
+   lobbySaved[instance]={}
+   for property,value in pairs(profile) do
+    lobbySaved[instance][property]=instance[property]; instance[property]=value
    end
+  end
+  if enabled then
+   apply(Lighting,lobbyProfile)
+   apply(Lighting:FindFirstChildOfClass("Atmosphere"),daylightAir)
   else
-   for property,value in pairs(lobbySaved) do Lighting[property]=(rooftop and rooftop:GetAttribute(property)) or value end
+   for instance,properties in pairs(lobbySaved) do
+    for property,value in pairs(properties) do
+     local key=instance==Lighting and property or "Atmosphere"..property
+     instance[property]=(rooftop and rooftop:GetAttribute(key)) or value
+    end
+   end
    table.clear(lobbySaved)
   end
  end

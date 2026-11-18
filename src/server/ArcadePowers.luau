@@ -2,6 +2,41 @@
 local Deck=require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ArcadeDeck"))
 local Arcade={}
 Arcade.__index=Arcade
+local PRACTICE_SLIP_WARNING=0.65
+-- Keep one invisible root for placement, expiry and single-use cleanup.
+local function hazardModel(world,name,id,position,width,depth)
+ local root=Instance.new("Part")
+ root.Name=name; root.Size=Vector3.new(width,0.1,depth); root.Position=position
+ root.Transparency=1; root.Anchored=true; root.CanCollide=false; root.CanTouch=false; root.CanQuery=false
+ local art=Instance.new("Model"); art.Name="HazardModel"; art.Parent=root
+ local function oval(label,size,x,y,z,yaw,color,transparency)
+  local piece=Instance.new("Part"); piece.Name=label
+  piece.Size=Vector3.one; piece.Color=color; piece.Transparency=transparency or 0
+  local mesh=Instance.new("SpecialMesh"); mesh.MeshType=Enum.MeshType.Sphere
+  mesh.Scale=size; mesh.Parent=piece
+  piece.Material=Enum.Material.SmoothPlastic; piece.Anchored=true
+  piece.CanCollide=false; piece.CanTouch=false; piece.CanQuery=false
+  piece.CFrame=CFrame.new(position+Vector3.new(x,y,z))*CFrame.Angles(0,yaw,0); piece.Parent=art
+ end
+ local green=Color3.fromRGB(90,151,44)
+ if id=="dropPickles" then
+  oval("Curved dill",Vector3.new(1.24,0.94,2.65),0,0.42,0,0.18,green)
+  oval("Tapered tip",Vector3.new(0.92,0.75,1.45),0.37,0.39,0.92,0.48,green)
+  for i=1,7 do
+   oval("Rind bump",Vector3.new(0.22,0.15,0.27),math.sin(i*2)*0.4,0.79-math.abs(i-4)*0.035,(i-4)*0.32,0,Color3.fromRGB(133,177,65))
+  end
+ else
+  local brine=Color3.fromRGB(177,207,70)
+  oval("Puddle rim",Vector3.new(width,0.22,depth*0.88),0,0.09,0,0,Color3.fromRGB(225,241,112))
+  oval("Brine puddle",Vector3.new(width*0.92,0.24,depth*0.8),0,0.13,0,0,brine)
+  oval("Brine spill",Vector3.new(width*0.67,0.18,depth*0.6),width*0.1,0.08,depth*0.2,0.12,brine,0.08)
+  for i=-1,1 do
+   oval("Gloss streak",Vector3.new(width*0.07,0.06,depth*0.27),i*width*0.2,0.25,i*depth*0.13,0.38,Color3.fromRGB(248,251,195),0.1)
+  end
+ end
+ root.Parent=world
+ return root
+end
 function Arcade.new(random,height)
  return setmetatable({height=height or 0,random=random or Random.new(),players={},hazards={},zeroUntil=0,glowUntil=0},Arcade)
 end
@@ -156,11 +191,8 @@ function Arcade:activate(player,index,now,side,opponents,root,world,chaos)
  elseif card.id=="dropPickles" or card.id=="slipStream" then
   for i=1,(card.id=="dropPickles" and 3 or 1) do
    local position=Vector3.new(math.clamp(root.Position.X+(i-2)*6,-16,16),181.4+self.height,-side*self.random:NextNumber(12,32))
-   local part=Instance.new("Part"); part.Name=card.name; part.Anchored=true; part.CanCollide=false; part.CanTouch=false
-   part.Material=Enum.Material.Neon; part.Color=card.id=="dropPickles" and Color3.fromRGB(149,255,63) or Color3.fromRGB(255,221,60)
-   part.Size=card.id=="dropPickles" and Vector3.new(1.5,0.5,3) or Vector3.new(10,0.12,12)
-   part.Position=position; part.Transparency=card.id=="dropPickles" and 0.1 or 0.45; part.Parent=world
-   table.insert(self.hazards,{part=part,position=position,side=-side,expires=slot.activeUntil,kind=card.id,touched={}})
+   local part=hazardModel(world,card.name,card.id,position,card.id=="dropPickles" and 1.5 or 10,card.id=="dropPickles" and 3 or 12)
+   table.insert(self.hazards,{part=part,position=position,side=-side,expires=slot.activeUntil,kind=card.id})
   end
  end
  return card
@@ -184,16 +216,19 @@ function Arcade:heatTarget(player,now,opponentPositions,side)
  end
  return best
 end
-function Arcade:touch(key,side,position,now)
+function Arcade:touch(key,side,position,now,grounded)
  local effects=self:data(key).effects
- for _,hazard in ipairs(self.hazards) do
-  if now<hazard.expires and hazard.side==side and not hazard.touched[key] then
+ for index,hazard in ipairs(self.hazards) do
+  if grounded~=false and now>=(hazard.armsAt or -math.huge) and now<hazard.expires and hazard.side==side then
    local offset=Vector3.new(position.X-hazard.position.X,0,position.Z-hazard.position.Z)
    local inZone=hazard.halfSize and math.abs(offset.X)<=hazard.halfSize and math.abs(offset.Z)<=hazard.halfSize
     or not hazard.halfSize and offset.Magnitude<=Deck.HAZARD_RADIUS
    if inZone then
-    hazard.touched[key]=true; effects.slide=now+Deck.PICKLE_RECOVERY
+    table.remove(self.hazards,index)
+    hazard.part:Destroy()
+    effects.slide=now+Deck.PICKLE_RECOVERY
     effects.slideDirection=offset.Magnitude>0.1 and offset.Unit or Vector3.new(1,0,0)
+    return true,effects.slideDirection,true
    end
   end
  end
@@ -212,6 +247,10 @@ end
 -- Permanent levels remain between rallies; automatic hazards advance only in live play.
 function Arcade:chaosUpdate(dt,now,participants,world,live)
  self.chaosGravity=1
+ local practiceBot
+ for _,entry in ipairs(participants) do
+  if entry.player=="PracticeBot" then practiceBot=entry end
+ end
  for _,entry in ipairs(participants) do
   local data=self:data(entry.player)
   local values=Deck.chaosValues(data.levels)
@@ -224,21 +263,34 @@ function Arcade:chaosUpdate(dt,now,participants,world,live)
   for _,id in ipairs({"dropPickles","slipStream"}) do
    local level=data.levels[id] or 0
    if level==0 then continue end
-   local elapsed=(data.chaosTimers[id] or 0)+math.max(0,dt)
+   local practiceTarget=practiceBot and practiceBot.position and practiceBot.side~=entry.side
+   local previous=data.chaosTimers[id]
+   local elapsed=(previous or 0)+math.max(0,dt)
    local interval=id=="dropPickles" and values.pickleInterval or values.slipInterval
+   if practiceTarget then
+    data.practiceHazardSpawned=data.practiceHazardSpawned or {}
+    if not data.practiceHazardSpawned[id] then interval=1 end
+   end
    data.chaosTimers[id]=elapsed
    if elapsed<interval then continue end
    data.chaosTimers[id]=0
+   if practiceTarget then data.practiceHazardSpawned[id]=true end
    local count=id=="dropPickles" and values.pickleCount or 1
-   for _=1,count do
+   for index=1,count do
     local position=Vector3.new(self.random:NextNumber(-14,14),181.4+self.height,-entry.side*self.random:NextNumber(16,34))
-    local part=Instance.new("Part"); part.Name="Chaos "..Deck.find(id).name
-    part.Anchored=true; part.CanCollide=false; part.CanTouch=false; part.Material=Enum.Material.Neon
-    part.Color=id=="dropPickles" and Color3.fromRGB(149,255,63) or Color3.fromRGB(255,221,60)
-    part.Size=id=="dropPickles" and Vector3.new(1.5,0.5,3) or Vector3.new(values.slipSize,0.12,values.slipSize)
-    part.Position=position; part.Transparency=id=="dropPickles" and 0.1 or 0.45; part.Parent=world
+    if practiceTarget then
+     local center=practiceBot.position
+     local delta=(practiceBot.target or center)-center
+     local lead=id=="slipStream" and 8 or 3
+     if delta.Magnitude>0.01 then center+=delta.Unit*math.min(delta.Magnitude,lead) end
+     local x=math.clamp(center.X,-18,18)
+     local z=math.clamp(center.Z,-38,-3)
+     position=Vector3.new(math.clamp(x+(index-1)*3,-20,20),position.Y,z)
+    end
+    local part=hazardModel(world,"Chaos "..Deck.find(id).name,id,position,id=="dropPickles" and 1.5 or values.slipSize,id=="dropPickles" and 3 or values.slipSize)
     table.insert(self.hazards,{part=part,position=position,side=-entry.side,expires=now+6,kind=id,
-     halfSize=id=="slipStream" and values.slipSize/2 or nil,touched={}})
+     armsAt=practiceTarget and now+(id=="slipStream" and PRACTICE_SLIP_WARNING or 0.3) or nil,
+     halfSize=id=="slipStream" and values.slipSize/2 or nil})
    end
   end
  end
@@ -269,10 +321,8 @@ function Arcade:chaosStep(dt,now,participants,world)
   for _,side in ipairs({-1,1}) do
    for i=1,3 do
     local position=Vector3.new(self.random:NextNumber(-16,16),181.4+self.height,side*self.random:NextNumber(16,36))
-    local part=Instance.new("Part"); part.Name="ChaosPickle"; part.Anchored=true; part.CanCollide=false; part.CanTouch=false
-    part.Material=Enum.Material.Neon; part.Color=Color3.fromRGB(149,255,63)
-    part.Size=Vector3.new(1.5,0.5,3); part.Position=position; part.Rotation=Vector3.new(0,self.random:NextNumber(-90,90),0); part.Parent=world
-    table.insert(self.hazards,{part=part,position=position,side=side,expires=endsAt,kind="dropPickles",touched={}})
+    local part=hazardModel(world,"ChaosPickle","dropPickles",position,1.5,3)
+    table.insert(self.hazards,{part=part,position=position,side=side,expires=endsAt,kind="dropPickles"})
    end
   end
  end
@@ -288,7 +338,10 @@ function Arcade:pause(dt)
   for id,value in pairs(data.effects) do if type(value)=="number" and value>0 then data.effects[id]+=dt end end
   for _,slot in pairs(data.slots) do if slot.readyAt then slot.readyAt+=dt; slot.activeUntil+=dt end end
  end
- for _,hazard in ipairs(self.hazards) do hazard.expires+=dt end
+ for _,hazard in ipairs(self.hazards) do
+  hazard.expires+=dt
+  if hazard.armsAt then hazard.armsAt+=dt end
+ end
 end
 function Arcade:snapshot(player,now)
  self:empty(player,now)

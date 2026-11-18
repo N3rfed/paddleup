@@ -123,12 +123,6 @@ function Lobby.moveToFirstFloor(root)
     p.Position+=Vector3.new(0,doorHeight/2,0)
    end
   end
-  -- A supported landing reaches outside the building; each step is one stud.
-  local edge=center.Z+floor.Size.Z/2
-  piece(floor,"Entrance landing",Vector3.new(width, floor.Size.Y,12),
-   Vector3.new(center.X,floor.Position.Y,edge+6))
-  piece(floor,"Entrance step",Vector3.new(width,1,2),
-   Vector3.new(center.X,bottom+0.5,edge+13))
   root:SetAttribute("FirstFloorLobby",true)
  end
  local offset=Vector3.new(0,floor.Position.Y+floor.Size.Y/2-O.Y,0)
@@ -201,17 +195,6 @@ function Lobby.encloseBuilding(root)
     Vector3.new(x,floorY+windowHeight/2,z),slab.Color,Enum.Material.Concrete)
   end
  end
- local door=part("Fixed entrance doors",Vector3.new(12,12,0.6),
-  Vector3.new(center.X,floorY+6,frontZ),P.forest,Enum.Material.Metal)
- door.CollisionGroup="Default"
- for _,dx in ipairs({-6,0,6}) do
-  part("Entrance brass stile",Vector3.new(0.14,12,0.12),
-   door.Position+Vector3.new(dx,0,0.36),P.brass,Enum.Material.Metal,false)
- end
- for _,dx in ipairs({-0.7,0.7}) do
-  part("Fixed door handle",Vector3.new(0.16,2,0.3),
-   door.Position+Vector3.new(dx,0,-0.45),P.brass,Enum.Material.Metal,false)
- end
  -- Match the adjacent tower's floor rhythm, glazing tint and pale concrete bands.
  local spacing=12
  if neighbors then
@@ -281,19 +264,34 @@ function Lobby.integrateCity(root)
   if height>0 then
    support("Grounded building foundation",Vector3.new(mass.Size.X,height,mass.Size.Z),
     Vector3.new(floor.Position.X,ground.Position.Y+height/2,floor.Position.Z))
-   for _,name in ipairs({"Entrance landing","Entrance step"}) do
-    local p=shell:WaitForChild(name)
-    local underside=p.Position.Y-p.Size.Y/2
-    support(name.." foundation",Vector3.new(p.Size.X,underside-ground.Position.Y,p.Size.Z),
-     Vector3.new(p.Position.X,(underside+ground.Position.Y)/2,p.Position.Z))
+
+  end
+  root:SetAttribute("CityIntegrationVersion",1)
+ end
+ if root:GetAttribute("EntranceStairVersion")~=2 then
+  local shell=root.Architecture
+  -- Remove the sealed entrance and its raised platform in saved places too.
+  for _,container in ipairs({exterior,shell}) do
+   for _,part in ipairs(container:GetChildren()) do
+    if part.Name=="Fixed entrance doors" or part.Name=="Entrance brass stile" or part.Name=="Fixed door handle"
+     or part.Name=="Entrance stair" or part.Name:match("^Entrance landing") or part.Name:match("^Entrance step") then part:Destroy() end
    end
   end
-  local door=exterior:WaitForChild("Fixed entrance doors")
-  local glass=shell:WaitForChild("Arrival glazing")
-  door.Material=Enum.Material.Glass; door.Color=glass.Color
-  door.Transparency=0.65; door.Reflectance=0.08
-  door.Anchored=true; door.CanCollide=true; door.CollisionGroup="Default"
-  root:SetAttribute("CityIntegrationVersion",1)
+  local base=workspace:WaitForChild("Baseplate")
+  local sidewalkY=base.Position.Y+base.Size.Y/2+0.4
+  local floorY=floor.Position.Y+floor.Size.Y/2
+  local rise=floorY-sidewalkY
+  local count=math.max(1,math.ceil(rise/0.65))
+  local edge=floor.Position.Z+floor.Size.Z/2
+  for i=1,count do
+   local top=floorY-rise*(i-1)/count
+   local step=Instance.new("Part")
+   step.Name="Entrance stair"; step.Anchored=true; step.Material=floor.Material; step.Color=floor.Color
+   step.Size=Vector3.new(12,top-sidewalkY+0.4,11/count)
+   step.Position=Vector3.new(floor.Position.X,top-step.Size.Y/2,edge+(i-0.5)*step.Size.Z)
+   step.Parent=exterior
+  end
+  root:SetAttribute("EntranceStairVersion",2)
  end
  -- Both saved and newly generated lobbies derive arrival from the moved floor.
  Lobby.Spawn=CFrame.lookAt(
@@ -303,8 +301,24 @@ function Lobby.integrateCity(root)
  if spawn then spawn.CFrame=Lobby.Spawn-Vector3.new(0,3.5,0) end
  return root
 end
+-- Saved places reuse their lobby model, including the original desk lettering.
+function Lobby.updateSigns(root)
+ local reception=root["Check In"]
+ local signature=reception:FindFirstChild("Club signature")
+ if signature then signature:Destroy() end
+ local board=reception["Reception privacy screen"]
+ local sign=reception["Check in sign"]
+ sign.Size=Vector3.new(11,1.3,0.15)
+ sign.CFrame=board.CFrame*CFrame.new(0,board.Size.Y/2-1.15,(board.Size.Z+sign.Size.Z)/2)
+ sign.Transparency=1
+ local label=sign.SurfaceGui.TextLabel
+ label.Text="CHECK IN"; label.TextColor3=P.ivory
+ root.Shop["Boutique fascia lettering"].SurfaceGui.TextLabel.Text="XP SHOP"
+end
 -- Publish readiness only after the existing lobby and city setup has finished.
 local function configureLoading(root)
+ require(script.Parent.LobbyDoor).build(root)
+ Lobby.updateSigns(root)
  Lobby.applyPalette(root)
  root.ModelStreamingMode=Enum.ModelStreamingMode.Atomic
  root:SetAttribute("ExpectedDescendants",#root:GetDescendants())
@@ -426,8 +440,7 @@ function Lobby.build()
  decor(reception,"Desk brass plinth",Vector3.new(32.3,0.35,6.3),Vector3.new(0,0.2,8),P.brass,Enum.Material.Metal)
  part(reception,"Reception stone top",Vector3.new(33,0.35,7),Vector3.new(0,4.7,8),P.linen,Enum.Material.Marble)
  part(reception,"Reception privacy screen",Vector3.new(18,8,0.6),Vector3.new(0,4,2.5),P.walnut,Enum.Material.Wood)
- sign(reception,"Check in sign","CHECK IN",Vector3.new(0,3,11.35),6,1,P.brass,false)
- sign(reception,"Club signature","P A D D L E U P",Vector3.new(0,6,2.95),10,1.2,P.brass,false)
+ sign(reception,"Check in sign","CHECK IN",Vector3.new(0,6.85,2.95),11,1.3,P.ivory,false)
  local glow=decor(reception,"Reception undercounter glow",Vector3.new(30,0.08,0.15),Vector3.new(0,4.35,11.3),P.warm,Enum.Material.Neon)
  wash(glow,12,0.35)
  decor(reception,"Reception monitor",Vector3.new(2.8,1.8,0.25),Vector3.new(7,5.8,8),P.ink)
@@ -469,7 +482,7 @@ function Lobby.build()
   local glass=part(shop,"Boutique storefront glazing",Vector3.new(2.8,12,0.15),Vector3.new(x+(x==-80 and 2 or -2),6.5,24),P.ivory,Enum.Material.Glass)
   glass.Transparency=0.82
  end
- sign(shop,"Boutique fascia lettering","PADDLEUP GOODS",Vector3.new(-60,15.8,24.9),13,1.1,P.brass,false)
+ sign(shop,"Boutique fascia lettering","XP SHOP",Vector3.new(-60,15.8,24.9),13,1.1,P.brass,false)
  -- Wall-mounted paddles and individual brass hooks.
  for index,x in ipairs({-74,-68,-62}) do
   decor(shop,"Paddle wall inset",Vector3.new(4,6.5,0.2),Vector3.new(x,7.5,5.5),P.linen)

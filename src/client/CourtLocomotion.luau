@@ -63,6 +63,11 @@ function Motion.update(dt)
   local tuck=airborne and math.clamp(ascent*0.8+takeoff*0.65,0,1) or 0
   local legOffset=airborne and d.takeoffStride*math.exp(-d.airTime*3) or 0
   -- Hip and chest counter-rotation follows the stride, never the aiming root.
+  local slipAge=workspace:GetServerTimeNow()-(c:GetAttribute("CourtSlipStarted") or -math.huge)
+  local stumble=0
+  if slipAge>=0 and slipAge<1 then
+   stumble=math.min(1,slipAge/0.1)*math.min(1,(1-slipAge)/0.4)
+  end
   local groundStride=airborne and 0 or stride
   local beat=math.sin(d.phase)
   local bounce=(1-math.cos(d.phase*2))*0.5
@@ -103,6 +108,15 @@ function Motion.update(dt)
      or angles(4,side*2,side*4)
    elseif name:find("elbow") then
     pose=angles(airborne and (side==1 and 95-10*tuck or 20+6*tuck) or 8)
+   end
+   if stumble>0 then
+    local catch=math.sin(slipAge*11)
+    local trip
+    if j.root then trip=angles(24,0,12*catch)
+    elseif name:find("hip") then trip=angles(side*34*catch,0,side*9)
+    elseif name:find("knee") then trip=angles(26-side*18*catch)
+    elseif name:find("shoulder") then trip=angles(38+side*19*catch,0,side*48) end
+    if trip then pose=pose:Lerp(trip,stumble) end
    end
    local basis=j.instance.C0.Rotation
    local target=basis:Inverse()*pose*basis

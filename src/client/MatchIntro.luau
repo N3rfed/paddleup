@@ -309,7 +309,8 @@ function MatchIntro.createScreen(parent,data,userId)
  local sun=Instance.new("Frame",sky);sun.Name="DistantMoon";sun.AnchorPoint=Vector2.new(0.5,0.5)
  sun.Position=UDim2.fromScale(0.65,0.23);sun.Size=UDim2.fromOffset(56,56);sun.BackgroundColor3=Color3.fromRGB(170,195,224)
  sun.BackgroundTransparency=0.22;sun.BorderSizePixel=0;Instance.new("UICorner",sun).CornerRadius=UDim.new(1,0)
- local moon=(data.environmentTitle or ""):find("LUNAR",1,true)
+ local environmentTitle=data.environmentTitle or ""
+ local moon=environmentTitle=="MOON" or environmentTitle:find("LUNAR",1,true)~=nil
  if moon then sky.BackgroundColor3=Color3.fromRGB(3,6,15);colors.Enabled=false;sun.Visible=false end
  if not moon then
   local random=Random.new(73)

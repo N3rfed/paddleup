@@ -7,7 +7,7 @@ function Shop.start(network,lobby,progression)
  local remote=Instance.new("RemoteEvent"); remote.Name="Shop"; remote.Parent=network
  local counter=assert(lobby:FindFirstChild("Boutique stone top",true),"Existing boutique counter is missing")
  local point=Instance.new("Attachment"); point.Name="ShopInteraction"; point.Position=Vector3.new(0,1.4,2.8); point.Parent=counter
- local prompt=Instance.new("ProximityPrompt"); prompt.Name="OpenShop"; prompt.ActionText="Browse Goods"; prompt.ObjectText="PaddleUp Goods"
+ local prompt=Instance.new("ProximityPrompt"); prompt.Name="OpenShop"; prompt.ActionText="Browse Goods"; prompt.ObjectText="XP Shop"
  prompt.KeyboardKeyCode=Enum.KeyCode.E; prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
  prompt.MaxActivationDistance=12; prompt.RequiresLineOfSight=false; prompt.HoldDuration=0; prompt.Parent=point
  -- Real catalog samples on the counter; built with exactly the equipped paddle builder.
@@ -67,7 +67,7 @@ function Shop.start(network,lobby,progression)
   s.last=now; s.ack=requestId
   if action=="Sync" then send(player); return end
   if token~=s.token or not s.expires or now>s.expires or not near(player) then
-   send(player,false,"Return to PaddleUp Goods and press E to continue."); return
+   send(player,false,"Return to the XP Shop and press E to continue."); return
   end
   if action=="Retry" then progression:refreshShop(player,true); send(player); return end
   if type(value)~="string" or #value>80 then send(player,false,"Choose a valid item."); return end

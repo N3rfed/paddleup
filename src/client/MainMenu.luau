@@ -30,7 +30,6 @@ function MainMenu.start(player,network)
   t.Text=value; t.TextWrapped=true
   return t
  end
- label("P A D D L E U P",22,24,12,gold)
  local heading=label("LET'S PLAY!",52,44,30); heading.Name="Heading"; heading.Font=Enum.Font.GothamBold
  label("01  /  GAME MODE",99,22,12,gold).Name="Step"
  for index=1,3 do

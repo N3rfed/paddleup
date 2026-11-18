@@ -38,6 +38,12 @@ function Help.start(player,network)
  panel.Position=UDim2.fromScale(0.5,0.5); panel.AnchorPoint=Vector2.new(0.5,0.5); panel.ZIndex=3
  local scale=Instance.new("UIScale",panel)
  local art=Assets.image(panel,"howToPlay",0,0,1715,856); art.ScaleType=Enum.ScaleType.Fit; art.ZIndex=3
+ -- The uploaded artwork includes the old heading. Cover that area with live text.
+ local heading=Instance.new("TextLabel",panel)
+ heading.Name="Heading"; heading.Position=UDim2.fromOffset(520,34); heading.Size=UDim2.fromOffset(675,50)
+ heading.BackgroundColor3=Color3.fromRGB(17,19,46); heading.BorderSizePixel=0; heading.ZIndex=4
+ heading.Text="HOW TO PLAY"; heading.TextColor3=Color3.fromRGB(239,124,255)
+ heading.Font=Enum.Font.GothamBold; heading.TextSize=40
  task.spawn(function() pcall(function() game:GetService("ContentProvider"):PreloadAsync({art,icon}) end) end)
  local function button(name,label,x,y,w,h)
   local b=Instance.new("TextButton",panel); b.Name=name; b.Text=label; b.TextTransparency=1

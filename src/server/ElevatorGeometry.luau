@@ -117,8 +117,6 @@ function Geometry.build(lobby,config)
    for _,x in ipairs({-4,4}) do
     part("Mirror champagne frame",Vector3.new(0.08,5.2,0.1),Vector3.new(x,0.5,back+0.41),Enum.Material.Metal,P.brass,false)
    end
-   local plaque=part("Rooftop club plaque",Vector3.new(6.2,2.2,0.1),Vector3.new(0,0.7,back+0.5),Enum.Material.Metal,P.navy,false)
-   surface(plaque,Enum.NormalId.Back,"P A D D L E  U P\nROOFTOP SOCIAL CLUB",P.cyan)
    part("Rear cabin handrail",Vector3.new(9.1,0.18,0.15),Vector3.new(0,-2.75,back+0.65),Enum.Material.Metal,P.brass,false)
    for _,x in ipairs({-3.6,3.6}) do
     part("Rear handrail bracket",Vector3.new(0.12,0.12,0.35),Vector3.new(x,-2.75,back+0.45),Enum.Material.Metal,P.brass,false)
@@ -147,7 +145,7 @@ function Geometry.build(lobby,config)
     part("Decorative door button",Vector3.new(0.12,0.22,0.36),Vector3.new(4.68,-2,doorZ-2+zOffset),Enum.Material.Metal,P.brass,false)
    end
    local welcome=part("Cabin passenger notice",Vector3.new(3.3,0.75,0.08),Vector3.new(0,-4.4,back+0.36),Enum.Material.Metal,P.navy,false)
-   surface(welcome,Enum.NormalId.Back,assigned.capacity.." PLAYERS  /  READY. SET. RALLY.",P.ivory)
+   surface(welcome,Enum.NormalId.Back,assigned.capacity.." PLAYERS",P.ivory)
    local sign=part("Party capacity sign",Vector3.new(9,1.1,0.15),Vector3.new(0,5.45,doorZ+0.4),Enum.Material.Metal,P.navy,false)
    local label=surface(sign,Enum.NormalId.Back,"",P.ivory)
    local controller={config=assigned,model=model,center=centerCF,doors={},open=false,lastNear=0,label=label,origin=original,doorZ=doorZ}

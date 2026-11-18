@@ -182,11 +182,18 @@ function HUD.start(player, network, legacyScore, legacyStamina)
     and not data.live and not data.practicePaused and data.serveDeadline
     and not data.matchIntro and not player:GetAttribute("PowerupDraftOpen")
     and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("LeaveConfirmationOpen")
-   serveCountdown.Visible=countdown~=nil and countdown~=false
+   local showSlip=data.practiceBotSlipping and not data.practicePaused and not data.matchIntro
+    and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PracticeMenuOpen")
+    and not player:GetAttribute("LeaveConfirmationOpen")
+   serveCountdown.Visible=not not (countdown or showSlip)
    if countdown then
     local seconds=math.ceil(math.max(0,data.serveDeadline-workspace:GetServerTimeNow()))
     timerText.Text="SERVE IN "..seconds.."s"
     local accent=seconds<=3 and Color3.fromRGB(255,85,200) or Color3.fromRGB(80,232,255)
+    timerText.TextColor3=accent; timerBorder.Color=accent
+   elseif showSlip then
+    timerText.Text="BOT SLIPPED!"
+    local accent=Color3.fromRGB(225,241,112)
     timerText.TextColor3=accent; timerBorder.Color=accent
    end
   end

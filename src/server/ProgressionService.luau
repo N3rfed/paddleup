@@ -21,7 +21,7 @@ function Service.start(network,lobby)
  local attachment=desk:FindFirstChild("DailyCheckInPoint") or Instance.new("Attachment")
  attachment.Name="DailyCheckInPoint"; attachment.Position=Vector3.new(0,desk.Size.Y/2+0.7,desk.Size.Z/2+1); attachment.Parent=desk
  local prompt=attachment:FindFirstChild("DailyCheckIn") or Instance.new("ProximityPrompt")
- prompt.Name="DailyCheckIn"; prompt.ActionText="Daily Check-In"; prompt.ObjectText="Paddle Up Club"
+ prompt.Name="DailyCheckIn"; prompt.ActionText="Daily Check-In"; prompt.ObjectText="Check-In Desk"
  prompt.KeyboardKeyCode=Enum.KeyCode.E; prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
  prompt.HoldDuration=0; prompt.MaxActivationDistance=Config.PromptDistance; prompt.RequiresLineOfSight=false; prompt.Parent=attachment
  local function near(player)

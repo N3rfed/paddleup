@@ -8,11 +8,10 @@ gui.Name="ArrivalLoading"; gui.IgnoreGuiInset=true; gui.ResetOnSpawn=false; gui.
 local cover=Instance.new("Frame",gui)
 cover.Size=UDim2.fromScale(1,1); cover.BackgroundColor3=Color3.fromRGB(12,24,29); cover.BorderSizePixel=0
 cover.Active=true
-local title=Instance.new("TextLabel",cover)
-title.Size=UDim2.fromScale(0.7,0.08); title.Position=UDim2.fromScale(0.15,0.43)
-title.BackgroundTransparency=1; title.Font=Enum.Font.GothamBold; title.TextSize=28
-title.TextColor3=Color3.fromRGB(240,232,213); title.Text="P A D D L E U P"
-local status=title:Clone(); status.Parent=cover; status.Position=UDim2.fromScale(0.15,0.53)
+local status=Instance.new("TextLabel",cover)
+status.Size=UDim2.fromScale(0.7,0.08); status.Position=UDim2.fromScale(0.15,0.46)
+status.BackgroundTransparency=1; status.Font=Enum.Font.GothamBold
+status.TextColor3=Color3.fromRGB(240,232,213)
 status.TextSize=16; status.Text="Preparing the penthouse..."
 gui.Parent=player:WaitForChild("PlayerGui")
 ReplicatedFirst:RemoveDefaultLoadingScreen()
@@ -38,5 +37,5 @@ while player.Character==character and (player:GetAttribute("SessionMode")==nil o
  and (character.HumanoidRootPart.Position-floor.Position).Magnitude>150 do task.wait(0.05) end
 RunService.RenderStepped:Wait(); RunService.RenderStepped:Wait()
 local tween=game:GetService("TweenService"):Create(cover,TweenInfo.new(0.25),{BackgroundTransparency=1})
-title.Visible=false; status.Visible=false; tween:Play(); tween.Completed:Wait()
+status.Visible=false; tween:Play(); tween.Completed:Wait()
 gui:Destroy()

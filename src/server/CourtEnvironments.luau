@@ -70,7 +70,7 @@ function Environments:set(name)
  end
  self.active=name
  self.root:SetAttribute("Environment",name)
- self.root:SetAttribute("EnvironmentTitle",name=="Moon" and "SELENE LUNAR OUTPOST" or "SKYLINE CLUB")
+ self.root:SetAttribute("EnvironmentTitle",name=="Moon" and "MOON" or "SKYLINE CLUB")
 
 end
 return Environments

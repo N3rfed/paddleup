@@ -85,19 +85,6 @@ function World.build()
  end
  for _,x in ipairs({35,57}) do for _,z in ipairs({-38,38}) do part("Pergola pillar",Vector3.new(0.5,12,0.5),Vector3.new(x,187,z),dark,Enum.Material.Metal) end end
  for z=-39,39,3 do part("Pergola slat",Vector3.new(25,0.35,0.8),Vector3.new(46,193,z),Color3.fromRGB(143,100,65),Enum.Material.Wood) end
- local sign=part("Club sign",Vector3.new(37,7,0.5),Vector3.new(0,193,-49),dark)
- local gui=Instance.new("SurfaceGui")
- gui.Face=Enum.NormalId.Back
- gui.CanvasSize=Vector2.new(1110,210)
- gui.Parent=sign
- local label=Instance.new("TextLabel")
- label.Size=UDim2.fromScale(1,1)
- label.BackgroundTransparency=1
- label.Text="PADDLE UP!"
- label.TextColor3=white
- label.Font=Enum.Font.GothamBold
- label.TextScaled=true
- label.Parent=gui
  local rng=Random.new(82)
  for i=1,30 do
   local angle=i*math.pi*2/30

@@ -72,7 +72,7 @@ function UI.start(player,network)
  local panel=frame(overlay,"WeeklyCheckIn",0,0,760,572,dark,11)
  panel.AnchorPoint=Vector2.new(0.5,0.5); panel.Position=UDim2.fromScale(0.5,0.5); round(panel,20); stroke(panel,Color3.fromRGB(85,88,139))
  local panelScale=Instance.new("UIScale",panel)
- local brand=text(panel,"P A D D L E U P   /   CLUB REWARDS",28,22,570,22,12,cyan,12)
+ local brand=text(panel,"CLUB REWARDS",28,22,570,22,12,cyan,12)
  local title=text(panel,"Daily Check-In",28,52,640,40,30,white,12)
  local close=button(panel,"CLOSE",636,22,96,32,Color3.fromRGB(60,61,96),12); close.Name="CloseCheckIn"; close.TextColor3=white
  local summary=text(panel,"",28,101,704,24,14,white,12)
