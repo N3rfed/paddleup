@@ -145,7 +145,6 @@ local introSerial=0
 local introUntil=0
 local introReady={}
 local introLoadDeadline=0
-local entryOverviewSeconds
 local serveDeadline
 local servingSide,serveReady,serveX=1,false,10
 local serverId,receiverId
@@ -324,7 +323,7 @@ local function matchStatus(message,kind)
   end
  end
 end
-local function rosterChanged()
+local function rosterChanged(elevatorEntry)
  if matchRewards then matchRewards:begin(users,courtMode) end
  releasePracticePlayers()
  practice:reset(courtMode=="Practice" and practice.difficulty or "Normal")
@@ -341,7 +340,8 @@ local function rosterChanged()
  ball.live=false; ball.v=Vector3.zero; ball.speed=1; ball.perfects=0
  ball.outLanding=nil; serveReady=false; serveDeadline=nil; nextServe=os.clock()+1
  introUntil=0; matchIntro=nil; introReady={}; introLoadDeadline=0
- if #home>0 and #away>0 then
+ local fullRoster=#home+#away==MatchSetup.players[courtMode]
+ if #home>0 and #away>0 and (not elevatorEntry or fullRoster) then
   introSerial+=1
   introUntil=os.clock()+3
   nextServe=introUntil
@@ -357,15 +357,8 @@ local function rosterChanged()
   end
   matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+3,home=portraits(1),away=portraits(-1),
    variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
-  if entryOverviewSeconds and #home+#away==MatchSetup.players[courtMode] then
-   local environment=courtRoot:FindFirstChild(environments.active.."Environment")
-   matchIntro.overview=true; matchIntro.overviewSeconds=entryOverviewSeconds
-   matchIntro.environment=environments.active; matchIntro.format=courtMode
-   matchIntro.environmentModel=environments.active.."Environment"
-   matchIntro.environmentExpected=environment and #environment:GetDescendants() or 0
-   entryOverviewSeconds=nil
-  end
-  if environments.active=="Moon" or matchIntro.overview then
+  -- Elevator admission has already prepared the selected arena on the server.
+  if environments.active=="Moon" and not elevatorEntry then
    matchIntro.loading=true
    introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
   end
@@ -391,9 +384,8 @@ connect(introReadyRemote.OnServerEvent,function(player,id)
  for participant,data in pairs(users) do
   if data.side~=0 and not introReady[participant] then return end
  end
- local duration=matchIntro.overviewSeconds or 3
- matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+duration
- introUntil=os.clock()+duration; nextServe=introUntil; introLoadDeadline=0
+ matchIntro.loading=false; matchIntro.endsAt=workspace:GetServerTimeNow()+3
+ introUntil=os.clock()+3; nextServe=introUntil; introLoadDeadline=0
 end)
 local function rootOf(p)
  local c=p.Character
@@ -732,7 +724,7 @@ local function leaveCourt(p)
  end
  rosterChanged()
 end
-local function connectSession(p,mode,variant,environment,modifier,seat)
+local function connectSession(p,mode,variant,environment,modifier,seat,elevatorEntry)
  local d=users[p]
  if not d or type(mode)~="string" then return end
  if mode~="Lobby" and mode~="Spectate" and mode~="Practice" and mode~="1V1" and mode~="2V2" and mode~="1V2" then return end
@@ -790,7 +782,7 @@ local function connectSession(p,mode,variant,environment,modifier,seat)
   p:SetAttribute("CourtSlot",d.slot)
   p:SetAttribute("CourtSide",d.side)
   d.stamina=100; d.powerUntil=0; d.slowUntil=0
-  rosterChanged()
+  rosterChanged(elevatorEntry)
  end
  p:SetAttribute("SessionMode",d.mode)
  if p.Character then task.spawn(spawnCharacter,p,p.Character) end
@@ -1234,10 +1226,6 @@ connect(RunService.Heartbeat,function(dt)
  if stopped or not next(users) then return end
  local now=os.clock()
  if not replacementPaused and matchIntro and matchIntro.loading and now>=introLoadDeadline then
-  if matchIntro.overview and context.onOverviewFailure then
-   context.onOverviewFailure()
-   return
-  end
   local waiting={}
   for player,data in pairs(users) do
    if data.side~=0 and not introReady[player] then table.insert(waiting,player) end
@@ -1605,9 +1593,8 @@ connect(RunService.Heartbeat,function(dt)
 end)
 
 local api={}
-function api:prepareOverview(seconds)
- assert(seconds==nil or (type(seconds)=="number" and seconds>=3 and seconds<=5),"Invalid overview duration")
- entryOverviewSeconds=seconds
+function api:prepareMap(map)
+ environments:prepare(map)
 end
 function api:pauseReplacement(paused)
  if replacementPaused==paused then return end
@@ -1633,8 +1620,8 @@ function api:replace(player,mode,variant,map,modifier,seat)
  return true
 end
 function api:add(player) addPlayer(player) end
-function api:enter(player,mode,variant,map,modifier)
- connectSession(player,mode,variant,map,modifier)
+function api:enter(player,mode,variant,map,modifier,elevatorEntry)
+ connectSession(player,mode,variant,map,modifier,nil,elevatorEntry)
  return users[player] and users[player].mode==mode
 end
 function api:remove(player)

@@ -1,4 +1,5 @@
 -- Swap only scenery. Keep the live court, net, ball, players, and physics intact.
+local MapCatalog=require(script.Parent:WaitForChild("MapCatalog"))
 local Environments={}
 Environments.__index=Environments
 local shared={
@@ -6,7 +7,7 @@ local shared={
  Sideline=true,["Court line"]=true,["Service center line"]=true,["Net post"]=true,
  ["Net collision"]=true,["Net white tape"]=true,["Net cord"]=true,RallyLights=true,
 }
-function Environments.valid(name) return name=="Rooftop" or name=="Moon" end
+function Environments.valid(name) return MapCatalog.get(name)~=nil end
 function Environments.new(root,height,preview)
  height=height or 0
  root:SetAttribute("CourtHeight",height)
@@ -44,6 +45,13 @@ function Environments:destroy()
  self.destroyed=true
  if self.previewTask and coroutine.status(self.previewTask)~="dead" then pcall(task.cancel,self.previewTask) end
  self.cache:Destroy()
+end
+function Environments:prepare(name)
+ assert(Environments.valid(name),"Unknown court environment")
+ local floor=self.root:FindFirstChild("Playing surface")
+ assert(floor and floor:IsA("BasePart"),"Missing court playing surface")
+ local model=name=="Moon" and self:moonModel() or self.rooftop
+ assert(model.Name==name.."Environment" and model:FindFirstChildWhichIsA("BasePart",true),"Missing scenery for "..name)
 end
 function Environments:set(name)
  assert(Environments.valid(name),"Unknown court environment")
