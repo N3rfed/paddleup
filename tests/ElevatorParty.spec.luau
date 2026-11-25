@@ -4,7 +4,7 @@ return function(Party,Queue)
  local function player(id) return {UserId=id,DisplayName="P"..id} end
  local a,b,c,d,e=player(1),player(2),player(3),player(4),player(5)
  local function party(capacity)
-  return Party.new({id="test",format=capacity==2 and "1V1" or "2V2",capacity=capacity,voteSeconds=15,maps={"Rooftop","Moon"},mapVoteSeconds=15,revealSeconds=1.2},function() return time end,random)
+  return Party.new({id="test",format=capacity==2 and "1V1" or "2V2",capacity=capacity,voteSeconds=15,maps={"Rooftop","Moon"},mapVoteSeconds=15},function() return time end,random)
  end
  local p=party(2)
  assert(p:join(a) and not p:readyUp(a),"Cannot ready before full")

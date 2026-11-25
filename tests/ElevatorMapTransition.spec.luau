@@ -37,6 +37,7 @@ return function(source,modules)
  local rewardRuns={}
  local progression={}
  local mocked=table.clone(modules)
+ mocked.PracticePartner={new=function(root) return {model=Instance.new("Model",root),pose=function() end,show=function() end} end}
  mocked.MatchRewards={new=function(service)
   assert(service==progression,"Courts share the profile service")
   local run={begins=0}
@@ -50,9 +51,9 @@ return function(source,modules)
  mocked.Lobby={Spawn=CFrame.new()}
  mocked.Spectator={leave=function() end,enter=function() end}
  mocked.CourtEnvironments={valid=function(name) return name=="Rooftop" or name=="Moon" end,
-  new=function() return {active="Rooftop",set=function(self,name) self.active=name end,destroy=function() end} end}
+  new=function() return {active="Rooftop",prepare=function(_,name) assert(name=="Rooftop" or name=="Moon") end,set=function(self,name) self.active=name end,destroy=function() end} end}
  mocked.CourtPickups={new=function() return {slots={},bursts={},reset=function() end,update=function() end} end}
- local scriptMock={Parent={WaitForChild=function(_,name) return name end}}
+ local scriptMock={Parent={PracticePartner="PracticePartner",WaitForChild=function(_,name) return name end}}
  local shared={WaitForChild=function(_,name) return name end}
  local services={Players=players,RunService={Heartbeat=heartbeat},ReplicatedStorage={WaitForChild=function() return shared end}}
  local environment=setmetatable({script=scriptMock,require=function(name) return assert(mocked[name],name) end,
@@ -61,10 +62,9 @@ return function(source,modules)
  local chunk=assert(loadstring(source)); setfenv(chunk,environment)
  local Court=chunk()
  local roots,controllers={},{}
- local loadFailures=0
  local function court(id)
   local root=Instance.new("Model"); table.insert(roots,root)
-  local controller=Court.new({id=id,height=id*4096,root=root,network=network,progression=progression,onOverviewFailure=function() loadFailures+=1 end,owner=function(p) return owners[p] end})
+  local controller=Court.new({id=id,height=id*4096,root=root,network=network,progression=progression,owner=function(p) return owners[p] end})
   table.insert(controllers,controller)
   return controller
  end
@@ -84,35 +84,33 @@ return function(source,modules)
    local map,variant,modifier=choice.map,choice.variant,choice.modifier
    local first=court(index); local a,b=player(index*2),player(index*2+1)
    owners[a]=index; owners[b]=index
-   first:prepareOverview(4); first:add(a); first:add(b)
-   assert(first:enter(a,"1V1",variant,map,modifier))
-   assert(first:enter(b,"1V1",variant,map,modifier))
-   now+=0.1; heartbeat:Fire(0.1)
-   local data=delivered[a].State.data.matchIntro
-   assert(data and data.overview and data.loading and data.environment==map,"Selected environment owns the overview")
+   first:prepareMap(map); first:add(a); first:add(b)
+   assert(first:enter(a,"1V1",variant,map,modifier,true))
+   assert(first:enter(b,"1V1",variant,map,modifier,true))
+   heartbeat:Fire(0.1)
+   local intro=delivered[a].State.data.matchIntro
+   local peerIntro=delivered[b].State.data.matchIntro
+   assert(intro and peerIntro and intro.id==peerIntro.id and intro.endsAt==now+8,"The whole party gets the original eight-second match intro")
+   assert(not intro.loading and not intro.overview,"Elevator entry has no travel animation or scenery acknowledgment barrier")
+   assert(intro.home[1].userId==a.UserId and intro.away[1].userId==b.UserId,"The original intro uses the selected match roster")
    assert(a:GetAttribute("CourtEnvironment")==map and b:GetAttribute("CourtEnvironment")==map,"Every participant enters the same selected map")
    assert(a:GetAttribute("MatchVariant")==variant and b:GetAttribute("MatchVariant")==variant,"Map does not change ruleset")
-   network.IntroReady.OnServerEvent:Fire(a,data.id-1)
-   network.IntroReady.OnServerEvent:Fire(a,data.id)
-   now+=1; heartbeat:Fire(0.1)
-   assert(delivered[b].State.data.matchIntro.loading,"One acknowledgement cannot start the match")
-   network.IntroReady.OnServerEvent:Fire(b,data.id)
-   heartbeat:Fire(0.1)
-   local active=delivered[a].State.data.matchIntro
-   assert(active.overview and not active.loading and active.endsAt==now+4,"All clients share the full four-second overview")
-   now+=3.9; heartbeat:Fire(0.1)
-   assert(delivered[a].State.data.matchIntro and not delivered[a].State.data.serveReady,"Gameplay stays blocked throughout overview")
+   now+=7.9; heartbeat:Fire(0.1)
+   assert(delivered[a].State.data.matchIntro and not delivered[a].State.data.serveReady and not a:GetAttribute("PowerupDraftOpen"),"Gameplay stays gated until the intro ends")
    now+=0.2; heartbeat:Fire(0.1)
-   assert(not delivered[a].State.data.matchIntro,"Overview releases the match at the deadline")
+   assert(not delivered[a].State.data.matchIntro,"The original intro ends before gameplay begins")
    if variant=="Chaos" then
-    assert(a:GetAttribute("PowerupDraftOpen") and delivered[a].Powerup.data.kind=="offer","Existing Chaos draft begins after the overview")
-   else assert(delivered[a].State.data.serveReady,"Classic prepares its serve after the overview") end
+    assert(a:GetAttribute("PowerupDraftOpen") and delivered[a].Powerup.data.kind=="offer","Existing Chaos draft begins on the selected court")
+   else assert(delivered[a].State.data.serveReady,"Classic prepares its serve on the selected court") end
   end
   local first=court(5); local a,b=player(20),player(21); owners[a]=5; owners[b]=5
-  first:prepareOverview(4); first:add(a); first:add(b)
-  first:enter(a,"1V1","Classic","Rooftop","None"); first:enter(b,"1V1","Classic","Rooftop","None")
-  now+=31; heartbeat:Fire(0.1)
-  assert(loadFailures==1,"A failed load invokes whole-party recovery instead of leaving an infinite intro")
+  assert(not pcall(function() first:prepareMap("Unknown") end),"Invalid maps fail before admission")
+  first:add(a); first:add(b)
+  assert(first:enter(a,"1V1","Classic","Moon","None"))
+  assert(first:enter(b,"1V1","Classic","Moon","None"))
+  now+=0.1; heartbeat:Fire(0.1)
+  local menuIntro=delivered[a].State.data.matchIntro
+  assert(menuIntro and menuIntro.loading,"Play menu retains the Moon loading intro")
  end)
  for _,controller in ipairs(controllers) do controller:destroy() end
  for _,root in ipairs(roots) do root:Destroy() end
@@ -121,5 +119,5 @@ return function(source,modules)
   if type(event)=="table" then assert(event.OnServerEvent:count()==0,"Shutdown disconnects every remote") end
  end
  assert(ok,err)
- return "Both selected maps, independent Chaos rules, full-party loading acknowledgements, synchronized four-second overview, timeout callback, and gameplay handoff passed"
+ return "Both selected maps, Classic and Chaos, the original match intro, invalid map rejection, and the Play-menu Moon intro passed"
 end

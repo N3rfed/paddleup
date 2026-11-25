@@ -11,6 +11,9 @@ end
 function Spectator.leave(player)
  local state=active[player]; if not state then return end
  active[player]=nil; slots[state.slot]=nil
+ if state.focus and player.ReplicationFocus==state.focus then
+  player.ReplicationFocus=state.previousFocus
+ end
  state.connection:Disconnect()
  if state.track then state.track:Stop(0) end
  state.clone:Destroy()
@@ -35,9 +38,10 @@ function Spectator.enter(player,character)
  -- Reuse the court's lounge benches; no seat instances or seat welds are created.
  local id=player:GetAttribute("CourtId") or 0
  local court=workspace:FindFirstChild(id==0 and "PaddleUp" or "PaddleUpCourt"..id)
+ local moon=court and court:FindFirstChild("MoonEnvironment")
  local benches={}
  if court then
-  for _,item in ipairs(court:GetDescendants()) do
+  for _,item in ipairs((moon or court):GetDescendants()) do
    if item:IsA("BasePart") and item.Name=="Lounge seat" then table.insert(benches,item) end
   end
  end
@@ -121,6 +125,18 @@ function Spectator.enter(player,character)
  state.connection=character.DescendantAdded:Connect(hide)
  for _,item in ipairs(character:GetDescendants()) do hide(item) end
  realHumanoid.DisplayDistanceType=Enum.HumanoidDisplayDistanceType.None; realHumanoid.AutoRotate=false
- character:PivotTo(CFrame.new(0,185,600))
+ if moon then
+  local floor=court:FindFirstChild("Playing surface")
+  if floor and floor:IsA("BasePart") then
+   state.focus=floor
+   state.previousFocus=player.ReplicationFocus
+   player.ReplicationFocus=floor
+  end
+  -- Keep the non-interacting avatar beside the existing lunar seats at this court's height.
+  local seatPosition=bench and bench.Position or Vector3.new(48,183+(court:GetAttribute("CourtHeight") or 0),0)
+  character:PivotTo(CFrame.new(seatPosition+Vector3.yAxis*3))
+ else
+  character:PivotTo(CFrame.new(0,185,600))
+ end
 end
 return Spectator

@@ -47,7 +47,6 @@ local lastSessionRequest={}
 -- A slot per allowed visitor supports the worst case: everyone practicing alone.
 -- Start with MaxPlayers=8 and measure before raising it (each slot contains scenery).
 local capacity=Players.MaxPlayers
-local failOverview
 local function owner(player) return owners[player] end
 local function runtime(id)
  if runtimes[id] then return runtimes[id] end
@@ -63,7 +62,6 @@ local function runtime(id)
  roots[id]=court
  local cleanup={}
  local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,progression=progression,
-  onOverviewFailure=function() if failOverview then failOverview(id) end end,
   track=function(callback) table.insert(cleanup,callback) end})
  if not ok then
   for index=#cleanup,1,-1 do pcall(cleanup[index]) end
@@ -87,15 +85,6 @@ local function lobby(player,message)
  move(player,0)
  runtimes[0]:enter(player,"Lobby")
  if message then session:FireClient(player,false,message) end
-end
--- Failed map preparation returns the whole party through normal lobby ownership.
-failOverview=function(id)
- local match=elevatorService and elevatorService.matches[id]
- if match then elevatorService:cancelTarget(match); elevatorService.matches[id]=nil end
- local roster={}
- for player,courtId in pairs(owners) do if courtId==id then table.insert(roster,player) end end
- if runtimes[id] then runtimes[id]:pauseReplacement(false); runtimes[id]:prepareOverview(nil) end
- for _,player in ipairs(roster) do lobby(player,"The selected map could not finish loading. Please try again.") end
 end
 local function freeSlot()
  for id=1,capacity do
@@ -211,30 +200,37 @@ end)
 -- Elevator admission reuses the same runtime, ownership, and CourtSession APIs.
 local function startElevatorMatch(group)
  local id=freeSlot()
- if not id or #group.players~=require(script.MatchSetup).players[group.format] then return false end
- reservedSlots[id]=true
- local ok,err=pcall(function()
-  runtime(id):prepareOverview(group.overviewSeconds)
-  for _,p in ipairs(group.players) do
-   assert(p.Parent==Players and owners[p]==0 and p.Character,"Party changed before arrival")
+ local setup=require(script.MatchSetup)
+ local failure="No court is free right now. Please try again."
+ if id then
+  reservedSlots[id]=true
+  local ok,err=xpcall(function()
+   failure="The selected map could not load. Please try again."
+   assert(group.map and setup.valid(group.mode,group.map,group.modifier),"Invalid elevator map or ruleset")
+   local court=runtime(id)
+   court:prepareMap(group.map)
+   failure="The party changed before the match could start. Please try again."
+   assert(#group.players==setup.players[group.format] and group.valid(),"Elevator party lost its roster")
+   for _,p in ipairs(group.players) do
+    assert(p.Parent==Players and owners[p]==0 and p.Character,"Party changed before arrival")
+   end
+   failure="The selected court could not start the match. Please try again."
+   for _,p in ipairs(group.players) do
+    queue:remove(p); move(p,id)
+    assert(court:enter(p,group.format,group.mode,group.map,group.modifier,true),"Admission rejected")
+   end
+  end,debug.traceback)
+  reservedSlots[id]=nil
+  if ok then
+   elevatorService:track(id,group)
+   return true
   end
-  for _,p in ipairs(group.players) do
-   assert(not group.valid or group.valid(),"Party changed while the map was preparing")
-   assert(p.Parent==Players and owners[p]==0,"Party member left")
-   queue:remove(p); move(p,id)
-   assert(runtimes[id]:enter(p,group.format,group.mode,group.map,group.modifier),"Admission rejected")
-   assert(not group.valid or group.valid(),"Party changed during admission")
-  end
- end)
- reservedSlots[id]=nil
- if not ok then
-  warn("Elevator admission failed: "..tostring(err))
-  if runtimes[id] then runtimes[id]:prepareOverview(nil) end
-  for _,p in ipairs(group.players) do if owners[p]==id then lobby(p,"The transition failed. Please try again.") end end
-  return false
+  warn("Elevator admission failed for "..tostring(group.map)..": "..tostring(err))
  end
- elevatorService:track(id,group)
- return true
+ for _,p in ipairs(group.players) do
+  if owners[p]==0 or (id and owners[p]==id) then lobby(p) end
+ end
+ return false,failure
 end
 elevatorService=require(script:WaitForChild("ElevatorService")).new({
  lobby=lobbyRoot,remote=folder.Elevator,queue=queue,owner=owner,

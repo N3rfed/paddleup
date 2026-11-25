@@ -72,7 +72,7 @@ function Party:update()
  if count<#self.players and self.clock()<self.endsAt then return end
  if selectingMap then
   self.map=winner(self.config.maps,totals,self.random)
-  self.stage="Departing"; self.endsAt=self.clock()+self.config.revealSeconds
+  self.stage="Departing"; self.endsAt=nil
  else
   local allowed={}
   for _,mode in ipairs(modes) do if self:allowed()[mode] then table.insert(allowed,mode) end end

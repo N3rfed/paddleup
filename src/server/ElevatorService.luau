@@ -10,7 +10,7 @@ function Service.new(context)
  for _,entry in ipairs(Config.Elevators) do
   assert((entry.format=="1V1" and entry.capacity==2) or (entry.format=="2V2" and entry.capacity==4),"Invalid elevator capacity")
   assert(self.geometry[entry.id],"Missing configured elevator "..entry.id)
-  local settings=table.clone(entry); settings.voteSeconds=Config.VoteSeconds; settings.maps=Config.MapIds; settings.mapVoteSeconds=Config.MapVoteSeconds; settings.revealSeconds=Config.RevealSeconds
+  local settings=table.clone(entry); settings.voteSeconds=Config.VoteSeconds; settings.maps=Config.MapIds; settings.mapVoteSeconds=Config.MapVoteSeconds
   self.parties[entry.id]=Party.new(settings,context.clock)
   self:publish(self.parties[entry.id])
  end
@@ -197,29 +197,30 @@ function Service:updateParties()
    end
   end
   if near then geometry.lastNear=now end
-  geometry:setOpen(party.stage~="Departing" and (near or #party.players>0 or now-geometry.lastNear<Config.DoorHoldSeconds))
+  geometry:setOpen(near or #party.players>0 or now-geometry.lastNear<Config.DoorHoldSeconds)
   if party:update() then
-   if party.stage=="Departing" then geometry:setOpen(false) end
    self:cancelTarget(party)
    self:publish(party)
   end
   if party.stage=="Waiting" and #party.players>0 and #party.players<party.config.capacity then self:offer(party,party.config.format) end
-  if party.stage=="Departing" and now>=party.endsAt then
+  if party.stage=="Departing" then
    local revision=party.revision
-   local group={players=table.clone(party.players),format=party.config.format,mode=party.mode,map=party.map,overviewSeconds=Config.OverviewSeconds,
+   local group={players=table.clone(party.players),format=party.config.format,mode=party.mode,map=party.map,
     modifier=party.mode=="Chaos" and "LowGravity" or "None",
     valid=function()
      if self.closed or party.revision~=revision or party.stage~="Departing" then return false end
      for _,p in ipairs(party.players) do if self.members[p]~=party then return false end end
      return #party.players==party.config.capacity
     end}
-   local ok=self.ctx.start(group)
+   local ok,message=self.ctx.start(group)
    if ok then
-    for _,p in ipairs(group.players) do self.members[p]=nil; p:SetAttribute("ElevatorId",nil); self:send(p,{kind="Closed",enteringMap=true}) end
+    for _,p in ipairs(group.players) do self.members[p]=nil; p:SetAttribute("ElevatorId",nil); self:send(p,{kind="Closed"}) end
     party.players={}; party.preferences={}; party.attempted={}; party:reset(); self:publish(party)
    else
-    party:reset(); self:publish(party)
-    for _,p in ipairs(party.players) do self:send(p,{kind="Notice",message="Court unavailable. Your party can ready up again."}) end
+    for _,p in ipairs(group.players) do
+     if self.members[p]==party then self:leave(p,false) end
+     self:send(p,{kind="Notice",message=message or "The match could not start. Please try again."})
+    end
    end
   end
  end

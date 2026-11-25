@@ -1,7 +1,6 @@
 local UI={}
 function UI.start(player,network)
  local RunService=game:GetService("RunService")
- local TweenService=game:GetService("TweenService")
  local UIS=game:GetService("UserInputService")
  local remote=network:WaitForChild("Elevator")
  local gui=Instance.new("ScreenGui"); gui.Name="ElevatorParty"; gui.ResetOnSpawn=false
@@ -76,9 +75,6 @@ function UI.start(player,network)
   cards[map.id]={button=card,stroke=stroke,votes=votes}
  end
  button(mapPanel,"Leave","Leave Elevator",20,403,620,function() remote:FireServer("Leave") end)
- local mapFade=Instance.new("Frame"); mapFade.Name="MapFade"; mapFade.Size=UDim2.fromScale(1,1)
- mapFade.BackgroundColor3=dark; mapFade.BorderSizePixel=0; mapFade.Visible=false; mapFade.ZIndex=10; mapFade.Parent=gui
- local fadeUntil=0
  local function renderMap()
   if not party or (party.stage~="MapVoting" and party.stage~="Departing") then mapPanel.Visible=false; return end
   mapPanel.Visible=true
@@ -97,14 +93,7 @@ function UI.start(player,network)
    local count=party.mapCounts[id] or 0
    card.votes.Text=(picked and (winning and "WINNER  /  " or "YOUR PICK  /  ") or "")..count..(count==1 and " VOTE" or " VOTES")
   end
-  if winning and party.endsAt-workspace:GetServerTimeNow()<0.35 and not mapFade.Visible then
-   mapFade.Visible=true; mapFade.BackgroundTransparency=1; fadeUntil=workspace:GetServerTimeNow()+5
-   TweenService:Create(mapFade,TweenInfo.new(0.3),{BackgroundTransparency=0}):Play()
-  end
  end
- network:WaitForChild("State").OnClientEvent:Connect(function(data)
-  if data.matchIntro and data.matchIntro.overview then mapFade.Visible=false end
- end)
  local function renderParty()
   if not party then panel.Visible=false; return end
   panel.Visible=party.stage=="Waiting" or party.stage=="Voting"
@@ -135,11 +124,8 @@ function UI.start(player,network)
   if type(data)~="table" then return end
   if data.kind=="Party" then
    party=data; renderParty(); renderMap()
-   if data.stage~="Departing" then mapFade.Visible=false end
   elseif data.kind=="Closed" then
    party=nil; panel.Visible=false; mapPanel.Visible=false
-   mapFade.Visible=data.enteringMap==true; mapFade.BackgroundTransparency=0
-   fadeUntil=workspace:GetServerTimeNow()+5
   elseif data.kind=="Invitation" then
    offer=data; invitation.Visible=true
    inviteTitle.Text="An opening is available in a "..data.format:gsub("V","v").." "..(data.replacement and "match!" or "party!")
@@ -164,7 +150,6 @@ function UI.start(player,network)
    message.Visible=true; messageText.Text="MATCH PAUSED / Finding an approved replacement"
   else message.Visible=false end
   if party then renderMap() end
-  if mapFade.Visible and now>=fadeUntil then mapFade.Visible=false end
   if party or offer then UIS.MouseBehavior=Enum.MouseBehavior.Default; UIS.MouseIconEnabled=true end
  end)
  local function resize()
