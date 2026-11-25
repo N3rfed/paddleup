@@ -47,6 +47,7 @@ local lastSessionRequest={}
 -- Start with MaxPlayers=8 and measure before raising it (each slot contains scenery).
 local capacity=Players.MaxPlayers
 local failOverview
+local returnAfterMatch
 local function owner(player) return owners[player] end
 local function runtime(id)
  if runtimes[id] then return runtimes[id] end
@@ -63,6 +64,7 @@ local function runtime(id)
  local cleanup={}
  local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,progression=progression,
   onOverviewFailure=function() if failOverview then failOverview(id) end end,
+  onRematchDeclined=function(roster,departing) returnAfterMatch(id,roster,departing) end,
   track=function(callback) table.insert(cleanup,callback) end})
  if not ok then
   for index=#cleanup,1,-1 do pcall(cleanup[index]) end
@@ -86,6 +88,13 @@ local function lobby(player,message)
  move(player,0)
  runtimes[0]:enter(player,"Lobby")
  if message then session:FireClient(player,false,message) end
+end
+returnAfterMatch=function(id,roster,departing)
+ local match=elevatorService and elevatorService.matches[id]
+ if match then elevatorService:cancelTarget(match); elevatorService.matches[id]=nil end
+ for player in pairs(roster) do
+  if player~=departing and owners[player]==id then lobby(player) end
+ end
 end
 -- Failed map preparation returns the whole party through normal lobby ownership.
 failOverview=function(id)
@@ -151,6 +160,8 @@ local connections={}
 local function connect(signal,callback) table.insert(connections,signal:Connect(callback)) end
 connect(Players.PlayerAdded,addPlayer)
 connect(Players.PlayerRemoving,function(player)
+ local court=runtimes[owners[player]]
+ if court then court:cancelRematch(player,true) end
  if elevatorService then elevatorService:departed(player,owners[player]); elevatorService:remove(player) end
  queue:remove(player)
  lastSessionRequest[player]=nil
@@ -167,13 +178,16 @@ connect(Players.PlayerRemoving,function(player)
   end
  end
 end)
-connect(session.OnServerEvent,function(player,mode)
+connect(session.OnServerEvent,function(player,mode,id,choice,sessionId)
  if closing or owners[player]==nil then return end
+ local court=runtimes[owners[player]]
+ if mode=="RematchVote" then court:voteRematch(player,id,choice,sessionId); return end
  if os.clock()-(lastSessionRequest[player] or -math.huge)<0.5 then return end
  lastSessionRequest[player]=os.clock()
  if mode~="Lobby" and mode~="Spectate" then
   session:FireClient(player,false,"Choose a mode and player count to join the queue."); return
  end
+ if court:cancelRematch(player) then return end
  if elevatorService then elevatorService:leave(player,true); elevatorService:departed(player,owners[player]) end
  queue:remove(player)
  local previous=owners[player]
