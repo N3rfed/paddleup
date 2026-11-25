@@ -576,6 +576,7 @@ feedback.OnClientEvent:Connect(function(message,kind,matchSessionId)
 end)
 local flyPosition=Vector3.new(40,210+CourtView.height(),65)
 local wasSpectating=false
+local moonSpectatorHeight
 local cameraRoot,cameraSide,trackedCamera
 local yaw,pitch=0,math.rad(-18)
 local windowFocused=true
@@ -673,7 +674,17 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
  local enteredSpectate=spectating and not wasSpectating
  wasSpectating=spectating
  if spectating then
-  if enteredSpectate then flyPosition=Vector3.new(40,210+CourtView.height(),65); yaw=math.rad(30); pitch=math.rad(-20) end
+  local moonHeight=player:GetAttribute("CourtEnvironment")=="Moon" and CourtView.height() or nil
+  if enteredSpectate or moonHeight~=moonSpectatorHeight then
+   if moonHeight then
+    flyPosition=Vector3.new(52,205+moonHeight,26)
+    local direction=(Vector3.new(0,184+moonHeight,0)-flyPosition).Unit
+    yaw=math.atan2(-direction.X,-direction.Z); pitch=math.asin(direction.Y)
+   else
+    flyPosition=Vector3.new(40,210+CourtView.height(),65); yaw=math.rad(30); pitch=math.rad(-20)
+   end
+  end
+  moonSpectatorHeight=moonHeight
   local available=windowFocused and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   local looking=available and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
   UIS.MouseBehavior=looking and Enum.MouseBehavior.LockCurrentPosition or Enum.MouseBehavior.Default
@@ -686,6 +697,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    movement=orbit.RightVector*(key(Enum.KeyCode.D)-key(Enum.KeyCode.A))+orbit.LookVector*(key(Enum.KeyCode.W)-key(Enum.KeyCode.S))+Vector3.yAxis*(key(Enum.KeyCode.E)+key(Enum.KeyCode.Space)-key(Enum.KeyCode.Q)-key(Enum.KeyCode.LeftControl))
    if movement.Magnitude>0 then flyPosition+=movement.Unit*dt*(key(Enum.KeyCode.LeftShift)==1 and 70 or 32) end
   end
+  if moonHeight then flyPosition=CourtView.clampMoonSpectator(flyPosition,moonHeight) end
   camera.CameraType=Enum.CameraType.Scriptable; camera.FieldOfView=70
   camera.CFrame=CFrame.new(flyPosition)*orbit; camera.Focus=CFrame.new(flyPosition+orbit.LookVector*25)
   crosshair.Visible=false; aim.Transparency=1; cancelCharge()
