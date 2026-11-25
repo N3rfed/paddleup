@@ -1,4 +1,5 @@
 local Setup={}
+Setup.REMATCH_SECONDS=15
 Setup.ARCADE_FEATURES_ENABLED=false
 function Setup.abilities(mode) return mode=="Arcade" and Setup.ARCADE_FEATURES_ENABLED end
 Setup.players={Practice=1,["1V1"]=2,["1V2"]=3,["2V2"]=4}

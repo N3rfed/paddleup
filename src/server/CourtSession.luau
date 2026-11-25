@@ -141,6 +141,8 @@ local joinSerial=0
 local lastHitter={}
 local ball={p=Vector3.new(0,(187+HEIGHT),-28),v=Vector3.zero,g=GRAVITY,live=false,last=-1,bounces=0,perfects=0,speed=1,bounceAt=-100}
 local nextServe=0
+local rematch
+local rematchSerial=0
 local matchIntro=nil
 local introSerial=0
 local introUntil=0
@@ -220,7 +222,6 @@ local function updateDraft(now)
   end
  end
  if draftDue and not draft and not ball.live and now>=introUntil and now>=nextServe then
-  if ball.resetScore then if matchRewards then matchRewards:begin(users,courtMode) end; rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
   local roster={}
   local home,away=false,false
   for p,d in pairs(users) do
@@ -314,7 +315,17 @@ local function matchStatus(message,kind)
   end
  end
 end
-local function rosterChanged(elevatorEntry)
+local function teamPortraits(side)
+ local result={}
+ for _,player in ipairs(teamPlayers(side)) do
+  table.insert(result,{userId=player.UserId,name=player.DisplayName})
+ end
+ if side==-1 and courtMode=="Practice" and #result==0 then
+  table.insert(result,{userId=0,name="Practice Partner",bot=true})
+ end
+ return result
+end
+local function rosterChanged(elevatorEntry,replaying)
  if matchRewards then matchRewards:begin(users,courtMode) end
  releasePracticePlayers()
  practice:reset(courtMode=="Practice" and practice.difficulty or "Normal")
@@ -336,20 +347,10 @@ local function rosterChanged(elevatorEntry)
   introSerial+=1
   introUntil=os.clock()+INTRO_DURATION
   nextServe=introUntil
-  local function portraits(side)
-   local result={}
-   for _,player in ipairs(teamPlayers(side)) do
-    table.insert(result,{userId=player.UserId,name=player.DisplayName})
-   end
-   if side==-1 and courtMode=="Practice" and #result==0 then
-    table.insert(result,{userId=0,name="Practice Partner",bot=true})
-   end
-   return result
-  end
-  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+INTRO_DURATION,home=portraits(1),away=portraits(-1),
+  matchIntro={id=introSerial,endsAt=workspace:GetServerTimeNow()+INTRO_DURATION,home=teamPortraits(1),away=teamPortraits(-1),
    variant=courtVariant,environmentTitle=courtRoot:GetAttribute("EnvironmentTitle"),round=1,pointsToWin=11,winBy=2}
-  -- Elevator admission has already prepared the selected arena on the server.
-  if environments.active=="Moon" and not elevatorEntry then
+  -- Elevator admission and rematches already have a prepared arena.
+  if environments.active=="Moon" and not elevatorEntry and not replaying then
    matchIntro.loading=true
    introUntil=math.huge; nextServe=introUntil; introLoadDeadline=os.clock()+30
   end
@@ -601,21 +602,36 @@ local function point(winner,reason)
  matchStatus({title=scored and (scorerName.." Scored for Team "..index.."!") or outcome=="secondServer" and "Second Server!" or "Side Out!",fault=faultNames[reason] or (reason.."!")},"rallyResult")
  if scored and score[index]>=11 and math.abs(score[1]-score[2])>=2 then
   if matchRewards then matchRewards:complete(winner) end
-  banner="TEAM "..index.." WINS!  /  New game in 6 seconds"
+  banner="TEAM "..index.." WINS!"
   matchStatus(banner,"point")
-  nextServe=os.clock()+6
-  ball.resetScore=true
+  nextServe=math.huge
+  draftDue=false
+  rematchSerial+=1
+  local roster={}
+  for player,data in pairs(users) do
+   if data.side~=0 then
+    roster[player]=true
+    freezePracticePlayer(player)
+   end
+  end
+  local startsAt=workspace:GetServerTimeNow()+0.6
+  local endsAt=startsAt+INTRO_DURATION
+  local cinematic={id=rematchSerial,startsAt=startsAt,endsAt=endsAt,winner=winner,
+   home=teamPortraits(1),away=teamPortraits(-1),variant=courtVariant,
+   environmentTitle=courtRoot:GetAttribute("EnvironmentTitle")}
+  rematch={id=rematchSerial,cinematic=cinematic,endsAt=endsAt+MatchSetup.REMATCH_SECONDS,
+   roster=roster,accepted={},departed={}}
   Comeback.update(comeback,score,true)
  end
- if previousComeback~=comeback.side then
+ if not rematch and previousComeback~=comeback.side then
   matchStatus(comeback.side~=0 and "COMEBACK! Team "..(comeback.side==1 and "1" or "2").." gains +15% movement, reach and hit speed until tied." or "COMEBACK BOOST ENDED","point")
  end
+ if rematch then return end
  if courtVariant=="Chaos" then
   rallies+=1
-  if ball.resetScore then resetPowerups()
-  elseif rallies%3==0 then draftDue=true end
- elseif courtVariant=="Arcade" then
-  if ball.resetScore then resetPowerups() elseif arcade:rally() then draftDue=true end
+  if rallies%3==0 then draftDue=true end
+ elseif courtVariant=="Arcade" and arcade:rally() then
+  draftDue=true
  end
 end
 local function paddle(character)
@@ -704,7 +720,7 @@ local function leaveCourt(p)
  d.powerUntil=0; d.slowUntil=0
  if p.Character then p.Character:SetAttribute("ShotChargeAt",nil) end
  p:SetAttribute("CourtSide",0)
- if not active then return end
+ if not active or rematch then return end
  if not replacementPaused and not occupant(1) then
   local remaining,other=occupant(-1)
   if remaining then
@@ -713,7 +729,7 @@ local function leaveCourt(p)
   end
  end
  if not replacementPaused and not occupant(1) and not occupant(-1) then
-  courtMode=nil; courtVariant=nil; courtModifier="None"; GRAVITY=45; courtRoot:SetAttribute("EnvironmentalModifier","None"); rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new()
+  courtMode=nil; courtVariant=nil; courtModifier="None"; GRAVITY=45; courtRoot:SetAttribute("EnvironmentalModifier","None"); rotation:reset(); score=rotation.score; comeback=Comeback.new()
  end
  rosterChanged()
 end
@@ -783,7 +799,6 @@ local function connectSession(p,mode,variant,environment,modifier,seat,elevatorE
 end
 local function prepareServe()
  if loadoutPending then return end
- if ball.resetScore then if matchRewards then matchRewards:begin(users,courtMode) end; rotation:reset(); score=rotation.score; ball.resetScore=false; comeback=Comeback.new() end
  syncServing()
  if not occupant(1) or (courtMode~="Practice" and not occupant(-1)) then return end
  table.clear(lastHitter)
@@ -860,6 +875,7 @@ local function autoBotServe()
  banner="BOT SERVE / LET IT BOUNCE"
 end
 connect(practiceRemote.OnServerEvent,function(p,action,value,revision)
+ if rematch then return end
  local d=users[p]
  if courtMode~="Practice" or not d or d.mode~="Practice" or d.side~=1 or occupant(1)~=p then return end
  if revision~=practice.revision then return end
@@ -867,7 +883,7 @@ connect(practiceRemote.OnServerEvent,function(p,action,value,revision)
   local wasPaused=practice.paused
   if type(value)~="string" or not practice:select(value) then return end
   releasePracticePlayers()
-  rotation:reset(); score=rotation.score; ball.resetScore=false
+  rotation:reset(); score=rotation.score
   rosterChanged()
   introUntil=0; matchIntro=nil; nextServe=os.clock()
   botSlowUntil=0; botStunUntil=0; botReactAt=0; botThinkAt=0
@@ -1143,6 +1159,7 @@ local function tryReturn(p,d,r,now,automatic,softRequested,charge,shotKind)
   return true
 end
 connect(arcadeRemote.OnServerEvent,function(p,index)
+ if rematch then return end
  local d=users[p]; local now=os.clock()
  if not d or d.side==0 or d.variant~="Arcade" or courtVariant~="Arcade" or practicePaused()
   or now<introUntil or loadoutPending or draft or draftDue or p:GetAttribute("LeaveConfirmationOpen") then return end
@@ -1170,6 +1187,7 @@ activateArmedPowers=function(now)
  end
 end
 connect(input.OnServerEvent,function(p,action,moveIntent)
+ if rematch then return end
  local d=users[p]
  if not d or d.side==0 or type(action)~="string" or practicePaused() then return end
  local now=os.clock()
@@ -1247,9 +1265,23 @@ connect(input.OnServerEvent,function(p,action,moveIntent)
   if ball.live then tryReturn(p,d,r,now,false,action=="SoftShot") end
  end
 end)
+local function declineRematch(departing)
+ local vote=rematch
+ rematch=nil
+ context.onRematchDeclined(vote.roster,departing)
+end
 local accumulator,broadcast=0,0
 connect(RunService.Heartbeat,function(dt)
  if stopped or not next(users) then return end
+ if rematch then
+  local time=workspace:GetServerTimeNow()
+  if rematch.cinematic and time>=rematch.cinematic.endsAt then
+   rematch.cinematic=nil
+   releasePracticePlayers()
+   if next(rematch.departed) then declineRematch(); return end
+  end
+  if time>=rematch.endsAt then declineRematch(); return end
+ end
  local now=os.clock()
  if not replacementPaused and matchIntro and matchIntro.loading and now>=introLoadDeadline then
   local waiting={}
@@ -1286,7 +1318,7 @@ connect(RunService.Heartbeat,function(dt)
  end
  if not paused then powerups:update(now,(now<introUntil or not MatchSetup.abilities(courtVariant)) and {} or pickupParticipants) end
  for p,d in pairs(users) do
-  if paused and (d.mode=="Practice" or replacementPaused) then freezePracticePlayer(p); continue end
+  if (rematch and rematch.cinematic and rematch.roster[p]) or (paused and (d.mode=="Practice" or replacementPaused)) then freezePracticePlayer(p); continue end
   local recovered=Rules.recoverStamina(d.stamina,d.staminaRecoveryAt or 0,now,dt)
   p:SetAttribute("SlowFallEnabled",Powerups.slowFall(d.powerups,d.side,d.variant))
   d.stamina=math.min(100,d.stamina+(recovered-d.stamina)*(1+((d.powerups and d.powerups.regen) or 0)))
@@ -1608,6 +1640,8 @@ connect(RunService.Heartbeat,function(dt)
     powerupEffects=activeEffects,powerupProgress={tension=d.powerupRally.tension,perfectChain=d.powerupRally.perfectChain,
      reachStacks=d.powerupMatch.reachStacks or 0,speedWins=d.powerupMatch.speedWins or 0,secondServeUsed=d.powerupMatch.secondServeUsed==true},
     matchIntro=d.side~=0 and now<introUntil and matchIntro or nil,
+    matchEnding=rematch and rematch.roster[p] and rematch.cinematic or nil,
+    rematch=rematch and not rematch.cinematic and rematch.roster[p] and {id=rematch.id,endsAt=rematch.endsAt,accepted=rematch.accepted[p]==true} or nil,
     trackingHidden=hidden,trackingGlitch=glitch,heavy=heavy,visualRate=heavy and 1/math.max(1,ball.speed*(ball.shotMultiplier or 1)) or 1,
     offensive=ball.offensive,decoyLanding=glitch and target+Vector3.new(target.X>0 and -6 or 6,0,3) or nil,
     outLanding=ball.outLanding,p=viewPosition,v=viewVelocity,g=ball.g,flightGravity=ball.flightGravity or GRAVITY,lob=ball.lob,live=ball.live,landing=target,eta=t,
@@ -1634,6 +1668,52 @@ connect(RunService.Heartbeat,function(dt)
 end)
 
 local api={}
+function api:cancelRematch(player,disconnecting)
+ if not rematch or not rematch.roster[player] then return false end
+ if rematch.cinematic then
+  rematch.departed[player]=true
+  for member in pairs(rematch.roster) do
+   if not rematch.departed[member] then return "cinematic" end
+  end
+ end
+ declineRematch(disconnecting and player or nil)
+ return true
+end
+function api:voteRematch(player,id,choice,sessionId)
+ local vote=rematch
+ if not vote or vote.cinematic or vote.id~=id or not vote.roster[player] or sessionId~=player:GetAttribute("MatchSessionId") then return end
+ if workspace:GetServerTimeNow()>=vote.endsAt or choice=="Leave" then
+  declineRematch()
+  return
+ end
+ if choice~="PlayAgain" or vote.accepted[player] then return end
+ vote.accepted[player]=true
+ for member in pairs(vote.roster) do
+  if member.Parent~=Players or context.owner(member)~=context.id then
+   declineRematch()
+   return
+  end
+  if not vote.accepted[member] then return end
+ end
+ rematch=nil
+ rotation:reset()
+ score=rotation.score
+ table.clear(lastHitter)
+ for member in pairs(vote.roster) do
+  local data=users[member]
+  data.stamina=100; data.staminaRecoveryAt=0; data.diveAt=0; data.diveHeld=false
+  data.powerAt=0; data.powerUntil=0; data.slowAt=0; data.slowUntil=0
+  data.chargeShotAt=nil; data.chargeCooldownBlocked=nil; data.serveChargeAt=nil
+  data.lastSwing=0; data.lastInput=0
+  if member.Character then
+   member.Character:SetAttribute("HitReadyAt",0)
+   member.Character:SetAttribute("ChargedShotReadyAt",0)
+  end
+  advanceMatchSession(member)
+ end
+ botSlowUntil=0; botStunUntil=0; botReactAt=0; botThinkAt=0; botSwingAt=0
+ rosterChanged(false,true)
+end
 function api:prepareMap(map)
  environments:prepare(map)
 end

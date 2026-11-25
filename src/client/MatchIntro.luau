@@ -21,14 +21,20 @@ function MatchIntro.viewTeams(data,userId)
  end
  return left,right
 end
-local function staticClone(source)
+local function isAccessoryPart(part)
+ return part:FindFirstAncestorWhichIsA("Accoutrement")~=nil
+end
+local function staticClone(source,poseAvatar)
  local archivable=source.Archivable; source.Archivable=true
  local ok,clone=pcall(function() return source:Clone() end)
  source.Archivable=archivable
  if not ok or not clone then return nil end
  for _,item in ipairs(clone:GetDescendants()) do
   if item:IsA("LuaSourceContainer") or item:IsA("Sound") or item:IsA("BillboardGui") then item:Destroy()
-  elseif item:IsA("BasePart") then item.Anchored=true; item.CanCollide=false; item.LocalTransparencyModifier=0 end
+  elseif item:IsA("BasePart") then
+   item.Anchored=not (poseAvatar and isAccessoryPart(item))
+   item.CanCollide=false; item.LocalTransparencyModifier=0
+  end
  end
  if clone:IsA("BasePart") then clone.Anchored=true; clone.CanCollide=false end
  return clone
@@ -63,6 +69,7 @@ function MatchIntro.standActor(model)
  local links={}
  for _,j in ipairs(model:GetDescendants()) do
   if (j:IsA("Motor6D") or j:IsA("AnimationConstraint") or j:IsA("Weld") or j:IsA("WeldConstraint")) and j.Part0 and j.Part1 then
+   if isAccessoryPart(j.Part0) or isAccessoryPart(j.Part1) then continue end
    local offset
    if j:IsA("WeldConstraint") then offset=j.Part0.CFrame:ToObjectSpace(j.Part1.CFrame)
    else
@@ -158,13 +165,14 @@ function MatchIntro.prepareActor(model,phase)
  local headParts,armParts={},{}
  if head then headParts[head]=true end
  for _,part in ipairs(model:GetDescendants()) do
-  if part:IsA("BasePart") and (part.Name:match("^Right.*Arm$") or part.Name=="RightHand"
+  if part:IsA("BasePart") and not isAccessoryPart(part) and (part.Name:match("^Right.*Arm$") or part.Name=="RightHand"
    or part.Name=="Right Arm" or part.Name=="PaddleFace" or part.Name=="PaddleGrip" or part.Name=="Paddle") then armParts[part]=true end
  end
- -- Include welded hair, hats and arm accessories in the same movement.
+ -- Include welded presentation props in their body part's pose.
  for _=1,3 do
   for _,joint in ipairs(model:GetDescendants()) do
-   if joint:IsA("Weld") or joint:IsA("WeldConstraint") then
+   if (joint:IsA("Weld") or joint:IsA("WeldConstraint")) and joint.Part0 and joint.Part1
+    and not isAccessoryPart(joint.Part0) and not isAccessoryPart(joint.Part1) then
     for _,group in ipairs({headParts,armParts}) do
      if group[joint.Part0] and joint.Part1 then group[joint.Part1]=true
      elseif group[joint.Part1] and joint.Part0 then group[joint.Part0]=true end
@@ -181,7 +189,7 @@ function MatchIntro.prepareActor(model,phase)
   end
  end
  for _,part in ipairs(model:GetDescendants()) do
-  if part:IsA("BasePart") then
+  if part:IsA("BasePart") and not isAccessoryPart(part) then
    actor.parts[part]=pivot:ToObjectSpace(part.CFrame)
   end
  end
@@ -209,6 +217,29 @@ function MatchIntro.animateScenes(scene,elapsed)
  local badge=scene.root.Canvas:FindFirstChild("VersusBadge")
  if badge then badge.UIScale.Scale=1+math.sin(elapsed*2.8)*0.018 end
 end
+local function avatarReady(model)
+ if not model:FindFirstChildOfClass("Humanoid") or not model:FindFirstChild("HumanoidRootPart") or not model:FindFirstChild("Head") then return false end
+ local attached={}
+ for _,item in ipairs(model:GetDescendants()) do
+  local a,b
+  if item:IsA("JointInstance") or item:IsA("WeldConstraint") then
+   a,b=item.Part0,item.Part1
+  elseif item:IsA("RigidConstraint") then
+   a=item.Attachment0 and item.Attachment0.Parent
+   b=item.Attachment1 and item.Attachment1.Parent
+  end
+  if a and b and a:IsDescendantOf(model) and b:IsDescendantOf(model) then
+   local accessoryA=a:FindFirstAncestorWhichIsA("Accoutrement")
+   local accessoryB=b:FindFirstAncestorWhichIsA("Accoutrement")
+   if accessoryA and not accessoryB then attached[accessoryA]=true end
+   if accessoryB and not accessoryA then attached[accessoryB]=true end
+  end
+ end
+ for _,item in ipairs(model:GetChildren()) do
+  if item:IsA("Accoutrement") and not attached[item] then return false end
+ end
+ return true
+end
 function MatchIntro.updateScenes(scene)
  if not scene or not scene.root.Parent or os.clock()<scene.nextCheck then return end
  scene.nextCheck=os.clock()+0.1
@@ -228,10 +259,15 @@ function MatchIntro.updateScenes(scene)
     if member.bot then source=court and court:FindFirstChild("Practice Partner")
     else
      local p=game:GetService("Players"):GetPlayerByUserId(member.userId)
+     if p and not p:HasAppearanceLoaded() then continue end
      source=p and p.Character
     end
-    if source and source:IsA("Model") and source:FindFirstChildWhichIsA("BasePart",true) then
-     local model=staticClone(source)
+    if (not source or not source:FindFirstChildWhichIsA("BasePart",true)) and scene.resolveAvatar then
+     source=scene.resolveAvatar(member)
+    end
+    if source and source:IsA("Model") and (member.bot or avatarReady(source)) then
+     -- Only the body is posed directly. Leave each accessory free to follow its native joint.
+     local model=staticClone(source,not member.bot)
      if model then
       if member.bot then
        for _,piece in ipairs(model:GetDescendants()) do
@@ -239,11 +275,7 @@ function MatchIntro.updateScenes(scene)
        end
       else MatchIntro.ensurePaddle(model) end
       MatchIntro.standActor(model)
-      -- Presentation geometry is posed once, then animated as connected groups.
-      -- Stop cloned Animator/joints from reapplying the captured live pose.
-      for _,item in ipairs(model:GetDescendants()) do
-       if item:IsA("Animator") or item:IsA("Motor6D") or item:IsA("AnimationConstraint") then item:Destroy() end
-      end
+      -- The anchored body keeps the authored pose. Preserve the rig and all attachment joints.
       local x=(index-(#shot.team+1)/2)*4.5
       local spot=origin+floor.CFrame.RightVector*x+Vector3.new(0,3,0)
       model:PivotTo(CFrame.lookAt(spot,spot+forward))

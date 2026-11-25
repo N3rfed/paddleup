@@ -47,6 +47,7 @@ local lastSessionRequest={}
 -- A slot per allowed visitor supports the worst case: everyone practicing alone.
 -- Start with MaxPlayers=8 and measure before raising it (each slot contains scenery).
 local capacity=Players.MaxPlayers
+local returnAfterMatch
 local function owner(player) return owners[player] end
 local function runtime(id)
  if runtimes[id] then return runtimes[id] end
@@ -62,6 +63,7 @@ local function runtime(id)
  roots[id]=court
  local cleanup={}
  local ok,result=pcall(CourtSession.new,{id=id,height=id*4096,root=court,network=folder,owner=owner,progression=progression,
+  onRematchDeclined=function(roster,departing) returnAfterMatch(id,roster,departing) end,
   track=function(callback) table.insert(cleanup,callback) end})
  if not ok then
   for index=#cleanup,1,-1 do pcall(cleanup[index]) end
@@ -85,6 +87,13 @@ local function lobby(player,message)
  move(player,0)
  runtimes[0]:enter(player,"Lobby")
  if message then session:FireClient(player,false,message) end
+end
+returnAfterMatch=function(id,roster,departing)
+ local match=elevatorService and elevatorService.matches[id]
+ if match then elevatorService:cancelTarget(match); elevatorService.matches[id]=nil end
+ for player in pairs(roster) do
+  if player~=departing and owners[player]==id then lobby(player) end
+ end
 end
 local function freeSlot()
  for id=1,capacity do
@@ -141,14 +150,19 @@ local connections={}
 local function connect(signal,callback) table.insert(connections,signal:Connect(callback)) end
 connect(Players.PlayerAdded,addPlayer)
 connect(Players.PlayerRemoving,function(player)
- if elevatorService then elevatorService:departed(player,owners[player]); elevatorService:remove(player) end
+ local court=runtimes[owners[player]]
+ local completedMatch=court and court:cancelRematch(player,true)
+ if elevatorService then
+  if not completedMatch then elevatorService:departed(player,owners[player]) end
+  elevatorService:remove(player)
+ end
  queue:remove(player)
  lastSessionRequest[player]=nil
  local id=owners[player]
  if id~=nil then
   local wasPlaying=player:GetAttribute("CourtSide")~=0
   runtimes[id]:remove(player); owners[player]=nil
-  if id~=0 and wasPlaying and (not elevatorService or not elevatorService.matches[id]) then
+  if not completedMatch and id~=0 and wasPlaying and (not elevatorService or not elevatorService.matches[id]) then
    local peers={}
    for peer,courtId in pairs(owners) do
     if courtId==id and peer:GetAttribute("CourtSide")~=0 then table.insert(peers,peer) end
@@ -157,12 +171,19 @@ connect(Players.PlayerRemoving,function(player)
   end
  end
 end)
-connect(session.OnServerEvent,function(player,mode)
+connect(session.OnServerEvent,function(player,mode,id,choice,sessionId)
  if closing or owners[player]==nil then return end
+ local court=runtimes[owners[player]]
+ if mode=="RematchVote" then court:voteRematch(player,id,choice,sessionId); return end
  if os.clock()-(lastSessionRequest[player] or -math.huge)<0.5 then return end
  lastSessionRequest[player]=os.clock()
  if mode~="Lobby" and mode~="Spectate" then
   session:FireClient(player,false,"Choose a mode and player count to join the queue."); return
+ end
+ local completedMatch=court:cancelRematch(player)
+ if completedMatch then
+  if completedMatch=="cinematic" then lobby(player) end
+  return
  end
  if elevatorService then elevatorService:leave(player,true); elevatorService:departed(player,owners[player]) end
  queue:remove(player)

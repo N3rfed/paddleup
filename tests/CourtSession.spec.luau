@@ -37,6 +37,8 @@ return function(source,modules)
  local rewardRuns={}
  local progression={}
  local mocked=table.clone(modules)
+ mocked.PracticePartner={new=function(root) return {model=Instance.new("Model",root),pose=function() end,show=function() end} end}
+ mocked.CosmeticAssets={paddle=function() end}
  mocked.MatchRewards={new=function(service)
   assert(service==progression,"Courts share the profile service")
   local run={begins=0}
@@ -52,18 +54,25 @@ return function(source,modules)
  mocked.CourtEnvironments={valid=function(name) return name=="Rooftop" or name=="Moon" end,
   new=function() return {active="Rooftop",set=function(self,name) self.active=name end,destroy=function() end} end}
  mocked.CourtPickups={new=function() return {slots={},bursts={},reset=function() end,update=function() end} end}
- local scriptMock={Parent={WaitForChild=function(_,name) return name end}}
+ local scriptMock={Parent={PracticePartner="PracticePartner",WaitForChild=function(_,name) return name end}}
  local shared={WaitForChild=function(_,name) return name end}
- local services={Players=players,RunService={Heartbeat=heartbeat},ReplicatedStorage={WaitForChild=function() return shared end}}
+ local services={Players=players,RunService={Heartbeat=heartbeat},ReplicatedStorage={Shared={CosmeticAssets="CosmeticAssets"},WaitForChild=function() return shared end}}
  local environment=setmetatable({script=scriptMock,require=function(name) return assert(mocked[name],name) end,
   game={GetService=function(_,name) return assert(services[name],name) end},
   workspace={Gravity=196.2,GetServerTimeNow=function() return now end},os={clock=function() return now end}}, {__index=getfenv()})
- local chunk=assert(loadstring(source)); setfenv(chunk,environment)
+ -- Drive match point through the real scoring path without simulating an entire game.
+ local instrumented,count=source:gsub("local api={}","local api={}\n function api:finishForTest() score[1]=10; rotation.side=1; ball.live=true; point(1,\"Out\") end",1)
+ assert(count==1,"Court test hook requires the court API")
+ local chunk=assert(loadstring(instrumented)); setfenv(chunk,environment)
  local Court=chunk()
  local roots,controllers={},{}
+ local returns={}
  local function court(id)
   local root=Instance.new("Model"); table.insert(roots,root)
-  local controller=Court.new({id=id,height=id*4096,root=root,network=network,progression=progression,owner=function(p) return owners[p] end})
+  local controller=Court.new({id=id,height=id*4096,root=root,network=network,progression=progression,owner=function(p) return owners[p] end,
+   onRematchDeclined=function(roster,departing)
+    table.insert(returns,{roster=roster,departing=departing})
+   end})
   table.insert(controllers,controller)
   return controller
  end
@@ -99,6 +108,70 @@ return function(source,modules)
   assert(delivered[e].State.data.practicePaused,"Practice owner can pause")
   assert(not delivered[a].State.data.practicePaused and not delivered[c].State.data.practicePaused,"Practice pause cannot freeze either match")
   assert(delivered[a].State.data.serveReady and delivered[c].State.data.serveReady,"Both multiplayer matches advance concurrently")
+  local function beginEnding(controller,p)
+   controller:finishForTest()
+   heartbeat:Fire(0.1)
+   local data=delivered[p].State.data
+   assert(data.matchEnding and not data.rematch and data.score[1]==11 and not data.serveReady,"Play the ending before opening the vote")
+   return data.matchEnding,data.matchSessionId
+  end
+  local function completed(controller,p)
+   local ending,sessionId=beginEnding(controller,p)
+   controller:voteRematch(p,ending.id,"PlayAgain",sessionId)
+   now=ending.endsAt-0.1; heartbeat:Fire(0.1)
+   assert(delivered[p].State.data.matchEnding and not delivered[p].State.data.rematch,"Early votes cannot skip the cinematic")
+   now=ending.endsAt; heartbeat:Fire(0.1)
+   local data=delivered[p].State.data
+   assert(not data.matchEnding and data.rematch and not data.rematch.accepted,"Open the vote only after the shared ending")
+   assert(data.rematch.endsAt==now+mocked.MatchSetup.REMATCH_SECONDS)
+   return data.rematch.id,data.matchSessionId
+  end
+  local side,slot=a:GetAttribute("CourtSide"),a:GetAttribute("CourtSlot")
+  local id,sessionId=completed(first,a)
+  local peerSession=b:GetAttribute("MatchSessionId")
+  first:voteRematch(c,id,"PlayAgain",c:GetAttribute("MatchSessionId"))
+  first:voteRematch(a,id,"PlayAgain",sessionId-1)
+  first:voteRematch(a,id,"PlayAgain",sessionId)
+  first:voteRematch(a,id,"PlayAgain",sessionId)
+  now+=7; heartbeat:Fire(0.1)
+  assert(delivered[a].State.data.rematch.accepted and not delivered[b].State.data.rematch.accepted
+   and not delivered[a].State.data.serveReady,"One vote never starts the game or restarts the countdown")
+  local begins=rewardRuns[1].begins
+  first:voteRematch(b,id,"PlayAgain",peerSession)
+  first:voteRematch(b,id,"PlayAgain",peerSession)
+  heartbeat:Fire(0.1)
+  assert(not delivered[a].State.data.rematch and delivered[a].State.data.score[1]==0
+   and rewardRuns[1].begins==begins+1 and #returns==0,"Unanimous acceptance starts exactly one fresh game")
+  assert(a:GetAttribute("CourtSide")==side and a:GetAttribute("CourtSlot")==slot
+   and a:GetAttribute("CourtEnvironment")=="Rooftop" and a:GetAttribute("MatchVariant")=="Classic","Preserve court and assignments")
+  now+=12; heartbeat:Fire(0.1)
+  assert(delivered[a].State.data.serveReady,"The rematch reaches its first serve")
+  id,sessionId=completed(first,a)
+  first:voteRematch(a,id,"Leave",sessionId)
+  first:voteRematch(b,id,"Leave",b:GetAttribute("MatchSessionId"))
+  assert(#returns==1 and returns[1].roster[a] and returns[1].roster[b] and not returns[1].departing,"One or multiple declines return the roster once")
+  heartbeat:Fire(0.1)
+  assert(not delivered[a].State.data.rematch,"Clear the declined prompt")
+  id,sessionId=completed(second,c)
+  second:voteRematch(c,id,"PlayAgain",sessionId)
+  now+=mocked.MatchSetup.REMATCH_SECONDS; heartbeat:Fire(0.1)
+  second:voteRematch(d,id,"PlayAgain",d:GetAttribute("MatchSessionId"))
+  assert(#returns==2 and returns[2].roster[c] and returns[2].roster[d],"Timeout cancels the whole roster and rejects late votes")
+  completed(second,c)
+  assert(second:cancelRematch(c,true) and not second:cancelRematch(d,true))
+  assert(#returns==3 and returns[3].departing==c and returns[3].roster[d],"Disconnect cancels once and identifies the departing player")
+  local ending=beginEnding(second,c)
+  assert(ending.winner==1 and ending.home[1].userId==c.UserId and ending.away[1].userId==d.UserId)
+  local peerEnding=delivered[d].State.data.matchEnding
+  assert(peerEnding.startsAt==ending.startsAt and peerEnding.endsAt==ending.endsAt and peerEnding.winner==ending.winner)
+  assert(second:cancelRematch(c,true)=="cinematic")
+  second:remove(c); owners[c]=nil
+  heartbeat:Fire(0.1)
+  assert(#returns==3 and delivered[d].State.data.matchEnding==ending,"A disconnect leaves the shared scene running for the other player")
+  now=ending.endsAt; heartbeat:Fire(0.1)
+  assert(#returns==4 and returns[4].roster[d],"After the scene, a disconnected roster is returned to the lobby")
+  owners[c]=2; second:add(c); assert(second:enter(c,"1V1","Classic","Rooftop","None"))
+  heartbeat:Fire(0.1)
   local otherState=delivered[c].State
   local otherRewardBegins=rewardRuns[2].begins
   local firstRewardBegins=rewardRuns[1].begins
@@ -113,6 +186,7 @@ return function(source,modules)
   assert(first:enter(a,"Practice","Classic","Rooftop","None"))
   heartbeat:Fire(0.1)
   assert(delivered[a].State.data.score[1]==0 and delivered[a].State.data.score[2]==0,"Reused court starts with a fresh score")
+  if mocked.MatchSetup.modes.Arcade then
   local f,g,h,i=player(6),player(7),player(8),player(9)
   local arcadeA,arcadeB=court(4),court(5)
   join(arcadeA,4,f,"1V1","Arcade"); join(arcadeA,4,g,"1V1","Arcade")
@@ -128,6 +202,7 @@ return function(source,modules)
   assert(delivered[f].ArcadeLoadout.data.kind=="close","Ready court finishes loadout selection")
   assert(delivered[h].ArcadeLoadout.data.kind=="open" and h:GetAttribute("PowerupDraftOpen"),"One court's picks cannot complete another court")
   assert(delivered[f].State.data.p.Y+4096==delivered[h].State.data.p.Y,"Arcade balls retain their court height")
+  end
   local before=delivered[c].State
   first:destroy(); first:destroy()
   now+=1; heartbeat:Fire(0.1)
@@ -140,5 +215,5 @@ return function(source,modules)
   if type(event)=="table" then assert(event.OnServerEvent:count()==0,"Shutdown disconnects every remote") end
  end
  assert(ok,err)
- return "Concurrent matches, independent scores/balls, practice isolation, departure, rejoin, duplicate joins, and shutdown cleanup passed"
+ return "Concurrent matches, independent scores/balls, practice isolation, departure, rejoin, duplicate joins, unanimous rematches, decline, timeout, disconnect, and shutdown cleanup passed"
 end

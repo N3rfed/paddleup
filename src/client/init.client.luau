@@ -38,10 +38,12 @@ require(script:WaitForChild("CourtCosmetics")).start(player)
 require(script:WaitForChild("ArcadeLoadout")).start(player,network)
 require(script:WaitForChild("PowerupDraft")).start(player,network)
 require(script:WaitForChild("MatchIntro")).start(player,network)
+require(script:WaitForChild("MatchEnding")).start(player,network)
+require(script:WaitForChild("RematchUI")).start(player,network)
 require(script:WaitForChild("PracticeUI")).start(player,network)
 require(script:WaitForChild("HowToPlay")).start(player,network)
 require(script:WaitForChild("ArcadeSlots")).start(player,network)
-local function playing() return not player:GetAttribute("ShopOpen") and not player:GetAttribute("HowToPlayOpen") and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") end
+local function playing() return not player:GetAttribute("MatchEndingOpen") and not player:GetAttribute("RematchOpen") and not player:GetAttribute("ShopOpen") and not player:GetAttribute("HowToPlayOpen") and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and (player:GetAttribute("CourtSide") or 0)~=0 and not player:GetAttribute("LeaveConfirmationOpen") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") end
 local cream=Color3.fromRGB(247,239,215)
 local mint=Color3.fromRGB(92,233,190)
 local coral=Color3.fromRGB(249,139,109)
@@ -632,7 +634,7 @@ RunService:BindToRenderStep("PaddleUpView",Enum.RenderPriority.Camera.Value+1,fu
    pitch=math.rad(-18)
   end
   local locked=courtSide~=0 and h and h.Health>0 and not player:GetAttribute("PracticePaused")
-  local aiming=locked and not player:GetAttribute("ShopOpen") and not player:GetAttribute("HowToPlayOpen") and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
+  local aiming=locked and not player:GetAttribute("MatchEndingOpen") and not player:GetAttribute("RematchOpen") and not player:GetAttribute("ShopOpen") and not player:GetAttribute("HowToPlayOpen") and not (snapshot and snapshot.matchIntro) and not player:GetAttribute("PracticeMenuOpen") and not player:GetAttribute("PracticePaused") and not player:GetAttribute("PowerupDraftOpen") and not player:GetAttribute("PowerupDetailsOpen") and not player:GetAttribute("LeaveConfirmationOpen") and not UIS:IsKeyDown(Enum.KeyCode.LeftAlt) and not UIS:IsKeyDown(Enum.KeyCode.RightAlt) and windowFocused and not UIS:GetFocusedTextBox() and not game:GetService("GuiService").MenuIsOpen
   UIS.MouseBehavior=aiming and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
   UIS.MouseIconEnabled=not aiming
   if aiming and UIS.MouseEnabled then
