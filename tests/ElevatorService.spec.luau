@@ -13,7 +13,7 @@ return function(source,Party,Queue,Config)
  local q=Queue.new(function() end,function() return now end)
  local ctx={lobby={},clock=function() return now end,owner=function(p) return ownerMap[p] end,queue=q,
   remote={OnServerEvent=signal,FireClient=function(_,p,data) events[p]=data end},
-  start=function(group) positions.group=group; if positions.controller then positions.controller:update() end; return false end,pause=function(id,value) positions.paused=value end,
+  start=function(group) positions.group=group; if positions.controller then positions.controller:update() end; return false,"The selected map could not load." end,pause=function(id,value) positions.paused=value end,
   replace=function(p,match,seat) positions.replaced=p; ownerMap[p]=match.courtId; return true end,
   terminate=function(id) positions.terminated=id end}
  local env=setmetatable({game={GetService=function() return players end},
@@ -59,13 +59,13 @@ return function(source,Party,Queue,Config)
  assert(not party.mapVotes[a],"Stale map packets cannot affect the vote")
  positions.onRequest(a,"MapVote",{revision=revision,map="Moon"})
  positions.onRequest(c,"MapVote",{revision=revision,map="Moon"})
- s:update(); assert(party.stage=="Departing","Winning map advances to reveal")
- now+=Config.RevealSeconds; s:update()
+ s:update()
  assert(positions.group and positions.group.map=="Moon" and positions.group.mode=="Chaos"
-  and positions.group.overviewSeconds==4,"Selected map and independent ruleset reach match admission")
+  and #positions.group.players==2,"Selected map and full party reach admission on the final ballot")
  players.list=savedPlayers
  assert(not positions.group.valid(),"A changed party invalidates an in-flight admission")
- s:leave(c,true); assert(not s.members[c] and party.stage=="Waiting","Explicit leave frees the slot")
+ assert(not s.members[a] and not s.members[c] and party.stage=="Waiting","Failed admission clears the party")
+ assert(events[a].message=="The selected map could not load." and events[c].message==events[a].message,"Both players receive the failure message")
  local group={players={a,d},format="1V1",mode="Classic",map="Rooftop",modifier="None"}
  a:SetAttribute("CourtSide",1); a:SetAttribute("CourtSlot",1)
  d:SetAttribute("CourtSide",-1); d:SetAttribute("CourtSlot",1)
